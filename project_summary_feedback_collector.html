@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Diary: Feedback Collector Application</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({ startOnLoad: true });</script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 0.3em;
+            margin-top: 1.5em;
+        }
+        h1 { font-size: 2em; }
+        h2 { font-size: 1.75em; }
+        h3 { font-size: 1.5em; }
+        p {
+            margin-bottom: 1em;
+        }
+        pre {
+            background-color: #2d2d2d; /* Dark background for code */
+            color: #f8f8f2; /* Light text for code */
+            padding: 1em;
+            overflow-x: auto; /* Scroll horizontally if code is wide */
+            border-radius: 4px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+            font-size: 0.9em;
+            margin-bottom: 1em;
+            white-space: pre-wrap; /* Wrap long lines in code block */
+            word-break: break-all; /* Break words if necessary to wrap */
+        }
+        code { /* For inline code */
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+            background-color: #f0f0f0; /* Light background for inline code */
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        pre > code { /* Reset styles for code within pre, as pre handles it */
+            background-color: transparent;
+            padding: 0;
+            font-size: 1em; /* Inherit from pre */
+            color: inherit; /* Inherit from pre */
+        }
+        ul, ol {
+            margin-bottom: 1em;
+            padding-left: 2em;
+        }
+        li {
+            margin-bottom: 0.3em;
+        }
+        strong { font-weight: 600; }
+        em { font-style: italic; }
+        .mermaid { /* Basic styling for mermaid container */
+            text-align: center;
+            margin-top: 1em;
+            margin-bottom: 1em;
+        }
+    </style>
+</head>
+<body>
+    <h1>Project Diary: Building and Debugging the Feedback Collector Application</h1>
+<p>This document summarizes the development and debugging journey of the Feedback Collector application, with a particular focus on integrating it with Microsoft Fabric.</p>
+<h2>1. Project Inception and Initial Goals</h2>
+<p>The primary goal was to create a Python-based application to:</p>
+<ol>
+  <li>Collect feedback from various sources (initially Reddit).</li>
+  <li>Store this feedback locally (e.g., CSV/JSON).</li>
+  <li>Provide a simple web interface (Flask) to trigger collection, view feedback, and initiate writing to a centralized data store.</li>
+  <li>Ultimately, write the collected feedback into a Delta table in Microsoft Fabric for analysis.</li>
+</ol>
+
+<p>The initial vision for the application encompassed a more comprehensive architecture, as depicted below, aiming for direct integration with various data sources and robust processing before storage in a centralized data lake:</p>
+
+<div class="mermaid" style="text-align: center; margin-top: 1em; margin-bottom: 1em;">
+graph TB
+    subgraph Data Sources
+        A[Reddit API]
+        B[MS Fabric Community API]
+    end
+    
+    subgraph Application
+        subgraph Data Collector
+            C1[Reddit Fetcher]
+            C2[Community Fetcher]
+        end
+        
+        subgraph Data Processor
+            D1[Content Filter]
+            D2[Field Mapper]
+            D3[Analysis Engine]
+        end
+        
+        subgraph Storage Manager
+            E1[Azure Auth]
+            E2[Data Writer]
+        end
+    end
+    
+    subgraph Data Lake
+        F[Workloads_feedback Table]
+    end
+    
+    A -->|Raw Posts| C1
+    B -->|Raw Discussions| C2
+    C1 -->|Reddit Data| D1
+    C2 -->|Community Data| D1
+    D1 -->|Filtered Content| D2
+    D2 -->|Mapped Fields| D3
+    D3 -->|Enriched Data| E1
+    E1 -->|Authenticated| E2
+    E2 -->|Structured Data| F
+</div>
+<h2>2. Initial Development & Local Functionality</h2>
+<p>The initial phase involved setting up:</p>
+<ul>
+  <li>A <strong>Flask web application</strong> (<code>app.py</code>, <code>main.py</code>) for basic UI and API endpoints.</li>
+  <li><strong>Collectors</strong> (e.g., <code>RedditCollector</code> in <code>collectors.py</code>) to fetch data from sources like Reddit using PRAW.</li>
+  <li><strong>Local Storage</strong> (<code>storage.py</code>) to save data to CSV files and manage an in-memory cache.</li>
+  <li><strong>HTML Templates</strong> for the user interface.</li>
+  <li><strong>Configuration Management</strong> (<code>config.py</code>, <code>.env</code>) for API keys and endpoints.</li>
+</ul>
+<p>This allowed for successful collection and local viewing of feedback. The decision to start with local CSV files for storing the collected feedback focused on simplicity and rapid development. This allowed us to quickly validate the core collection and basic processing logic, providing an MVP before tackling more complex backend integrations like Microsoft Fabric.</p>
+
+<p>The architecture for integrating with Microsoft Fabric, which we then proceeded to build, is illustrated below. This diagram shows the flow from data collection through processing to storage in the Fabric Lakehouse:</p>
+<div class="mermaid" style="text-align: center; margin-top: 1em; margin-bottom: 1em;">
+graph TB
+        subgraph "Data Collection"
+            A["Reddit API"]
+            B["MS Fabric Community API"]
+            C["Data Processing (Python App)"]
+        end
+        
+        subgraph "Microsoft Fabric"
+            D["OneLake Storage (via Livy/Spark)"]
+            E["Lakehouse"]
+            F["Workloads_feedback Delta Table"]
+        end
+        
+        A --> C
+        B --> C
+        C --> D
+        D --> E
+        E --> F
+</div>
+<h2>3. The Microsoft Fabric Integration Challenge</h2>
+<p>The next major step was to write the collected data to a Delta table in Microsoft Fabric. The chosen method was to use the Livy API to submit PySpark jobs. This led to the creation of <code>fabric_writer.py</code>.</p>
+<h3>3.1. Early Attempts and the Emergence of <code>JSONDecodeError</code></h3>
+<p>The <code>FabricWriter</code> was designed to:</p>
+<ol>
+  <li>Obtain an authentication token for Fabric.</li>
+  <li>Start a Livy Spark session.</li>
+  <li>Prepare a PySpark script:</li>
+</ol>
+<ul>
+  <li>This script would take the list of feedback items (Python dictionaries) as a JSON string.</li>
+  <li>It would then use Spark to create a DataFrame from this JSON data.</li>
+  <li>Finally, it would write the DataFrame to the target Delta table.</li>
+</ul>
+<ol>
+  <li>Submit this PySpark script as a statement to the Livy session.</li>
+  <li>Poll for statement completion and close the session.</li>
+</ol>
+<p>Almost immediately, we encountered a persistent error when the Spark job tried to parse the JSON data:</p>
+<pre><code>json.decoder.JSONDecodeError: Invalid control character at: line 1 column 109 (char 108)
+</code></pre>
+<p>This error indicated that Spark's <code>json.loads()</code> function was finding an unescaped control character within the JSON string it was trying to parse, specifically at character index 108 (0-indexed).</p>
+<h3>3.2. Iterative Debugging: Chasing the "Invalid Control Character"</h3>
+<p>This error became the central focus of an extensive debugging effort. Here's a summary of the steps taken:</p>
+<p><strong>A. Data Sanitization:</strong></p>
+<ul>
+  <li><strong>Hypothesis:</strong> The raw feedback data might contain unescaped control characters.</li>
+  <li><strong>Action:</strong> Implemented <code>_sanitize_string_for_json</code> and <code>_sanitize_data_recursively</code> functions in <code>fabric_writer.py</code> to remove ASCII control characters (U+0000 to U+001F, except common whitespace like <code>\t</code>, <code>\n</code>, <code>\r</code>) and DEL (U+007F).</li>
+  <li><strong>Result:</strong> The error persisted, suggesting the issue was not with the <strong>original</strong> raw data's control characters being passed through, or that sanitization wasn't catching the specific problematic character.</li>
+</ul>
+<p><strong>B. <code>json.dumps</code> Parameters (<code>ensure_ascii</code>):</strong></p>
+<ul>
+  <li><strong>Hypothesis:</strong> The <code>ensure_ascii</code> parameter of <code>json.dumps()</code> might be affecting how characters (especially non-ASCII or special characters) were being encoded, potentially leading to issues downstream in Spark.</li>
+  <li><strong>Action:</strong> Experimented with <code>ensure_ascii=True</code> (default, escapes non-ASCII to <code>\uXXXX</code>) and <code>ensure_ascii=False</code> (passes UTF-8 characters through).</li>
+  <li><strong>Result:</strong> The error persisted with both settings. We eventually settled on <code>ensure_ascii=True</code> as it produces a more restricted character set, which is generally safer for JSON. The problem was clearly not simple non-ASCII characters.</li>
+</ul>
+<p><strong>C. Detailed Logging (Flask/Python Side):</strong></p>
+<ul>
+  <li><strong>Hypothesis:</strong> We needed to see exactly what the JSON string looked like <strong>on the Flask side</strong> before being sent to Spark, particularly around the problematic character index 108.</li>
+  <li><strong>Action:</strong> Added <code>DEBUG_FW:</code> print statements in <code>_prepare_pyspark_payload</code> to log:</li>
+</ul>
+<ul>
+  <li>The full JSON string length.</li>
+  <li>A snippet of the JSON string.</li>
+  <li>The character and its ordinal value at index 108.</li>
+  <li>A small context window of characters and their ordinals around index 108.</li>
+</ul>
+<ul>
+  <li><strong>Key Flask-Side Log Snippet (after <code>json.dumps</code>):</strong></li>
+</ul>
+<pre><code>DEBUG_FW: Character at index 108: '\', Ordinal value: 92
+DEBUG_FW: Ordinal values for segment 'ances\n\nH' (indices 103-112): [97, 110, 99, 101, 115, 92, 110, 92, 110, 72]
+</code></pre>
+<p>This showed that on the Flask side, character 108 was a backslash (<code>\</code>, ordinal 92) and character 109 was 'n' (ordinal 110). This <code>\\n</code> sequence is the <strong>correct</strong> JSON representation for a newline character within a string value. This deepened the mystery, as <code>\\n</code> should be valid for <code>json.loads()</code>.</p>
+<p><strong>D. Detailed Logging (Spark/PySpark Side):</strong></p>
+<ul>
+  <li><strong>Hypothesis:</strong> We needed to see what the JSON string looked like <strong>from Spark's perspective</strong>, right before <code>json.loads()</code> was called.</li>
+  <li><strong>Action:</strong> Modified the PySpark code template to include extensive <code>print()</code> statements (prefixed with <code>FATAL:</code> or <code>SPARK_DEBUG:</code>) within the <code>try...except json.JSONDecodeError</code> block. These prints would show the error message from Spark, the character position, a snippet of the string Spark was trying to parse, and the ordinal of the character at the error position.</li>
+  <li><strong>Challenge:</strong> Initially, these Spark-side <code>print</code> statements weren't visible in the Livy logs returned to Flask when the statement failed with <code>output.status == 'error'</code>. We had to enhance <code>_poll_statement_status</code> to explicitly try and fetch <code>output.data['text/plain']</code> (which contains stdout) even on error.</li>
+</ul>
+<p><strong>E. Isolating with a Single Data Item:</strong></p>
+<ul>
+  <li><strong>Hypothesis:</strong> The issue might be related to the overall size of the JSON payload (132 items, ~800KB JSON string) or an issue specific to one of the later items.</li>
+  <li><strong>Action:</strong> Modified <code>write_data_to_fabric</code> to send only the <strong>first</strong> data item: <code>data_to_write_for_spark = [data_to_write[0]]</code>.</li>
+  <li><strong>Result:</strong> The error <strong>still persisted</strong> with a single item, and it was still <code>Invalid control character at: line 1 column 109 (char 108)</code>. This was a crucial step, as it ruled out payload size as the primary cause and confirmed the issue was present even in the first item's data representation.</li>
+  <li><strong>Breakthrough - Spark-Side Logs Became Visible:</strong> With the single item and improved polling, we finally saw the detailed Spark-side logs:</li>
+</ul>
+<pre><code>ERROR:fabric_writer:Spark stdout on error for statement 1:
+FATAL: Error decoding JSON data in Spark: Invalid control character at: line 1 column 109 (char 108)
+...
+Ordinal of char at error_pos (108): 10
+</code></pre>
+<p><strong>This was the "Aha!" moment!</strong></p>
+<ul>
+  <li>Flask side: char 108 is <code>\</code> (ord 92), part of <code>\\n</code>.</li>
+  <li>Spark side: char 108 (the one causing the error) is a literal Line Feed (<code>\n</code>, ord 10).</li>
+</ul>
+<p>This meant the <code>\\n</code> (two characters: backslash, n) generated by <code>json.dumps</code> in Flask was somehow being transformed into a single literal newline character by the time it reached <code>json.loads</code> inside the Spark script. A literal newline is an invalid control character within a JSON string value unless escaped.</p>
+<p><strong>F. Investigating String Embedding in PySpark Code:</strong></p>
+<ul>
+  <li><strong>Hypothesis:</strong> The way the <code>data_as_json_string</code> (from Flask) was embedded into the PySpark code string was the culprit. The initial method was:</li>
+</ul>
+<pre><code># In fabric_writer.py
+pyspark_code = f"""
+import json
+# ...
+data_json_string = '''{data_as_json_string}''' # data_as_json_string contains "\\n"
+# ...
+data_list_for_df = json.loads(data_json_string)
+"""
+</code></pre>
+<p>We theorized that some layer of processing (Livy, or Python's own parsing of the triple-quoted string literal in the Spark environment) was interpreting the <code>\\n</code> from <code>data_as_json_string</code> as an escape sequence for a literal newline, rather than preserving it as a literal backslash followed by 'n'.</p>
+<ul>
+  <li><strong>The Solution - Using <code>repr()</code>:</strong></li>
+</ul>
+<ul>
+  <li><strong>Action:</strong> Change the embedding method to use Python's built-in <code>repr()</code> function. <code>repr(a_string)</code> generates a Python string literal that, when evaluated by a Python interpreter, faithfully reconstructs the original string, including all necessary escapes for special characters like backslashes and quotes.</li>
+  <li><strong>Code Change in <code>_prepare_pyspark_payload</code>:</strong></li>
+</ul>
+<pre><code># python
+data_as_python_literal_string = repr(data_as_json_string)
+# ...
+pyspark_code = f"""
+# ...
+data_json_string = {data_as_python_literal_string} # No extra quotes around this
+# ...
+"""
+</code></pre>
+<p>If <code>data_as_json_string</code> was <code>"[{\"key\": \"value with \\n newline\"}]"</code>,</p>
+<p><code>repr(data_as_json_string)</code> would produce something like <code>'[{\"key\": \"value with \\\\n newline\"}]'</code> (note the outer single quotes from <code>repr</code> and <code>\\n</code> becoming <code>\\\\n</code>).</p>
+<p>When the Spark Python interpreter executes <code>data_json_string = '[{\"key\": \"value with \\\\n newline\"}]'</code>, the variable <code>data_json_string</code> correctly becomes <code>[{"key": "value with \\n newline"}]</code>, which is what <code>json.loads()</code> needs.</p>
+<ul>
+  <li><strong>Result of <code>repr()</code> fix:</strong></li>
+</ul>
+<ol>
+  <li><strong>Test with Single Item:</strong> SUCCESS! The Spark-side logs confirmed that <code>data_json_string</code> now contained <code>\\n</code> (ord 92 at char 108), and <code>json.loads()</code> worked.</li>
+</ol>
+<pre><code>SPARK_DEBUG: Spark-side context around char 108: 'ances\n\nHi', ordinals: [97, 110, 99, 101, 115, 92, 110, 92, 110, 72, 105]
+Attempting to write 1 rows to table 'FeedbackCollector' in mode 'overwrite'.
+Successfully wrote data to table 'FeedbackCollector'.
+</code></pre>
+<ol>
+  <li><strong>Test with Full Dataset (132 items):</strong> SUCCESS! The <code>repr()</code> solution scaled correctly. The <code>data_as_python_literal_string</code> grew (e.g., from ~827KB to ~877KB), and the total PySpark code length was ~880KB, but Livy and Spark handled it.</li>
+</ol>
+<pre><code>DEBUG_FW: Python-side data_as_json_string (length: 826989 chars).
+DEBUG_FW: data_as_python_literal_string for Spark (length: 876783 chars).
+INFO:fabric_writer:Submitting Spark statement ... Code length: 880453 chars.
+SPARK_DEBUG: Length of data_json_string in Spark: 826989
+Attempting to write 132 rows to table 'FeedbackCollector' in mode 'overwrite'.
+Successfully wrote data to table 'FeedbackCollector'.
+</code></pre>
+<h2>4. Architectural Discussions & Presentation Preparation</h2>
+<p>After resolving the main technical hurdle, we discussed:</p>
+<ul>
+  <li><strong>Presentation Outline:</strong> Structuring the development journey and the "war story" of debugging the <code>JSONDecodeError</code> for an audience of technical PMs.</li>
+  <li><strong>Key Message:</strong> Emphasizing the importance of building robust, automated solutions for recurring PM tasks.</li>
+  <li><strong>Diagram Sketches:</strong> Outlining visual representations for:</li>
+</ul>
+<ol>
+  <li>Initial architecture with local CSV storage.</li>
+  <li>Enhanced architecture with Fabric integration, highlighting the Livy/Spark pathway.</li>
+</ol>
+<h2>5. Technical conclusions</h2>
+<p>The Feedback Collector application is now successfully writing data to Microsoft Fabric. The journey to resolve the <code>JSONDecodeError</code> was challenging but yielded important learnings:</p>
+<ul>
+  <li><strong>String Escaping is Critical:</strong> When passing string data (especially complex strings like serialized JSON) between systems or through layers of interpretation (Python script -> Livy -> Spark Python interpreter), meticulous attention to escaping is paramount.</li>
+  <li><strong><code>repr()</code> is Your Friend:</strong> For embedding a string into Python code such that it reconstructs perfectly, <code>repr()</code> is a robust tool.</li>
+  <li><strong>Comparative Logging:</strong> In distributed or multi-step processes, logging the state of data <strong>at each significant step</strong> and <strong>from the perspective of each component</strong> is crucial for pinpointing where transformations or corruptions occur.</li>
+  <li><strong>Systematic Debugging:</strong> Isolating variables (like payload size) and forming clear hypotheses for each test helps narrow down complex problems.</li>
+</ul>
+<p>This project demonstrates a practical approach to automating feedback collection and integrating it with a powerful analytics platform, while also serving as a case study in tackling subtle data representation issues.</p>
+
+<h2>6. Key learnings</h2>
+<ul>
+  <li>Building an application to replace any repetitive task we do today is straightforward!</li>
+  <li>This application required creating a reddit app to query the data, while manus.ai just did it.</li>
+  <li>If you don't know what to ask the LLM... ask the LLM what you should ask it.</li>
+  <li>Frontend is especially easy to refactor, just tell it what you want. We need to get this velocity in our product.</li>
+  <li>The whole application took about 5 hours of work and then Hasan showed me he did it all in 1 prompt with 8 min of processing!</li>
+  <li>
+  <strong>Blocker</strong><br>
+  When trying to save to Fabric, I encountered a blocker due to the need to create Entra apps/SPs, which isn't allowed in Microsoft.<br>
+  <strong>Discussion</strong><br>
+  Can the MCP server help with this?
+</li>
+</ul>
+</body>
+</html>
