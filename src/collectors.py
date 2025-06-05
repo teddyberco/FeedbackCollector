@@ -215,7 +215,10 @@ class FabricCommunityCollector:
                         
                         feedback_text = title # Default feedback text
                         if body_container_tag:
-                            extracted_body_text = body_container_tag.get_text(strip=True)
+                            # Use get_text with separator to preserve spaces between elements
+                            extracted_body_text = body_container_tag.get_text(separator=' ', strip=True)
+                            # Clean up multiple spaces and normalize whitespace
+                            extracted_body_text = re.sub(r'\s+', ' ', extracted_body_text).strip()
                             if extracted_body_text: # Use body if found and not empty
                                 feedback_text = extracted_body_text
                         
