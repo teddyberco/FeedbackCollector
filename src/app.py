@@ -25,6 +25,30 @@ if not os.path.exists(DATA_DIR):
     os.makedirs(DATA_DIR)
     logger.info(f"Created data directory: {DATA_DIR}")
 
+def load_latest_feedback_from_csv():
+    """Load feedback from the most recent CSV file if in-memory data is empty"""
+    try:
+        # Get all CSV files in the data directory
+        csv_files = [f for f in os.listdir(DATA_DIR) if f.startswith('feedback_') and f.endswith('.csv')]
+        if not csv_files:
+            return []
+        
+        # Sort by filename (which includes timestamp) to get the latest
+        latest_file = sorted(csv_files)[-1]
+        filepath = os.path.join(DATA_DIR, latest_file)
+        
+        logger.info(f"Loading feedback from CSV: {filepath}")
+        df = pd.read_csv(filepath, encoding='utf-8-sig')
+        
+        # Convert DataFrame to list of dictionaries
+        feedback_items = df.to_dict('records')
+        logger.info(f"Loaded {len(feedback_items)} items from CSV")
+        
+        return feedback_items
+    except Exception as e:
+        logger.error(f"Error loading feedback from CSV: {e}")
+        return []
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -142,17 +166,107 @@ def collect_feedback_route():
 
 @app.route('/feedback')
 def feedback_viewer():
+    global last_collected_feedback
+    
     source_filter = request.args.get('source', 'All')
     category_filter = request.args.get('category', 'All')
+    sort_by = request.args.get('sort', 'newest')  # Default to newest first
     
-    feedback_to_display = last_collected_feedback
+    # If no feedback in memory, try loading from CSV
+    if not last_collected_feedback:
+        logger.info("No feedback in memory, attempting to load from CSV")
+        last_collected_feedback = load_latest_feedback_from_csv()
+    
+    feedback_to_display = list(last_collected_feedback)  # Create a copy to avoid modifying the original
     source_info_message = f"Displaying all {len(feedback_to_display)} collected items."
+
+    # Debug logging
+    logger.info(f"Feedback viewer - Initial count: {len(feedback_to_display)}, Source filter: {source_filter}, Category filter: {category_filter}, Sort: {sort_by}")
 
     if source_filter != 'All':
         feedback_to_display = [item for item in feedback_to_display if item.get('Sources') == source_filter]
+        logger.info(f"After source filter '{source_filter}': {len(feedback_to_display)} items")
     
     if category_filter != 'All':
         feedback_to_display = [item for item in feedback_to_display if item.get('Category') == category_filter]
+        logger.info(f"After category filter '{category_filter}': {len(feedback_to_display)} items")
+
+    # Sort by date - newest items first by default
+    if feedback_to_display:
+        try:
+            # Enhanced debug logging for date sorting issue
+            logger.info(f"=== Date Sorting Debug for source_filter='{source_filter}' ===")
+            
+            # Debug: show sample dates and types before sorting
+            sample_dates = []
+            for i, item in enumerate(feedback_to_display[:5]):
+                date_val = item.get('Created', 'No date')
+                date_type = type(date_val).__name__
+                is_nan = pd.isna(date_val) if pd.api.types.is_scalar(date_val) else False
+                sample_dates.append(f"Item {i}: value='{date_val}', type={date_type}, is_nan={is_nan}, source={item.get('Sources', 'Unknown')}")
+            logger.info(f"Sample items before sorting: {sample_dates}")
+            
+            def parse_date(item):
+                date_str = item.get('Created', '')
+                
+                # Handle pandas NaT/NaN values
+                if pd.isna(date_str):
+                    logger.debug(f"Found NaT/NaN date value for item from {item.get('Sources', 'Unknown')}")
+                    return datetime(1900, 1, 1)
+                
+                # Convert to string if needed
+                date_str = str(date_str) if date_str else ''
+                
+                if date_str and date_str != 'nan' and date_str != 'NaT':
+                    try:
+                        # Handle ISO format dates (e.g., '2025-01-15T10:30:00')
+                        if 'T' in date_str:
+                            # Remove timezone info to make all datetimes naive for comparison
+                            if '+' in date_str or 'Z' in date_str:
+                                # Has timezone info - parse and convert to naive
+                                parsed = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                                # Convert to naive datetime by removing timezone info
+                                parsed = parsed.replace(tzinfo=None)
+                            else:
+                                # No timezone info - parse as naive
+                                parsed = datetime.fromisoformat(date_str)
+                            return parsed
+                        # Handle date-only format (e.g., '2025-01-15')
+                        else:
+                            parsed = datetime.strptime(date_str, '%Y-%m-%d')
+                            return parsed
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Date parsing error for '{date_str}' from {item.get('Sources', 'Unknown')}: {e}")
+                        pass
+                # Return a very old date for items without valid dates
+                logger.debug(f"Using default date for item from {item.get('Sources', 'Unknown')} with date '{date_str}'")
+                return datetime(1900, 1, 1)
+            
+            # Check date distribution before sorting
+            parsed_dates = []
+            for item in feedback_to_display[:10]:  # Sample first 10 items
+                parsed = parse_date(item)
+                parsed_dates.append((parsed, item.get('Sources', 'Unknown')))
+            
+            unique_parsed = set(d[0] for d in parsed_dates)
+            logger.info(f"Unique parsed dates in sample: {len(unique_parsed)}")
+            if len(unique_parsed) <= 2:
+                logger.warning(f"Low date diversity! Parsed dates: {[(d[0].isoformat(), d[1]) for d in parsed_dates[:3]]}")
+            
+            reverse_order = sort_by == 'newest'
+            feedback_to_display = sorted(feedback_to_display, key=parse_date, reverse=reverse_order)
+            
+            # Debug: show sample dates after sorting with more detail
+            sample_dates_after = []
+            for i, item in enumerate(feedback_to_display[:5]):
+                date_str = item.get('Created', 'No date')
+                parsed = parse_date(item)
+                sample_dates_after.append(f"Item {i}: raw='{date_str}', parsed='{parsed.isoformat()}', source={item.get('Sources', 'Unknown')}")
+            logger.info(f"Sorted {len(feedback_to_display)} items by date ({sort_by} first)")
+            logger.info(f"Sample items after sorting: {sample_dates_after}")
+            logger.info("=== End Date Sorting Debug ===")
+        except Exception as e:
+            logger.warning(f"Error sorting feedback by date: {e}")
 
     if source_filter != 'All' or category_filter != 'All':
         filters_applied = []
@@ -180,6 +294,7 @@ def feedback_viewer():
                            current_source=source_filter,
                            all_categories=all_categories,
                            current_category=category_filter,
+                           current_sort=sort_by,
                            trending_category_name=trending_category_name,
                            trending_category_count=trending_category_count
                            )

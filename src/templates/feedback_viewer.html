@@ -60,9 +60,9 @@
         <div class="mb-3">
             <strong>Filter by source:</strong>
             <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Source filters">
-                <a href="{{ url_for('feedback_viewer', source='All', category=current_category if current_category != 'All' else None) }}" class="btn {% if current_source == 'All' or not current_source %}btn-primary{% else %}btn-outline-primary{% endif %}">All Sources</a>
+                <a href="{{ url_for('feedback_viewer', source='All', category=current_category if current_category != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_source == 'All' or not current_source %}btn-primary{% else %}btn-outline-primary{% endif %}">All Sources</a>
                 {% for src in all_sources %}
-                <a href="{{ url_for('feedback_viewer', source=src, category=current_category if current_category != 'All' else None) }}" class="btn {% if current_source == src %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ src }}</a>
+                <a href="{{ url_for('feedback_viewer', source=src, category=current_category if current_category != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_source == src %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ src }}</a>
                 {% endfor %}
             </div>
         </div>
@@ -72,13 +72,21 @@
         <div class="mb-3">
             <strong>Filter by Category:</strong>
             <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Category filters">
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category='All') }}" class="btn {% if current_category == 'All' or not current_category %}btn-primary{% else %}btn-outline-primary{% endif %}">All Categories</a>
+                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category='All', sort=current_sort if current_sort else None) }}" class="btn {% if current_category == 'All' or not current_category %}btn-primary{% else %}btn-outline-primary{% endif %}">All Categories</a>
                 {% for cat in all_categories %}
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=cat) }}" class="btn {% if current_category == cat %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ cat }}</a>
+                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=cat, sort=current_sort if current_sort else None) }}" class="btn {% if current_category == cat %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ cat }}</a>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
+
+        <div class="mb-3">
+            <strong>Sort by Date:</strong>
+            <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Date sort options">
+                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sort='newest') }}" class="btn {% if current_sort == 'newest' or not current_sort %}btn-success{% else %}btn-outline-success{% endif %}">📅 Newest First</a>
+                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sort='oldest') }}" class="btn {% if current_sort == 'oldest' %}btn-success{% else %}btn-outline-success{% endif %}">📆 Oldest First</a>
+            </div>
+        </div>
 
         {% if source_info %}
             <p class="text-muted"><em>{{ source_info }}</em></p>
@@ -98,11 +106,11 @@
                                 {% elif item.Title and item.Title|trim != '' %}
                                     {{ item.Title }} {# Fallback to original Title if Gist is not useful #}
                                 {% else %}
-                                    Feedback from {{ item.Source or 'N/A' }} {# Generic fallback #}
+                                    Feedback from {{ item.Sources or 'N/A' }} {# Generic fallback #}
                                 {% endif %}
                             </h5>
                             <h6 class="card-subtitle mb-2 text-muted">
-                                {{ item.Source or 'Unknown Source' }}
+                                {{ item.Sources or 'Unknown Source' }}
                                 {% if item.Created and item.Created|trim != '' %}
                                     - {{ item.Created.split('T')[0] }} {# Show Date part only #}
                                 {% endif %}
