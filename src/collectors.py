@@ -170,11 +170,32 @@ class FabricCommunityCollector:
                     
                     date_str_combined = None
                     if date_span and time_span:
-                        date_text = date_span.get_text(strip=True).lstrip('').strip()
-                        time_text = time_span.get_text(strip=True).lstrip('').strip()
-                        date_str_combined = f"{date_text} {time_text}"
-                    elif date_span: 
-                        date_str_combined = date_span.get_text(strip=True).lstrip('').strip()
+                        raw_date_text = date_span.get_text(strip=True) if date_span else ""
+                        raw_time_text = time_span.get_text(strip=True) if time_span else ""
+                        
+                        # Aggressively clean date and time parts individually using regex
+                        date_match = re.search(r'([\d\-]+)', raw_date_text)
+                        time_match = re.search(r'([\d\s:/APMampm]+)', raw_time_text) # Allow space in time
+                        
+                        date_text_cleaned = date_match.group(1).strip() if date_match else ""
+                        time_text_cleaned = time_match.group(1).strip() if time_match else ""
+                        
+                        if date_text_cleaned and time_text_cleaned:
+                            date_str_combined = f"{date_text_cleaned} {time_text_cleaned}"
+                            logger.debug(f"Cleaned combined date/time: '{date_str_combined}' from raw '{raw_date_text} {raw_time_text}'")
+                        elif date_text_cleaned: # Case where only date_span might exist
+                             date_str_combined = date_text_cleaned
+                             logger.debug(f"Cleaned date only: '{date_str_combined}' from raw '{raw_date_text}'")
+                        else:
+                            date_str_combined = None # Will trigger fallback in _parse_community_date
+                            logger.warning(f"Could not reliably extract date/time from raw: '{raw_date_text} {raw_time_text}'")
+                            
+                    elif date_span: # This case might be redundant now but kept for safety if only date_span exists without time_span initially
+                        raw_date_text_only = date_span.get_text(strip=True)
+                        date_match_only = re.search(r'([\d\-]+)', raw_date_text_only)
+                        date_str_combined = date_match_only.group(1).strip() if date_match_only else None
+                        logger.debug(f"Cleaned date only (elif branch): '{date_str_combined}' from raw '{raw_date_text_only}'")
+
 
                     labels_list_container = item_element.select_one('div.LabelsList')
                     tag_texts = []
@@ -233,10 +254,13 @@ class FabricCommunityCollector:
         return feedback_items[:self.max_items_to_fetch]
 
     def _parse_community_date(self, date_str: str) -> datetime: 
-        if not date_str:
-            logger.warning(f"Date string empty for {self.source_name}. Using current time.")
-            return datetime.now(timezone.utc) 
-        cleaned_date_str = date_str.replace('', '').replace('', '').strip()
+        # The date_str should be pre-cleaned by the caller now
+        cleaned_date_str = date_str # Assume it's clean
+        if not cleaned_date_str: # Add a check here in case pre-cleaning resulted in empty string
+             logger.warning(f"Date string became empty after pre-cleaning for {self.source_name}. Using current time.")
+             return datetime.now(timezone.utc)
+        logger.debug(f"Date string received by _parse_community_date: '{cleaned_date_str}'")
+        
         now = datetime.now(timezone.utc)
         formats_to_try = ["%m-%d-%Y %I:%M %p", "%m-%d-%Y", "%b %d, %Y %I:%M %p", "%d-%m-%Y %I:%M %p"]
         for fmt in formats_to_try:
