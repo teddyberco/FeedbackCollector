@@ -166,7 +166,7 @@ def _start_livy_session(token: str, livy_endpoint: str, spark_conf: dict = None)
     try:
         logger.info(f"Starting Livy session at {livy_endpoint} with payload: {json.dumps(session_payload)}")
         response = requests.post(livy_endpoint, headers=headers, json=session_payload, timeout=60)
-        response.raise_for_status() 
+        response.raise_for_status()
         session_data = response.json()
         session_id = session_data.get('id')
         session_state = session_data.get('state')

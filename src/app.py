@@ -313,12 +313,22 @@ def write_to_fabric_route():
 
         logger.info(f"Attempting to write {len(last_collected_feedback)} items to Fabric Lakehouse.")
         
-        logger.info("Simulating successful write to Fabric Lakehouse.")
-        time_to_simulate_work = len(last_collected_feedback) * 0.05 
-        import time
-        time.sleep(min(time_to_simulate_work, 5)) 
-
-        return jsonify({'status': 'success', 'message': f'Successfully wrote {len(last_collected_feedback)} items to Fabric table {config.FABRIC_TARGET_TABLE_NAME} (simulated).'})
+        # Import and use the fabric_writer module
+        try:
+            import fabric_writer
+        except ImportError as ie:
+            logger.error(f"Failed to import fabric_writer module: {ie}")
+            return jsonify({'status': 'error', 'message': f'Fabric writer module not available: {str(ie)}'}), 500
+        
+        # Call the actual fabric_writer
+        success = fabric_writer.write_data_to_fabric(fabric_token, last_collected_feedback)
+        
+        if success:
+            logger.info(f"Successfully wrote {len(last_collected_feedback)} items to Fabric Lakehouse")
+            return jsonify({'status': 'success', 'message': f'Successfully wrote {len(last_collected_feedback)} items to Fabric table {config.FABRIC_TARGET_TABLE_NAME}.'})
+        else:
+            logger.error("Failed to write data to Fabric Lakehouse")
+            return jsonify({'status': 'error', 'message': 'Failed to write data to Fabric Lakehouse. Check logs for details.'}), 500
 
     except Exception as e:
         logger.error(f"Error writing to Fabric: {e}", exc_info=True)
