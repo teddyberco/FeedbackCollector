@@ -54,7 +54,10 @@ def index():
 
 @app.route('/insights')
 def insights_page():
-    return render_template('insights_page.html')
+    return render_template('insights_page.html',
+                         powerbi_report_id=config.POWERBI_REPORT_ID,
+                         powerbi_tenant_id=config.POWERBI_TENANT_ID,
+                         powerbi_embed_base_url=config.POWERBI_EMBED_BASE_URL)
 
 @app.route('/api/keywords', methods=['GET', 'POST'])
 def manage_keywords_route():

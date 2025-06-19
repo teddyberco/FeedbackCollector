@@ -13,18 +13,23 @@ REDDIT_USER_AGENT = os.getenv('REDDIT_USER_AGENT', 'WorkloadFeedbackCollector/1.
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 
 # Azure DevOps Configuration
-ADO_PARENT_WORK_ITEM_ID = os.getenv('ADO_PARENT_WORK_ITEM_ID', '1319103')  # Default to the specified work item
-ADO_PROJECT_NAME = os.getenv('ADO_PROJECT_NAME', 'Trident')
-ADO_ORG_URL = os.getenv('ADO_ORG_URL', 'https://dev.azure.com/powerbi')
+ADO_PARENT_WORK_ITEM_ID = os.getenv('ADO_PARENT_WORK_ITEM_ID')
+ADO_PROJECT_NAME = os.getenv('ADO_PROJECT_NAME')
+ADO_ORG_URL = os.getenv('ADO_ORG_URL')
 
 # Fabric Livy API Configuration
-FABRIC_LIVY_ENDPOINT = os.getenv('FABRIC_LIVY_ENDPOINT', 'https://msitapi.fabric.microsoft.com/v1/workspaces/e8ba5f1e-6489-4fe4-959b-528f8bf100cb/lakehouses/1a06b857-cd0b-4da3-bd61-ddfcca868607/livyapi/versions/2023-12-01/sessions')
-FABRIC_TARGET_TABLE_NAME = os.getenv('FABRIC_TARGET_TABLE_NAME', 'FeedbackCollector')
-FABRIC_WRITE_MODE = os.getenv('FABRIC_WRITE_MODE', 'overwrite') # 'overwrite' or 'append'
+FABRIC_LIVY_ENDPOINT = os.getenv('FABRIC_LIVY_ENDPOINT')
+FABRIC_TARGET_TABLE_NAME = os.getenv('FABRIC_TARGET_TABLE_NAME')
+FABRIC_WRITE_MODE = os.getenv('FABRIC_WRITE_MODE')
+
+# Power BI Report Configuration
+POWERBI_REPORT_ID = os.getenv('POWERBI_REPORT_ID')
+POWERBI_TENANT_ID = os.getenv('POWERBI_TENANT_ID')
+POWERBI_EMBED_BASE_URL = os.getenv('POWERBI_EMBED_BASE_URL')
 
 # Storage Configuration
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-FABRIC_STORAGE_URL = "abfss://e8ba5f1e-6489-4fe4-959b-528f8bf100cb@msit-onelake.dfs.fabric.microsoft.com/1a06b857-cd0b-4da3-bd61-ddfcca868607/Tables/dbo/FeedbackCollector"
+FABRIC_STORAGE_URL = os.getenv('FABRIC_STORAGE_URL')
 FABRIC_STORAGE_KEY = os.getenv('FABRIC_STORAGE_KEY')
 
 # Feedback Categories - Display Names

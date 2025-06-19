@@ -4,24 +4,21 @@
     <title>Feedback Insights</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
-            margin: 0; 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
             background-color: #f8f9fa;
         }
-        .iframe-container {
+        .powerbi-container {
             position: relative;
             overflow: hidden;
             width: 100%;
-            /* Aspect ratio padding-top: (height/width * 100) = (541.25 / 1140 * 100) = 47.478% */
-            /* For full page, we might want it to take up more height, or be scrollable. */
-            /* Let's make it take significant height, but allow scrolling within the iframe itself. */
-            height: 85vh; /* 85% of viewport height, adjust as needed */
+            height: 85vh; /* 85% of viewport height */
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: white;
         }
-        .iframe-container iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
+        .powerbi-container iframe {
             width: 100%;
             height: 100%;
             border: none;
@@ -29,18 +26,233 @@
         .container-custom {
             padding: 20px;
         }
+        .token-status {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        .manual-token-section {
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
     <div class="container-custom mt-3">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h1>Feedback Insights Report</h1>
-            <a href="/" class="btn btn-outline-primary">Back to Collector Home</a>
+            <div>
+                <!-- Token status indicator -->
+                <span id="tokenStatus" class="badge bg-secondary me-2">Token: Ready for manual entry</span>
+                
+                <!-- Auto-write to Fabric button (enabled when token is entered) -->
+                <button id="autoWriteFabric" class="btn btn-success me-2" disabled onclick="writeToFabricAuto()">
+                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style="display:none;" id="writeSpinner"></span>
+                    Auto Write to Fabric
+                </button>
+                
+                <a href="/" class="btn btn-outline-primary">Back to Collector Home</a>
+            </div>
         </div>
         <hr>
-        <div class="iframe-container">
-            <iframe title="Feedback insights" src="https://msit.fabric.microsoft.com/reportEmbed?reportId=566a3c76-552c-49ee-9ed1-a69d0b7d0c54&autoAuth=true&ctid=72f988bf-86f1-41af-91ab-2d7cd011db47" allowFullScreen="true"></iframe>
+        
+        <!-- Power BI Report Container - Now prominently displayed first -->
+        <div class="powerbi-container" id="powerbiContainer">
+            <iframe
+                id="powerbiReport"
+                title="Feedback insights"
+                src="{{ powerbi_embed_base_url }}?reportId={{ powerbi_report_id }}&autoAuth=true&ctid={{ powerbi_tenant_id }}"
+                allowFullScreen="true">
+            </iframe>
+        </div>
+        
+        <!-- Manual Token Entry Section - Moved to bottom -->
+        <div class="manual-token-section mt-4">
+            <h5><i class="bi bi-key me-2"></i>Bearer Token Entry for Fabric API Access</h5>
+            <p class="text-muted mb-3">
+                To enable writing feedback data to Fabric Lakehouse, provide your authentication token:
+            </p>
+            <details class="mb-3">
+                <summary class="text-primary" style="cursor: pointer;">📋 Click here for token capture instructions</summary>
+                <ol class="mt-2 mb-0">
+                    <li>Open browser Developer Tools (F12)</li>
+                    <li>Go to Network tab and refresh this page</li>
+                    <li>Look for requests to <code>fabric.microsoft.com</code> or <code>analysis.windows.net</code></li>
+                    <li>Find the Authorization header in any request</li>
+                    <li>Copy the Bearer token value and paste below</li>
+                </ol>
+            </details>
+            <div class="input-group">
+                <input type="text" id="manualToken" class="form-control"
+                       placeholder="Paste your Bearer token here (with or without 'Bearer ' prefix)..." />
+                <button class="btn btn-primary" onclick="useManualToken()">Use Token</button>
+            </div>
+            <small class="text-muted mt-2 d-block">
+                The token should be a long string starting with "eyJ". Example: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIs...
+            </small>
         </div>
     </div>
+
+    <script>
+    let capturedToken = null;
+
+    // Update token status display
+    function updateTokenStatus(message, type) {
+        const statusElement = document.getElementById('tokenStatus');
+        const writeButton = document.getElementById('autoWriteFabric');
+        
+        statusElement.textContent = `Token: ${message}`;
+        
+        if (type === 'success') {
+            statusElement.className = 'badge bg-success me-2';
+            writeButton.disabled = false;
+        } else if (type === 'warning') {
+            statusElement.className = 'badge bg-warning me-2';
+        } else if (type === 'error') {
+            statusElement.className = 'badge bg-danger me-2';
+        } else {
+            statusElement.className = 'badge bg-secondary me-2';
+        }
+    }
+
+    // Use manually entered token
+    function useManualToken() {
+        const manualToken = document.getElementById('manualToken').value.trim();
+        if (!manualToken) {
+            alert('Please enter a token');
+            return;
+        }
+
+        // Remove 'Bearer ' prefix if present
+        const cleanToken = manualToken.startsWith('Bearer ') ? manualToken.substring(7) : manualToken;
+        
+        if (cleanToken.length < 50) {
+            alert('Token seems too short. Please verify you copied the complete token.');
+            return;
+        }
+
+        // Basic token validation (JWT should start with eyJ)
+        if (!cleanToken.startsWith('eyJ')) {
+            alert('Token should start with "eyJ" (JWT format). Please check your token.');
+            return;
+        }
+
+        capturedToken = cleanToken;
+        updateTokenStatus('Token entered successfully', 'success');
+        console.log('Manual token set:', cleanToken.substring(0, 50) + '...');
+        
+        // Clear the input for security
+        document.getElementById('manualToken').value = '';
+        
+        // Show success message
+        showTokenSuccessMessage();
+    }
+
+    // Show success message when token is entered
+    function showTokenSuccessMessage() {
+        const existingAlert = document.querySelector('.token-success-alert');
+        if (existingAlert) {
+            existingAlert.remove();
+        }
+        
+        const successAlert = document.createElement('div');
+        successAlert.className = 'alert alert-success alert-dismissible fade show token-success-alert';
+        successAlert.innerHTML = `
+            <strong>✅ Success!</strong> Bearer token has been captured and is ready for Fabric API calls.
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const container = document.querySelector('.container-custom');
+        const reportContainer = document.getElementById('powerbiContainer');
+        container.insertBefore(successAlert, reportContainer);
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (successAlert.parentNode) {
+                successAlert.remove();
+            }
+        }, 5000);
+    }
+
+    // Write collected feedback to Fabric
+    async function writeToFabricAuto() {
+        if (!capturedToken) {
+            alert('No token available. Please enter your Bearer token first.');
+            return;
+        }
+
+        const writeButton = document.getElementById('autoWriteFabric');
+        const spinner = document.getElementById('writeSpinner');
+        
+        // Show loading state
+        writeButton.disabled = true;
+        spinner.style.display = 'inline-block';
+        writeButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Writing to Fabric...';
+
+        try {
+            const response = await fetch('/api/write_to_fabric', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fabric_token: capturedToken })
+            });
+
+            const result = await response.json();
+            
+            if (response.ok) {
+                alert(`✅ Success: ${result.message}`);
+                updateTokenStatus('Token used successfully', 'success');
+            } else {
+                alert(`❌ Error: ${result.message}`);
+                console.error('Fabric write error:', result);
+                updateTokenStatus('Token error - check validity', 'error');
+            }
+        } catch (error) {
+            alert(`❌ Network error: ${error.message}`);
+            console.error('Network error:', error);
+            updateTokenStatus('Network error occurred', 'error');
+        } finally {
+            // Reset button state
+            writeButton.disabled = !capturedToken; // Only enable if we still have a token
+            writeButton.innerHTML = 'Auto Write to Fabric';
+            spinner.style.display = 'none';
+        }
+    }
+
+    // Debug function for troubleshooting
+    window.debugTokenCapture = function() {
+        console.log('=== DEBUG TOKEN CAPTURE ===');
+        console.log('Current captured token:', capturedToken ? `${capturedToken.substring(0, 50)}...` : 'No token');
+        console.log('Token status element:', document.getElementById('tokenStatus').textContent);
+        console.log('Write button enabled:', !document.getElementById('autoWriteFabric').disabled);
+        
+        console.log('\n=== POWER BI IFRAME ===');
+        const iframe = document.getElementById('powerbiReport');
+        console.log('Iframe src:', iframe.src);
+        console.log('Iframe loaded:', iframe.complete);
+        
+        console.log('\n=== BROWSER STORAGE ===');
+        console.log('localStorage keys:', Object.keys(localStorage));
+        console.log('sessionStorage keys:', Object.keys(sessionStorage));
+    };
+
+    // Allow Enter key to submit token
+    document.getElementById('manualToken').addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            useManualToken();
+        }
+    });
+
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Feedback Insights page loaded - ready for manual token entry');
+        updateTokenStatus('Ready for manual entry', 'secondary');
+    });
+    </script>
 </body>
 </html>
