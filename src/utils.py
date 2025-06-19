@@ -130,3 +130,28 @@ if __name__ == '__main__':
 
     sample6 = "Login button not working."
     print(f"Text: '{sample6}'\nGist: {generate_feedback_gist(sample6)}")
+
+def call_mcp_tool(server_name: str, tool_name: str, arguments: dict):
+    """
+    Call an MCP tool - placeholder for integration with actual MCP tools
+    
+    Args:
+        server_name: Name of the MCP server
+        tool_name: Name of the tool to call
+        arguments: Dictionary of arguments to pass to the tool
+    
+    Returns:
+        The result from the MCP tool call
+    """
+    logger.info(f"🔄 MCP tool call requested: {server_name}.{tool_name}")
+    logger.info(f"📞 This should be replaced with actual MCP client integration")
+    
+    # Return a placeholder indicating real MCP integration is needed
+    return {
+        'items': [],
+        'totalCount': 0,
+        'hasMore': False,
+        'message': f'Real MCP integration needed for {server_name}.{tool_name}'
+    }
+
+# Removed _call_ado_tool_direct function - replaced with direct MCP integration recommendation

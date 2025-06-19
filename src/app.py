@@ -7,18 +7,17 @@ from typing import List, Dict, Any, Tuple
 import json 
 
 from collectors import RedditCollector, FabricCommunityCollector, GitHubDiscussionsCollector
-import config 
-# Removed: from utils import get_keywords, save_keywords_to_file, get_default_keywords
-# utils.py is still used for other functions like categorize_feedback, generate_feedback_gist if needed by collectors
-# but keyword management functions will now come from config.py
+from working_ado_client import get_working_ado_items
+import config
+import utils
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
-last_collected_feedback: List[Dict[str, Any]] = []
-last_collection_summary: Dict[str, int] = {"reddit": 0, "fabric": 0, "github": 0, "total": 0}
+last_collected_feedback = []
+last_collection_summary = {"reddit": 0, "fabric": 0, "github": 0, "total": 0}
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
 if not os.path.exists(DATA_DIR):
@@ -60,7 +59,7 @@ def insights_page():
 @app.route('/api/keywords', methods=['GET', 'POST'])
 def manage_keywords_route():
     if request.method == 'GET':
-        keywords = config.load_keywords() # Changed from get_keywords()
+        keywords = config.load_keywords()
         return jsonify(keywords)
     elif request.method == 'POST':
         try:
@@ -70,8 +69,7 @@ def manage_keywords_route():
             
             valid_keywords = [str(k).strip() for k in data['keywords'] if str(k).strip()]
             
-            config.save_keywords(valid_keywords) # Changed from save_keywords_to_file()
-            # Update the global KEYWORDS in config module as well, so collectors use the new ones immediately
+            config.save_keywords(valid_keywords)
             config.KEYWORDS = valid_keywords.copy() 
             logger.info(f"Keywords updated and saved: {valid_keywords}")
             return jsonify({'status': 'success', 'keywords': valid_keywords, 'message': 'Keywords saved successfully.'})
@@ -82,9 +80,8 @@ def manage_keywords_route():
 @app.route('/api/keywords/restore_default', methods=['POST'])
 def restore_default_keywords_route():
     try:
-        default_keywords = config.DEFAULT_KEYWORDS # Changed from get_default_keywords()
-        config.save_keywords(default_keywords) # Changed from save_keywords_to_file()
-        # Update the global KEYWORDS in config module as well
+        default_keywords = config.DEFAULT_KEYWORDS
+        config.save_keywords(default_keywords)
         config.KEYWORDS = default_keywords.copy()
         logger.info(f"Default keywords restored and saved: {default_keywords}")
         return jsonify({'status': 'success', 'keywords': default_keywords, 'message': 'Default keywords restored and saved.'})
@@ -94,78 +91,135 @@ def restore_default_keywords_route():
 
 @app.route('/api/collect', methods=['POST'])
 def collect_feedback_route():
+    """Main collection route using only real data collectors"""
     global last_collected_feedback, last_collection_summary
-    last_collected_feedback = [] 
-
-    logger.info("Starting feedback collection process via API.")
+    last_collected_feedback = []
     
-    # Reload keywords from file in case they were changed by another process
-    # or to ensure the most current set is used by collectors.
-    # The config.KEYWORDS is updated by save_keywords and restore_default_keywords routes.
-    # So, collectors should already be using the latest if they import config.KEYWORDS.
-    # However, explicit reloading here can be a safeguard if needed, but might be redundant
-    # if config.KEYWORDS is dynamically updated correctly.
-    # For now, relying on config.KEYWORDS being up-to-date.
-    # config.KEYWORDS = config.load_keywords() # Optional: force reload if concerned about external changes
-
-    reddit_collector = RedditCollector()
-    fabric_collector = FabricCommunityCollector()
-    github_collector = GitHubDiscussionsCollector()
-
-    reddit_feedback = reddit_collector.collect()
-    logger.info(f"Reddit collector found {len(reddit_feedback)} items.")
-    
-    fabric_feedback = fabric_collector.collect()
-    logger.info(f"Fabric Community collector found {len(fabric_feedback)} items.")
-    
-    github_feedback = github_collector.collect()
-    logger.info(f"GitHub Discussions collector found {len(github_feedback)} items.")
-
-    all_feedback = reddit_feedback + fabric_feedback + github_feedback
-    
-    last_collected_feedback = all_feedback
-    last_collection_summary = {
-        "reddit": len(reddit_feedback),
-        "fabric": len(fabric_feedback),
-        "github": len(github_feedback),
-        "total": len(all_feedback)
-    }
-    logger.info(f"Total feedback items collected: {len(all_feedback)}")
-
-    if not all_feedback:
-        logger.info("No feedback items collected in this run.")
-        return jsonify(last_collection_summary)
-
     try:
-        df = pd.DataFrame(all_feedback)
-        expected_columns = getattr(config, 'TABLE_COLUMNS', getattr(config, 'EXPECTED_COLUMNS', [])) # Check for both names
-        if not expected_columns: # Fallback if not defined in config
-            expected_columns = df.columns.tolist()
-            logger.warning("TABLE_COLUMNS or EXPECTED_COLUMNS not found in config. Using DataFrame's columns.")
-
-        for col in expected_columns:
-            if col not in df.columns:
-                df[col] = None 
-
-        df = df.reindex(columns=expected_columns)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"feedback_{timestamp}.csv"
-        filepath = os.path.join(DATA_DIR, filename)
+        logger.info("Starting feedback collection process via API.")
         
-        df.to_csv(filepath, index=False, encoding='utf-8-sig') 
-        logger.info(f"Feedback saved to {filepath}")
+        # Get optional ADO work item ID from request
+        ado_work_item_id = None
+        if request.is_json:
+            data = request.get_json()
+            ado_work_item_id = data.get('ado_work_item_id') if data else None
         
-        current_app.config['LAST_CSV_FILE'] = filename 
+        # Collect from all sources using proper collectors
+        reddit_collector = RedditCollector()
+        fabric_collector = FabricCommunityCollector()
+        github_collector = GitHubDiscussionsCollector()
+        
+        reddit_feedback = reddit_collector.collect()
+        logger.info(f"Reddit collector found {len(reddit_feedback)} items.")
+        
+        fabric_feedback = fabric_collector.collect()
+        logger.info(f"Fabric Community collector found {len(fabric_feedback)} items.")
+        
+        github_feedback = github_collector.collect()
+        logger.info(f"GitHub Discussions collector found {len(github_feedback)} items.")
+        
+        # Use working ADO client to get children of parent work item
+        logger.info("🔗 WORKING ADO CLIENT: Collecting children work items from Azure DevOps")
+        
+        # Get work items using the working client (children of parent work item from past year)
+        ado_workitems = get_working_ado_items(parent_work_item_id=ado_work_item_id, top=200)
+        logger.info(f"📊 Working client found {len(ado_workitems)} children work items")
+        
+        # Convert work items to feedback format with descriptions and proper categorization
+        ado_feedback = []
+        for item in ado_workitems:
+            work_item_id = item.get('id')
+            title = item.get('title', '')
+            description = item.get('description', '')
+            ado_url = item.get('url')  # Already formatted in working client
+            
+            # Use description + title for content (what user sees on feedback cards)
+            full_content = f"{title}"
+            if description and description != 'No description available':
+                full_content += f"\n\nDescription: {description}"
+            
+            # Categorize based on the full feedback content (title + description)
+            category = utils.categorize_feedback(full_content)
+            
+            ado_feedback.append({
+                'Title': f"[ADO-{work_item_id}] {title}",
+                'Feedback_Gist': f"[ADO-{work_item_id}] {title}",  # For card title
+                'Feedback': full_content,  # This is what shows in the card content
+                'Content': full_content,  # Backup field
+                'Author': item.get('createdBy', ''),
+                'Created': item.get('createdDate', ''),
+                'Url': ado_url,  # Proper field name for "View Source" button
+                'URL': ado_url,  # Backup field
+                'Sources': 'Azure DevOps',
+                'Category': category,  # Use text-based categorization
+                'Sentiment': 'Neutral',
+                'ADO_ID': work_item_id,
+                'ADO_Type': item.get('type', ''),
+                'ADO_State': item.get('state', ''),
+                'ADO_AssignedTo': item.get('assignedTo', '')
+            })
+        
+        logger.info(f"🔗 Working ADO client found {len(ado_feedback)} children work items from parent {ado_work_item_id}.")
+        
+        # Log sample work items
+        if ado_feedback:
+            logger.info("📋 Children work items found:")
+            for item in ado_feedback[:3]:
+                logger.info(f"  - {item['Title']} | URL: {item['URL']}")
+        
+        # Combine all feedback
+        all_feedback = reddit_feedback + fabric_feedback + github_feedback + ado_feedback
+        
+        last_collected_feedback = all_feedback
+        last_collection_summary = {
+            "reddit": len(reddit_feedback),
+            "fabric": len(fabric_feedback),
+            "github": len(github_feedback),
+            "ado": len(ado_feedback),
+            "total": len(all_feedback)
+        }
+        logger.info(f"Total feedback items collected: {len(all_feedback)}")
+
+        if not all_feedback:
+            logger.info("No feedback items collected in this run.")
+            return jsonify(last_collection_summary)
+
+        # Save to CSV
+        try:
+            df = pd.DataFrame(all_feedback)
+            expected_columns = getattr(config, 'TABLE_COLUMNS', getattr(config, 'EXPECTED_COLUMNS', []))
+            if not expected_columns:
+                expected_columns = df.columns.tolist()
+                logger.warning("TABLE_COLUMNS or EXPECTED_COLUMNS not found in config. Using DataFrame's columns.")
+
+            for col in expected_columns:
+                if col not in df.columns:
+                    df[col] = None 
+
+            df = df.reindex(columns=expected_columns)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"feedback_{timestamp}.csv"
+            filepath = os.path.join(DATA_DIR, filename)
+            
+            df.to_csv(filepath, index=False, encoding='utf-8-sig') 
+            logger.info(f"Feedback saved to {filepath}")
+            
+            current_app.config['LAST_CSV_FILE'] = filename 
+            
+        except Exception as e:
+            logger.error(f"Error processing or saving feedback to CSV: {e}", exc_info=True)
+            return jsonify({**last_collection_summary, "csv_error": str(e)}), 500
+            
+        return jsonify(last_collection_summary)
         
     except Exception as e:
-        logger.error(f"Error processing or saving feedback to CSV: {e}", exc_info=True)
-        return jsonify({**last_collection_summary, "csv_error": str(e)}), 500
-        
-    return jsonify(last_collection_summary)
+        logger.error(f"Error in collection route: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/feedback')
 def feedback_viewer():
+    """Full-featured feedback viewer with template rendering"""
     global last_collected_feedback
     
     source_filter = request.args.get('source', 'All')
@@ -194,18 +248,6 @@ def feedback_viewer():
     # Sort by date - newest items first by default
     if feedback_to_display:
         try:
-            # Enhanced debug logging for date sorting issue
-            logger.info(f"=== Date Sorting Debug for source_filter='{source_filter}' ===")
-            
-            # Debug: show sample dates and types before sorting
-            sample_dates = []
-            for i, item in enumerate(feedback_to_display[:5]):
-                date_val = item.get('Created', 'No date')
-                date_type = type(date_val).__name__
-                is_nan = pd.isna(date_val) if pd.api.types.is_scalar(date_val) else False
-                sample_dates.append(f"Item {i}: value='{date_val}', type={date_type}, is_nan={is_nan}, source={item.get('Sources', 'Unknown')}")
-            logger.info(f"Sample items before sorting: {sample_dates}")
-            
             def parse_date(item):
                 date_str = item.get('Created', '')
                 
@@ -242,29 +284,11 @@ def feedback_viewer():
                 logger.debug(f"Using default date for item from {item.get('Sources', 'Unknown')} with date '{date_str}'")
                 return datetime(1900, 1, 1)
             
-            # Check date distribution before sorting
-            parsed_dates = []
-            for item in feedback_to_display[:10]:  # Sample first 10 items
-                parsed = parse_date(item)
-                parsed_dates.append((parsed, item.get('Sources', 'Unknown')))
-            
-            unique_parsed = set(d[0] for d in parsed_dates)
-            logger.info(f"Unique parsed dates in sample: {len(unique_parsed)}")
-            if len(unique_parsed) <= 2:
-                logger.warning(f"Low date diversity! Parsed dates: {[(d[0].isoformat(), d[1]) for d in parsed_dates[:3]]}")
-            
             reverse_order = sort_by == 'newest'
             feedback_to_display = sorted(feedback_to_display, key=parse_date, reverse=reverse_order)
             
-            # Debug: show sample dates after sorting with more detail
-            sample_dates_after = []
-            for i, item in enumerate(feedback_to_display[:5]):
-                date_str = item.get('Created', 'No date')
-                parsed = parse_date(item)
-                sample_dates_after.append(f"Item {i}: raw='{date_str}', parsed='{parsed.isoformat()}', source={item.get('Sources', 'Unknown')}")
             logger.info(f"Sorted {len(feedback_to_display)} items by date ({sort_by} first)")
-            logger.info(f"Sample items after sorting: {sample_dates_after}")
-            logger.info("=== End Date Sorting Debug ===")
+            
         except Exception as e:
             logger.warning(f"Error sorting feedback by date: {e}")
 

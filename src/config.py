@@ -12,6 +12,11 @@ REDDIT_USER_AGENT = os.getenv('REDDIT_USER_AGENT', 'WorkloadFeedbackCollector/1.
 # GitHub Configuration
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 
+# Azure DevOps Configuration
+ADO_PARENT_WORK_ITEM_ID = os.getenv('ADO_PARENT_WORK_ITEM_ID', '1319103')  # Default to the specified work item
+ADO_PROJECT_NAME = os.getenv('ADO_PROJECT_NAME', 'Trident')
+ADO_ORG_URL = os.getenv('ADO_ORG_URL', 'https://dev.azure.com/powerbi')
+
 # Fabric Livy API Configuration
 FABRIC_LIVY_ENDPOINT = os.getenv('FABRIC_LIVY_ENDPOINT', 'https://msitapi.fabric.microsoft.com/v1/workspaces/e8ba5f1e-6489-4fe4-959b-528f8bf100cb/lakehouses/1a06b857-cd0b-4da3-bd61-ddfcca868607/livyapi/versions/2023-12-01/sessions')
 FABRIC_TARGET_TABLE_NAME = os.getenv('FABRIC_TARGET_TABLE_NAME', 'FeedbackCollector')
