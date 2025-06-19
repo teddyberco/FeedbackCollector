@@ -141,6 +141,9 @@ def collect_feedback_route():
             # Categorize based on the full feedback content (title + description)
             category = utils.categorize_feedback(full_content)
             
+            # Analyze sentiment of the feedback content
+            sentiment_analysis = utils.analyze_sentiment(full_content)
+            
             ado_feedback.append({
                 'Title': f"[ADO-{work_item_id}] {title}",
                 'Feedback_Gist': f"[ADO-{work_item_id}] {title}",  # For card title
@@ -152,7 +155,9 @@ def collect_feedback_route():
                 'URL': ado_url,  # Backup field
                 'Sources': 'Azure DevOps',
                 'Category': category,  # Use text-based categorization
-                'Sentiment': 'Neutral',
+                'Sentiment': sentiment_analysis['label'],
+                'Sentiment_Score': sentiment_analysis['polarity'],
+                'Sentiment_Confidence': sentiment_analysis['confidence'],
                 'ADO_ID': work_item_id,
                 'ADO_Type': item.get('type', ''),
                 'ADO_State': item.get('state', ''),
@@ -166,6 +171,26 @@ def collect_feedback_route():
             logger.info("📋 Children work items found:")
             for item in ado_feedback[:3]:
                 logger.info(f"  - {item['Title']} | URL: {item['URL']}")
+        
+        # Apply sentiment analysis to all feedback sources
+        def add_sentiment_to_feedback(feedback_list, source_name):
+            for item in feedback_list:
+                if 'Sentiment_Score' not in item or item.get('Sentiment_Score') is None:
+                    # Get the text content for sentiment analysis
+                    text_content = item.get('Feedback', '') or item.get('Content', '') or item.get('Title', '')
+                    sentiment_analysis = utils.analyze_sentiment(text_content)
+                    
+                    item['Sentiment'] = sentiment_analysis['label']
+                    item['Sentiment_Score'] = sentiment_analysis['polarity']
+                    item['Sentiment_Confidence'] = sentiment_analysis['confidence']
+                    
+                    logger.debug(f"Added sentiment analysis to {source_name} item: {sentiment_analysis['label']} ({sentiment_analysis['polarity']})")
+            return feedback_list
+        
+        # Add sentiment analysis to all feedback sources
+        reddit_feedback = add_sentiment_to_feedback(reddit_feedback, "Reddit")
+        fabric_feedback = add_sentiment_to_feedback(fabric_feedback, "Fabric Community")
+        github_feedback = add_sentiment_to_feedback(github_feedback, "GitHub")
         
         # Combine all feedback
         all_feedback = reddit_feedback + fabric_feedback + github_feedback + ado_feedback
@@ -224,12 +249,24 @@ def feedback_viewer():
     
     source_filter = request.args.get('source', 'All')
     category_filter = request.args.get('category', 'All')
+    sentiment_filter = request.args.get('sentiment', 'All')
     sort_by = request.args.get('sort', 'newest')  # Default to newest first
     
     # If no feedback in memory, try loading from CSV
     if not last_collected_feedback:
         logger.info("No feedback in memory, attempting to load from CSV")
         last_collected_feedback = load_latest_feedback_from_csv()
+        
+        # Apply sentiment analysis to loaded feedback if not already present
+        if last_collected_feedback:
+            for item in last_collected_feedback:
+                if 'Sentiment_Score' not in item or item.get('Sentiment_Score') is None:
+                    text_content = item.get('Feedback', '') or item.get('Content', '') or item.get('Title', '')
+                    sentiment_analysis = utils.analyze_sentiment(text_content)
+                    
+                    item['Sentiment'] = sentiment_analysis['label']
+                    item['Sentiment_Score'] = sentiment_analysis['polarity']
+                    item['Sentiment_Confidence'] = sentiment_analysis['confidence']
     
     feedback_to_display = list(last_collected_feedback)  # Create a copy to avoid modifying the original
     source_info_message = f"Displaying all {len(feedback_to_display)} collected items."
@@ -244,6 +281,10 @@ def feedback_viewer():
     if category_filter != 'All':
         feedback_to_display = [item for item in feedback_to_display if item.get('Category') == category_filter]
         logger.info(f"After category filter '{category_filter}': {len(feedback_to_display)} items")
+    
+    if sentiment_filter != 'All':
+        feedback_to_display = [item for item in feedback_to_display if item.get('Sentiment') == sentiment_filter]
+        logger.info(f"After sentiment filter '{sentiment_filter}': {len(feedback_to_display)} items")
 
     # Sort by date - newest items first by default
     if feedback_to_display:
@@ -292,16 +333,19 @@ def feedback_viewer():
         except Exception as e:
             logger.warning(f"Error sorting feedback by date: {e}")
 
-    if source_filter != 'All' or category_filter != 'All':
+    if source_filter != 'All' or category_filter != 'All' or sentiment_filter != 'All':
         filters_applied = []
         if source_filter != 'All':
             filters_applied.append(f"Source: {source_filter}")
         if category_filter != 'All':
             filters_applied.append(f"Category: {category_filter}")
+        if sentiment_filter != 'All':
+            filters_applied.append(f"Sentiment: {sentiment_filter}")
         source_info_message = f"Filtered by {', '.join(filters_applied)}. Showing {len(feedback_to_display)} items."
 
     all_sources = sorted(list(set(item.get('Sources', 'Unknown') for item in last_collected_feedback if item.get('Sources'))))
     all_categories = sorted(list(set(item.get('Category', 'Uncategorized') for item in last_collected_feedback if item.get('Category'))))
+    all_sentiments = sorted(list(set(item.get('Sentiment', 'Neutral') for item in last_collected_feedback if item.get('Sentiment'))))
 
     trending_category_name = None
     trending_category_count = 0
@@ -311,13 +355,15 @@ def feedback_viewer():
             trending_category_name = category_counts.index[0]
             trending_category_count = int(category_counts.iloc[0])
 
-    return render_template('feedback_viewer.html', 
-                           feedback_items=feedback_to_display, 
+    return render_template('feedback_viewer.html',
+                           feedback_items=feedback_to_display,
                            source_info=source_info_message,
                            all_sources=all_sources,
                            current_source=source_filter,
                            all_categories=all_categories,
                            current_category=category_filter,
+                           all_sentiments=all_sentiments,
+                           current_sentiment=sentiment_filter,
                            current_sort=sort_by,
                            trending_category_name=trending_category_name,
                            trending_category_count=trending_category_count

@@ -42,6 +42,28 @@
         .card a.btn { /* Make button stand out a bit */
             font-weight: 500;
         }
+        /* Sentiment badge styles */
+        .sentiment-positive {
+            background-color: #28a745 !important;
+            animation: pulse-green 2s infinite;
+        }
+        .sentiment-negative {
+            background-color: #dc3545 !important;
+            animation: pulse-red 2s infinite;
+        }
+        .sentiment-neutral {
+            background-color: #6c757d !important;
+        }
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+        }
     </style>
 </head>
 <body>
@@ -56,13 +78,33 @@
         </div>
         {% endif %}
 
+        {% if feedback_items %}
+        <div class="alert alert-light border" role="alert">
+            <h6 class="alert-heading">📊 Sentiment Overview</h6>
+            <div class="row text-center">
+                {% set positive_count = feedback_items | selectattr('Sentiment', 'equalto', 'Positive') | list | length %}
+                {% set negative_count = feedback_items | selectattr('Sentiment', 'equalto', 'Negative') | list | length %}
+                {% set neutral_count = feedback_items | selectattr('Sentiment', 'equalto', 'Neutral') | list | length %}
+                <div class="col-4">
+                    <span class="badge sentiment-positive">😊 {{ positive_count }} Positive</span>
+                </div>
+                <div class="col-4">
+                    <span class="badge sentiment-neutral">😐 {{ neutral_count }} Neutral</span>
+                </div>
+                <div class="col-4">
+                    <span class="badge sentiment-negative">😞 {{ negative_count }} Negative</span>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         {% if all_sources %}
         <div class="mb-3">
             <strong>Filter by source:</strong>
             <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Source filters">
-                <a href="{{ url_for('feedback_viewer', source='All', category=current_category if current_category != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_source == 'All' or not current_source %}btn-primary{% else %}btn-outline-primary{% endif %}">All Sources</a>
+                <a href="{{ url_for('feedback_viewer', source='All', category=current_category if current_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_source == 'All' or not current_source %}btn-primary{% else %}btn-outline-primary{% endif %}">All Sources</a>
                 {% for src in all_sources %}
-                <a href="{{ url_for('feedback_viewer', source=src, category=current_category if current_category != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_source == src %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ src }}</a>
+                <a href="{{ url_for('feedback_viewer', source=src, category=current_category if current_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_source == src %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ src }}</a>
                 {% endfor %}
             </div>
         </div>
@@ -72,9 +114,21 @@
         <div class="mb-3">
             <strong>Filter by Category:</strong>
             <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Category filters">
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category='All', sort=current_sort if current_sort else None) }}" class="btn {% if current_category == 'All' or not current_category %}btn-primary{% else %}btn-outline-primary{% endif %}">All Categories</a>
+                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category='All', sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_category == 'All' or not current_category %}btn-primary{% else %}btn-outline-primary{% endif %}">All Categories</a>
                 {% for cat in all_categories %}
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=cat, sort=current_sort if current_sort else None) }}" class="btn {% if current_category == cat %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ cat }}</a>
+                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=cat, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_category == cat %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ cat }}</a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if all_sentiments %}
+        <div class="mb-3">
+            <strong>Filter by Sentiment:</strong>
+            <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Sentiment filters">
+                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sentiment='All', sort=current_sort if current_sort else None) }}" class="btn {% if current_sentiment == 'All' or not current_sentiment %}btn-warning{% else %}btn-outline-warning{% endif %}">All Sentiments</a>
+                {% for sentiment in all_sentiments %}
+                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sentiment=sentiment, sort=current_sort if current_sort else None) }}" class="btn {% if current_sentiment == sentiment %}btn-warning{% else %}btn-outline-warning{% endif %}">{{ sentiment }}</a>
                 {% endfor %}
             </div>
         </div>
@@ -83,8 +137,8 @@
         <div class="mb-3">
             <strong>Sort by Date:</strong>
             <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Date sort options">
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sort='newest') }}" class="btn {% if current_sort == 'newest' or not current_sort %}btn-success{% else %}btn-outline-success{% endif %}">📅 Newest First</a>
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sort='oldest') }}" class="btn {% if current_sort == 'oldest' %}btn-success{% else %}btn-outline-success{% endif %}">📆 Oldest First</a>
+                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort='newest') }}" class="btn {% if current_sort == 'newest' or not current_sort %}btn-success{% else %}btn-outline-success{% endif %}">📅 Newest First</a>
+                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort='oldest') }}" class="btn {% if current_sort == 'oldest' %}btn-success{% else %}btn-outline-success{% endif %}">📆 Oldest First</a>
             </div>
         </div>
 
@@ -125,8 +179,17 @@
                                 {% if item.Tag and item.Tag|trim != '' %}
                                     <span class="badge bg-secondary ms-2">{{ item.Tag }}</span>
                                 {% endif %}
-                                 {% if item.Status and item.Status|trim != '' %}
+                                {% if item.Status and item.Status|trim != '' %}
                                     <span class="badge bg-info ms-2">{{ item.Status }}</span>
+                                {% endif %}
+                                {% if item.Sentiment and item.Sentiment|trim != '' %}
+                                    {% if item.Sentiment == 'Positive' %}
+                                        <span class="badge sentiment-positive ms-2" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😊 {{ item.Sentiment }}</span>
+                                    {% elif item.Sentiment == 'Negative' %}
+                                        <span class="badge sentiment-negative ms-2" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😞 {{ item.Sentiment }}</span>
+                                    {% else %}
+                                        <span class="badge sentiment-neutral ms-2" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😐 {{ item.Sentiment }}</span>
+                                    {% endif %}
                                 {% endif %}
                             </div>
                         </div>

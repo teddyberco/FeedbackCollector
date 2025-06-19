@@ -110,6 +110,62 @@ def categorize_feedback(text: str) -> str:
                 return category_info['name']
     return DEFAULT_CATEGORY
 
+def analyze_sentiment(text: str) -> dict:
+    """
+    Analyzes sentiment of the given text using TextBlob.
+    
+    Args:
+        text: The text to analyze for sentiment
+    
+    Returns:
+        Dictionary containing sentiment score, polarity, and label
+    """
+    if not text or not isinstance(text, str):
+        return {
+            'polarity': 0.0,
+            'subjectivity': 0.0,
+            'label': 'Neutral',
+            'confidence': 'Low'
+        }
+    
+    try:
+        blob = TextBlob(text)
+        polarity = blob.sentiment.polarity  # Range: -1 (negative) to 1 (positive)
+        subjectivity = blob.sentiment.subjectivity  # Range: 0 (objective) to 1 (subjective)
+        
+        # Determine sentiment label based on polarity
+        if polarity > 0.1:
+            label = 'Positive'
+        elif polarity < -0.1:
+            label = 'Negative'
+        else:
+            label = 'Neutral'
+        
+        # Determine confidence based on absolute polarity value
+        abs_polarity = abs(polarity)
+        if abs_polarity >= 0.5:
+            confidence = 'High'
+        elif abs_polarity >= 0.2:
+            confidence = 'Medium'
+        else:
+            confidence = 'Low'
+        
+        return {
+            'polarity': round(polarity, 3),
+            'subjectivity': round(subjectivity, 3),
+            'label': label,
+            'confidence': confidence
+        }
+        
+    except Exception as e:
+        logger.error(f"Error analyzing sentiment: {e}")
+        return {
+            'polarity': 0.0,
+            'subjectivity': 0.0,
+            'label': 'Neutral',
+            'confidence': 'Low'
+        }
+
 if __name__ == '__main__':
     # Test cases
     print(f"NLTK Resource Check Complete (see logs above).")
