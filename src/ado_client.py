@@ -26,7 +26,7 @@ def get_working_ado_items(parent_work_item_id: str = None, top: int = 20) -> Lis
         logger.info(f"Getting children of parent work item: {parent_work_item_id}")
         
         # Get PAT token
-        pat_token = os.getenv('AZURE_DEVOPS_PAT')
+        pat_token = config.ADO_PAT or os.getenv('AZURE_DEVOPS_PAT') or os.getenv('ADO_PAT')
         if not pat_token:
             logger.error("No PAT token found")
             return []

@@ -3,6 +3,8 @@
 <head>
     <title>Feedback Insights</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -48,15 +50,6 @@
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h1>Feedback Insights Report</h1>
             <div>
-                <!-- Token status indicator -->
-                <span id="tokenStatus" class="badge bg-secondary me-2">Token: Ready for manual entry</span>
-                
-                <!-- Auto-write to Fabric button (enabled when token is entered) -->
-                <button id="autoWriteFabric" class="btn btn-success me-2" disabled onclick="writeToFabricAuto()">
-                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style="display:none;" id="writeSpinner"></span>
-                    Auto Write to Fabric
-                </button>
-                
                 <a href="/" class="btn btn-outline-primary">Back to Collector Home</a>
             </div>
         </div>
@@ -76,7 +69,7 @@
         <div class="manual-token-section mt-4">
             <h5><i class="bi bi-key me-2"></i>Bearer Token Entry for Fabric API Access</h5>
             <p class="text-muted mb-3">
-                To enable writing feedback data to Fabric Lakehouse, provide your authentication token:
+                Enter your authentication token here. It will be saved and available on the <a href="/" class="text-decoration-none">Home page</a> for writing feedback data to Fabric Lakehouse:
             </p>
             <details class="mb-3">
                 <summary class="text-primary" style="cursor: pointer;">📋 Click here for token capture instructions</summary>
@@ -88,10 +81,16 @@
                     <li>Copy the Bearer token value and paste below</li>
                 </ol>
             </details>
-            <div class="input-group">
-                <input type="text" id="manualToken" class="form-control"
-                       placeholder="Paste your Bearer token here (with or without 'Bearer ' prefix)..." />
-                <button class="btn btn-primary" onclick="useManualToken()">Use Token</button>
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label for="manualToken" class="form-label mb-0">Bearer Token</label>
+                    <span id="tokenStatus" class="badge bg-secondary">Ready for manual entry</span>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="manualToken" class="form-control"
+                           placeholder="Paste your Bearer token here (with or without 'Bearer ' prefix)..." />
+                    <button class="btn btn-primary" onclick="useManualToken()">Use Token</button>
+                </div>
             </div>
             <small class="text-muted mt-2 d-block">
                 The token should be a long string starting with "eyJ". Example: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIs...
@@ -99,8 +98,97 @@
         </div>
     </div>
 
+    <!-- Fabric Write Progress Drawer -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="fabricProgressDrawer" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title">
+                <i class="bi bi-cloud-upload me-2"></i>Writing to Fabric Lakehouse
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" id="closeProgressDrawer" disabled></button>
+        </div>
+        <div class="offcanvas-body">
+            <!-- Progress Overview -->
+            <div class="mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted">Overall Progress</span>
+                    <span id="progressPercentage" class="badge bg-primary">0%</span>
+                </div>
+                <div class="progress mb-2">
+                    <div class="progress-bar" role="progressbar" id="progressBar" style="width: 0%"></div>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted" id="progressStatus">Initializing...</small>
+                    <small class="text-muted" id="progressETA">ETA: --</small>
+                </div>
+            </div>
+
+            <!-- Current Operation -->
+            <div class="mb-4">
+                <h6 class="text-muted mb-2">Current Operation</h6>
+                <div class="alert alert-info d-flex align-items-center" id="currentOperation">
+                    <div class="spinner-border spinner-border-sm me-2" role="status" id="operationSpinner">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span id="operationText">Preparing data for Fabric...</span>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div class="mb-4">
+                <h6 class="text-muted mb-2">Statistics</h6>
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="border rounded p-2">
+                            <div class="h5 mb-0" id="statsItems">0</div>
+                            <small class="text-muted">Items</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border rounded p-2">
+                            <div class="h5 mb-0" id="statsTime">00:00</div>
+                            <small class="text-muted">Elapsed</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border rounded p-2">
+                            <div class="h5 mb-0" id="statsSpeed">0/s</div>
+                            <small class="text-muted">Rate</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Log -->
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="text-muted mb-0">Live Log</h6>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearProgressLog()">
+                        <i class="bi bi-trash"></i> Clear
+                    </button>
+                </div>
+                <div class="border rounded p-2" id="progressLogContainer" style="height: 300px; overflow-y: auto; background-color: #f8f9fa;">
+                    <div id="progressLog" class="font-monospace small"></div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-grid gap-2">
+                <button class="btn btn-outline-danger" id="cancelFabricWrite" onclick="cancelFabricWrite()" disabled>
+                    <i class="bi bi-x-circle me-1"></i>Cancel Operation
+                </button>
+                <button class="btn btn-success" id="fabricWriteComplete" onclick="closeFabricDrawer()" style="display: none;">
+                    <i class="bi bi-check-circle me-1"></i>Operation Complete
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
     let capturedToken = null;
+    let fabricProgressDrawer = null;
+    let fabricProgressInterval = null;
+    let fabricStartTime = null;
+    let fabricOperationId = null;
 
     // Update token status display
     function updateTokenStatus(message, type) {
@@ -119,6 +207,193 @@
         } else {
             statusElement.className = 'badge bg-secondary me-2';
         }
+    }
+
+    // Initialize Fabric progress drawer
+    function initializeFabricDrawer() {
+        if (!fabricProgressDrawer) {
+            fabricProgressDrawer = new bootstrap.Offcanvas(document.getElementById('fabricProgressDrawer'));
+        }
+    }
+
+    // Show Fabric progress drawer
+    function showFabricProgressDrawer() {
+        initializeFabricDrawer();
+        
+        // Reset drawer state
+        resetProgressDrawer();
+        
+        // Show the drawer
+        fabricProgressDrawer.show();
+        
+        // Start progress tracking
+        fabricStartTime = Date.now();
+        startProgressUpdates();
+    }
+
+    // Reset progress drawer to initial state
+    function resetProgressDrawer() {
+        document.getElementById('progressBar').style.width = '0%';
+        document.getElementById('progressPercentage').textContent = '0%';
+        document.getElementById('progressStatus').textContent = 'Initializing...';
+        document.getElementById('progressETA').textContent = 'ETA: --';
+        document.getElementById('operationText').textContent = 'Preparing data for Fabric...';
+        document.getElementById('operationSpinner').style.display = 'inline-block';
+        document.getElementById('statsItems').textContent = '0';
+        document.getElementById('statsTime').textContent = '00:00';
+        document.getElementById('statsSpeed').textContent = '0/s';
+        document.getElementById('progressLog').innerHTML = '';
+        document.getElementById('cancelFabricWrite').disabled = false;
+        document.getElementById('fabricWriteComplete').style.display = 'none';
+        document.getElementById('closeProgressDrawer').disabled = true;
+        
+        addProgressLog('🚀 Starting Fabric write operation...', 'info');
+    }
+
+    // Add log entry to progress drawer
+    function addProgressLog(message, type = 'info') {
+        const logContainer = document.getElementById('progressLog');
+        const timestamp = new Date().toLocaleTimeString();
+        
+        const logEntry = document.createElement('div');
+        logEntry.className = `mb-1 text-${type}`;
+        logEntry.innerHTML = `<span class="text-muted">[${timestamp}]</span> ${message}`;
+        
+        logContainer.appendChild(logEntry);
+        
+        // Auto-scroll to bottom
+        const container = document.getElementById('progressLogContainer');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // Update progress drawer with current status
+    function updateProgressDrawer(progress, status, operation, stats = {}) {
+        document.getElementById('progressBar').style.width = `${progress}%`;
+        document.getElementById('progressPercentage').textContent = `${Math.round(progress)}%`;
+        document.getElementById('progressStatus').textContent = status;
+        document.getElementById('operationText').textContent = operation;
+        
+        // Update statistics
+        if (stats.items !== undefined) {
+            document.getElementById('statsItems').textContent = stats.items;
+        }
+        
+        // Update elapsed time
+        if (fabricStartTime) {
+            const elapsed = Math.floor((Date.now() - fabricStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('statsTime').textContent =
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            // Calculate speed
+            if (stats.items && elapsed > 0) {
+                const speed = (stats.items / elapsed).toFixed(1);
+                document.getElementById('statsSpeed').textContent = `${speed}/s`;
+            }
+        }
+        
+        // Calculate ETA
+        if (progress > 0 && progress < 100 && fabricStartTime) {
+            const elapsed = Date.now() - fabricStartTime;
+            const estimatedTotal = (elapsed / progress) * 100;
+            const remaining = Math.max(0, estimatedTotal - elapsed);
+            const etaMinutes = Math.floor(remaining / 60000);
+            const etaSeconds = Math.floor((remaining % 60000) / 1000);
+            document.getElementById('progressETA').textContent =
+                `ETA: ${etaMinutes}m ${etaSeconds}s`;
+        }
+    }
+
+    // Start progress updates polling
+    function startProgressUpdates() {
+        if (fabricProgressInterval) {
+            clearInterval(fabricProgressInterval);
+        }
+        
+        fabricProgressInterval = setInterval(async () => {
+            if (fabricOperationId) {
+                try {
+                    const response = await fetch(`/api/fabric_progress/${fabricOperationId}`);
+                    if (response.ok) {
+                        const progressData = await response.json();
+                        updateProgressFromServer(progressData);
+                    }
+                } catch (error) {
+                    console.error('Error fetching progress:', error);
+                }
+            }
+        }, 1000); // Update every second
+    }
+
+    // Update progress from server response
+    function updateProgressFromServer(data) {
+        if (data.progress !== undefined) {
+            updateProgressDrawer(
+                data.progress,
+                data.status || 'Processing...',
+                data.operation || 'Writing to Fabric...',
+                data.stats || {}
+            );
+        }
+        
+        if (data.logs && data.logs.length > 0) {
+            data.logs.forEach(log => {
+                addProgressLog(log.message, log.type || 'info');
+            });
+        }
+        
+        if (data.completed) {
+            completeFabricOperation(data.success, data.message);
+        }
+    }
+
+    // Complete Fabric operation
+    function completeFabricOperation(success, message) {
+        if (fabricProgressInterval) {
+            clearInterval(fabricProgressInterval);
+            fabricProgressInterval = null;
+        }
+        
+        document.getElementById('operationSpinner').style.display = 'none';
+        document.getElementById('cancelFabricWrite').disabled = true;
+        document.getElementById('fabricWriteComplete').style.display = 'block';
+        document.getElementById('closeProgressDrawer').disabled = false;
+        
+        if (success) {
+            updateProgressDrawer(100, 'Completed successfully', 'Fabric write complete');
+            addProgressLog(`✅ ${message || 'Operation completed successfully'}`, 'success');
+        } else {
+            addProgressLog(`❌ ${message || 'Operation failed'}`, 'danger');
+        }
+    }
+
+    // Close Fabric progress drawer
+    function closeFabricDrawer() {
+        if (fabricProgressDrawer) {
+            fabricProgressDrawer.hide();
+        }
+        if (fabricProgressInterval) {
+            clearInterval(fabricProgressInterval);
+            fabricProgressInterval = null;
+        }
+    }
+
+    // Cancel Fabric write operation
+    function cancelFabricWrite() {
+        if (fabricOperationId) {
+            fetch(`/api/cancel_fabric_write/${fabricOperationId}`, { method: 'POST' })
+                .then(() => {
+                    addProgressLog('🛑 Cancellation requested...', 'warning');
+                    document.getElementById('cancelFabricWrite').disabled = true;
+                })
+                .catch(console.error);
+        }
+    }
+
+    // Clear progress log
+    function clearProgressLog() {
+        document.getElementById('progressLog').innerHTML = '';
     }
 
     // Use manually entered token
@@ -144,8 +419,12 @@
         }
 
         capturedToken = cleanToken;
-        updateTokenStatus('Token entered successfully', 'success');
-        console.log('Manual token set:', cleanToken.substring(0, 50) + '...');
+        
+        // Save token to localStorage for persistence across pages
+        localStorage.setItem('fabricToken', cleanToken);
+        
+        updateTokenStatus('Token saved and ready for use on Home page', 'success');
+        console.log('Manual token set and saved to localStorage:', cleanToken.substring(0, 50) + '...');
         
         // Clear the input for security
         document.getElementById('manualToken').value = '';
@@ -193,10 +472,15 @@
         // Show loading state
         writeButton.disabled = true;
         spinner.style.display = 'inline-block';
-        writeButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Writing to Fabric...';
+        writeButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Starting...';
 
+        // Show progress drawer
+        showFabricProgressDrawer();
+        
         try {
-            const response = await fetch('/api/write_to_fabric', {
+            addProgressLog('📤 Sending request to Fabric API...', 'info');
+            
+            const response = await fetch('/api/write_to_fabric_async', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ fabric_token: capturedToken })
@@ -205,16 +489,20 @@
             const result = await response.json();
             
             if (response.ok) {
-                alert(`✅ Success: ${result.message}`);
-                updateTokenStatus('Token used successfully', 'success');
+                fabricOperationId = result.operation_id;
+                addProgressLog(`✅ Operation started: ${result.operation_id}`, 'success');
+                addProgressLog(`📊 Processing ${result.total_items || 'unknown'} items...`, 'info');
+                updateTokenStatus('Fabric write in progress...', 'secondary');
+                
+                // Start polling for progress
+                startProgressUpdates();
             } else {
-                alert(`❌ Error: ${result.message}`);
-                console.error('Fabric write error:', result);
+                completeFabricOperation(false, result.message || 'Failed to start operation');
                 updateTokenStatus('Token error - check validity', 'error');
             }
         } catch (error) {
-            alert(`❌ Network error: ${error.message}`);
             console.error('Network error:', error);
+            completeFabricOperation(false, `Network error: ${error.message}`);
             updateTokenStatus('Network error occurred', 'error');
         } finally {
             // Reset button state

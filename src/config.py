@@ -13,6 +13,7 @@ REDDIT_USER_AGENT = os.getenv('REDDIT_USER_AGENT', 'WorkloadFeedbackCollector/1.
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
 
 # Azure DevOps Configuration
+ADO_PAT = os.getenv('ADO_PAT')
 ADO_PARENT_WORK_ITEM_ID = os.getenv('ADO_PARENT_WORK_ITEM_ID')
 ADO_PROJECT_NAME = os.getenv('ADO_PROJECT_NAME')
 ADO_ORG_URL = os.getenv('ADO_ORG_URL')

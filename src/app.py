@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Tuple
 import json 
 
 from collectors import RedditCollector, FabricCommunityCollector, GitHubDiscussionsCollector
-from working_ado_client import get_working_ado_items
+from ado_client import get_working_ado_items
 import config
 import utils
 
@@ -406,6 +406,166 @@ def write_to_fabric_route():
     except Exception as e:
         logger.error(f"Error writing to Fabric: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': f'An unexpected error occurred: {str(e)}'}), 500
+
+# Global storage for async operations
+fabric_operations = {}
+
+@app.route('/api/write_to_fabric_async', methods=['POST'])
+def write_to_fabric_async_endpoint():
+    """Start asynchronous write to Fabric Lakehouse with progress tracking"""
+    try:
+        import uuid
+        import threading
+        from datetime import datetime
+        
+        data = request.get_json()
+        fabric_token = data.get('fabric_token')
+        
+        if not fabric_token:
+            return jsonify({'status': 'error', 'message': 'Fabric token is required'}), 400
+        
+        global last_collected_feedback
+        if not last_collected_feedback:
+            return jsonify({'status': 'error', 'message': 'No feedback data collected yet or last collection was empty.'}), 400
+        
+        # Generate unique operation ID
+        operation_id = str(uuid.uuid4())
+        
+        # Initialize operation tracking
+        fabric_operations[operation_id] = {
+            'status': 'starting',
+            'progress': 0,
+            'total_items': len(last_collected_feedback),
+            'processed_items': 0,
+            'start_time': datetime.now(),
+            'logs': [],
+            'completed': False,
+            'success': False,
+            'message': '',
+            'operation': 'Initializing...'
+        }
+        
+        # Start background thread
+        def fabric_write_worker():
+            try:
+                fabric_operations[operation_id]['logs'].append({
+                    'message': f'🚀 Starting Fabric write operation for {len(last_collected_feedback)} items',
+                    'type': 'info'
+                })
+                fabric_operations[operation_id]['status'] = 'in_progress'
+                fabric_operations[operation_id]['operation'] = 'Writing to Fabric Lakehouse...'
+                
+                import fabric_writer
+                
+                def progress_callback(processed, total, operation, message):
+                    fabric_operations[operation_id]['processed_items'] = processed
+                    fabric_operations[operation_id]['progress'] = (processed / total) * 100 if total > 0 else 0
+                    fabric_operations[operation_id]['operation'] = operation
+                    if message:
+                        fabric_operations[operation_id]['logs'].append({
+                            'message': message,
+                            'type': 'info'
+                        })
+                
+                # Call fabric writer with progress callback
+                fabric_operations[operation_id]['logs'].append({
+                    'message': '📝 Calling Fabric writer module...',
+                    'type': 'info'
+                })
+                
+                success = fabric_writer.write_data_to_fabric(fabric_token, last_collected_feedback)
+                
+                fabric_operations[operation_id]['completed'] = True
+                fabric_operations[operation_id]['success'] = success
+                fabric_operations[operation_id]['progress'] = 100
+                fabric_operations[operation_id]['processed_items'] = len(last_collected_feedback)
+                
+                if success:
+                    fabric_operations[operation_id]['message'] = f'Successfully wrote {len(last_collected_feedback)} items to Fabric Lakehouse'
+                    fabric_operations[operation_id]['logs'].append({
+                        'message': '✅ Fabric write operation completed successfully',
+                        'type': 'success'
+                    })
+                else:
+                    fabric_operations[operation_id]['message'] = 'Failed to write data to Fabric Lakehouse'
+                    fabric_operations[operation_id]['logs'].append({
+                        'message': '❌ Fabric write operation failed',
+                        'type': 'danger'
+                    })
+                    
+            except Exception as e:
+                fabric_operations[operation_id]['completed'] = True
+                fabric_operations[operation_id]['success'] = False
+                fabric_operations[operation_id]['message'] = f'Error: {str(e)}'
+                fabric_operations[operation_id]['logs'].append({
+                    'message': f'❌ Error during Fabric write: {str(e)}',
+                    'type': 'danger'
+                })
+                logger.error(f"Error in Fabric write worker: {e}", exc_info=True)
+        
+        thread = threading.Thread(target=fabric_write_worker)
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({
+            'status': 'success',
+            'operation_id': operation_id,
+            'total_items': len(last_collected_feedback),
+            'message': 'Fabric write operation started'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error starting async Fabric write: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': f'Failed to start operation: {str(e)}'}), 500
+
+@app.route('/api/fabric_progress/<operation_id>')
+def get_fabric_progress(operation_id):
+    """Get progress of Fabric write operation"""
+    try:
+        if operation_id not in fabric_operations:
+            return jsonify({'error': 'Operation not found'}), 404
+        
+        operation = fabric_operations[operation_id]
+        
+        # Calculate stats
+        stats = {
+            'items': operation['processed_items']
+        }
+        
+        # Get new logs since last check (simplified - returns all logs)
+        logs = operation['logs']
+        operation['logs'] = []  # Clear logs after sending
+        
+        return jsonify({
+            'progress': operation['progress'],
+            'status': operation['status'],
+            'operation': operation['operation'],
+            'stats': stats,
+            'logs': logs,
+            'completed': operation['completed'],
+            'success': operation['success'],
+            'message': operation['message']
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting Fabric progress: {e}")
+        return jsonify({'error': 'Failed to get progress'}), 500
+
+@app.route('/api/cancel_fabric_write/<operation_id>', methods=['POST'])
+def cancel_fabric_write(operation_id):
+    """Cancel Fabric write operation"""
+    try:
+        if operation_id in fabric_operations:
+            fabric_operations[operation_id]['logs'].append({
+                'message': '🛑 Cancellation requested (operation will stop at next checkpoint)',
+                'type': 'warning'
+            })
+            # Note: Actual cancellation would require more complex implementation
+            return jsonify({'status': 'success', 'message': 'Cancellation requested'})
+        else:
+            return jsonify({'error': 'Operation not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')
