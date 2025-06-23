@@ -1,6 +1,6 @@
 # Microsoft Fabric Workloads Feedback Collector
 
-A comprehensive web-based tool that collects feedback about Microsoft Fabric Workloads from multiple sources, provides real-time progress tracking, and offers seamless integration with Microsoft Fabric Lakehouse for analytics.
+A comprehensive web-based tool that collects feedback about Microsoft Fabric Workloads from multiple sources, provides intelligent categorization with domain analysis, and offers seamless integration with Microsoft Fabric Lakehouse for analytics.
 
 ## 🌟 Features
 
@@ -8,19 +8,22 @@ A comprehensive web-based tool that collects feedback about Microsoft Fabric Wor
 - **Reddit**: r/MicrosoftFabric community discussions
 - **Microsoft Fabric Community**: Official forums and discussions
 - **GitHub Discussions**: Microsoft-Fabric-workload-development-sample repository
-- **Azure DevOps**: Work items and task feedback
+- **Azure DevOps**: Work items and task feedback with advanced text cleaning
 
-### **Intelligent Processing**
-- **Smart Keyword Filtering**: "workload hub", "workloads", "Workload Development Kit"
-- **Sentiment Analysis**: Automated categorization (Positive/Neutral/Negative)
-- **Impact Classification**: Bug/Feature Request/Question/Feedback
-- **Real-time Progress Tracking**: Live collection monitoring
+### **Enhanced Intelligence**
+- **Domain-Aware Categorization**: Maps feedback to 6 cross-cutting business domains
+- **Smart Audience Detection**: Automatically identifies Developer/Customer/ISV feedback
+- **Enhanced Text Processing**: Removes CSS, HTML, and email content from ADO items
+- **Duplicate Detection**: Identifies repeating requests with 30% similarity threshold
+- **Priority Classification**: Automatic priority assignment based on content analysis
+- **Confidence Scoring**: Provides categorization confidence levels
 
 ### **Web Interface & User Experience**
 - **Modern Web UI**: Bootstrap-powered responsive interface
-- **Progress Drawer**: Real-time collection progress with detailed logging
+- **Enhanced Feedback Viewer**: Advanced filtering by category, audience, domain, and priority
+- **Statistical Insights**: Comprehensive analytics with cross-tabulation matrices
+- **Progress Drawer**: Real-time collection monitoring with detailed logging
 - **Token Management**: Secure Bearer token handling for Fabric integration
-- **Cross-Page State Persistence**: Seamless navigation without losing progress
 
 ### **Microsoft Fabric Integration**
 - **Lakehouse Writing**: Direct integration with Fabric Lakehouse
@@ -48,8 +51,8 @@ pip install -r src/requirements.txt
 
 ### 2. **Environment Setup**
 ```bash
-cp src/.env.template .env
-# Edit .env with your API credentials
+cp src/.env.template src/.env
+# Edit src/.env with your API credentials
 ```
 
 ### 3. **Launch Web Interface**
@@ -61,7 +64,7 @@ python run_web.py
 ### 4. **Access Application**
 - Open browser to `http://localhost:5000`
 - Start collecting feedback with real-time progress tracking
-- View collected data at `/feedback` endpoint
+- View collected data at `/feedback` endpoint with enhanced filtering
 - Access Power BI insights at `/insights` endpoint
 
 ## 🔧 Configuration
@@ -105,141 +108,114 @@ POWERBI_TENANT_ID=your_tenant_id
 2. Create Personal Access Token
 3. Grant "Work Items (Read)" permissions
 
-## 📊 Web Interface
+## 📊 Enhanced Features
 
-### **Home Page (`/`)**
-- **Feedback Collection**: Start collection with real-time progress
-- **Progress Drawer**: Live monitoring with detailed logs
-- **Fabric Integration**: Write collected data to Lakehouse
-- **Token Management**: Secure token input and persistence
+### **Intelligent Categorization System**
+- **Primary Categories**: 7 main categories including Developer Experience, Customer Experience, Technical Issues
+- **Subcategories**: Detailed subcategorization for precise classification
+- **Domain Mapping**: 6 cross-cutting domains:
+  - Governance & Compliance
+  - User Experience & Design
+  - Authentication & Security
+  - Performance & Scalability
+  - Integration & Interoperability
+  - Analytics & Reporting
 
-### **Data Viewer (`/feedback`)**
-- **Table View**: Paginated feedback data display
-- **Filtering**: Search and filter capabilities
-- **Export Options**: Download collected data
+### **Advanced Text Processing**
+- **CSS/HTML Removal**: Cleans ADO feedback from formatting artifacts
+- **Email Filtering**: Removes email headers, signatures, and threading
+- **Smart Text Extraction**: Preserves meaningful content while removing noise
+- **Description Pattern Removal**: Eliminates redundant "Description:" prefixes
 
-### **Insights Dashboard (`/insights`)**
-- **Power BI Integration**: Embedded analytics dashboard
-- **Bearer Token Setup**: Manual token configuration
-- **Real-time Sync**: Direct data pipeline to Fabric
-
-## 🏗️ Architecture
-
-### **Backend Components**
-- **Flask Web Server**: RESTful API endpoints
-- **Data Collectors**: Modular source-specific collectors
-- **Fabric Writer**: Async Lakehouse integration
-- **Progress Tracking**: Real-time operation monitoring
-
-### **Frontend Features**
-- **Bootstrap UI**: Modern, responsive design
-- **Progress Drawer**: Collapsible real-time monitoring
-- **State Persistence**: LocalStorage-based progress recovery
-- **Cross-page Navigation**: Seamless user experience
+### **Statistical Analysis**
+- **Category Distribution**: Visual breakdown of feedback by category
+- **Audience Segmentation**: Developer vs Customer vs ISV analysis
+- **Priority Matrix**: High/Medium/Low priority distribution
+- **Domain Coverage**: Cross-domain impact analysis
+- **Confidence Metrics**: Categorization reliability scoring
 
 ## 📁 Project Structure
 ```
 FeedbackCollector/
 ├── src/
-│   ├── app.py                    # Main Flask application
-│   ├── collectors.py             # Data collection logic
+│   ├── app.py                    # Main Flask application with enhanced ADO
+│   ├── collectors.py             # Data collection with text cleaning
 │   ├── fabric_writer.py          # Fabric Lakehouse integration
 │   ├── ado_client.py             # Azure DevOps integration
 │   ├── config.py                 # Configuration management
 │   ├── run_web.py               # Web server launcher
-│   ├── utils.py                 # Utility functions
-│   ├── keywords.json            # Search keywords configuration
+│   ├── utils.py                 # Enhanced categorization & text processing
+│   ├── keywords.json            # Domain and category keywords
 │   ├── requirements.txt         # Python dependencies
 │   ├── .env.template           # Environment template
 │   └── templates/               # HTML templates
 │       ├── index.html           # Main interface
-│       ├── feedback_viewer.html # Data viewer
+│       ├── feedback_viewer.html # Enhanced data viewer
 │       └── insights_page.html   # Power BI dashboard
-├── data/                        # CSV output files
-├── .env                         # Environment variables
-└── README.md                    # Project documentation
+├── data/                        # CSV output files (gitignored)
+├── .gitignore                   # Enhanced git exclusions
+├── README.md                    # This file
+└── Final_Implementation_Summary.md # Detailed feature documentation
 ```
 
-## 📋 Data Schema
+## 📋 Enhanced Data Schema
 
 ### **CSV Output Format**
 Each feedback item contains the following fields:
 
 | Field | Description | Example |
 |-------|-------------|---------|
-| `Feedback` | Processed main content | "Workload development is challenging..." |
-| `Area` | Topic area classification | "Workloads", "Development", "Performance" |
-| `Sources` | Origin platform | "Reddit", "Fabric Community", "GitHub", "ADO" |
-| `Impacttype` | Issue classification | "Bug", "Feature Request", "Question", "Feedback" |
-| `Partner/Customer` | Source identification | "Community", "Microsoft", "Partner" |
-| `Customer` | User identification | Username or anonymized ID |
-| `Tag` | Relevant keywords | "workload hub", "development kit" |
-| `Created` | Original timestamp | "2025-06-20 15:30:45" |
-| `Organization` | Platform name | "Reddit", "Microsoft" |
-| `Status` | Processing status | "Processed", "New", "Updated" |
-| `Created_by` | System identifier | "FeedbackCollector v2.0" |
-| `Rawfeedback` | Original content | Unprocessed raw text |
+| `Feedback` | Cleaned, processed content | "Workload development challenges..." |
+| `Feedback_Gist` | Smart summary of feedback | "Issue with workload deployment" |
+| `Area` | Topic area classification | "Workloads", "Development" |
+| `Sources` | Origin platform | "Azure DevOps", "Reddit", "GitHub" |
+| `Audience` | Target audience | "Developer", "Customer", "ISV" |
+| `Enhanced_Category` | Primary category | "Developer Experience Requests" |
+| `Subcategory` | Detailed subcategory | "Development Tools" |
+| `Priority` | Assigned priority | "high", "medium", "low" |
+| `Domains` | Related business domains | ["Performance", "Security"] |
+| `Primary_Domain` | Main domain | "Performance & Scalability" |
+| `Categorization_Confidence` | Classification confidence | 0.85 |
+| `Impacttype` | Issue classification | "Bug", "Feature Request" |
 | `Sentiment` | AI-analyzed sentiment | "Positive", "Neutral", "Negative" |
+| `Created` | Original timestamp | "2025-06-20 15:30:45" |
+| `Organization` | Platform/org name | "ADO/FabricPlatform" |
 
-### **Fabric Lakehouse Schema**
-When written to Microsoft Fabric, data follows the same schema with additional metadata:
-- `ingestion_timestamp`: When data was written to Fabric
-- `source_collection_id`: Unique identifier for collection batch
-- `processing_version`: Schema/processing version
+## 🔍 Monitoring & Analytics
 
-## 💾 Data Storage
+### **Built-in Analytics**
+- **Category Statistics**: Distribution charts and percentages
+- **Audience Breakdown**: Developer/Customer/ISV segmentation
+- **Priority Analysis**: Impact assessment across categories
+- **Domain Coverage**: Cross-functional impact visualization
+- **Duplicate Detection**: Identifies patterns in repeated feedback
+- **Trend Analysis**: Time-based feedback patterns
 
-### **Local Storage**
-- **Location**: `data/` directory
-- **Format**: CSV files with timestamp
-- **Naming**: `feedback_YYYYMMDD_HHMMSS.csv`
-- **Retention**: Automatically manages recent files (keeps latest 5)
-
-### **Microsoft Fabric Lakehouse**
-- **Integration**: Direct API-based ingestion
-- **Authentication**: Bearer token-based security
-- **Processing**: Asynchronous batch uploads
-- **Monitoring**: Real-time progress tracking in web interface
-
-## 🔍 Monitoring & Logging
-
-### **Web Interface Logging**
-- **Real-time Progress**: Live collection status in progress drawer
-- **Detailed Logs**: Timestamped operation logs with color coding
-- **Error Tracking**: Comprehensive error reporting and troubleshooting
-- **State Persistence**: Progress survives page navigation
-
-### **Backend Logging**
-- **Console Output**: Structured logging with timestamps
-- **Error Handling**: Graceful degradation with detailed error messages
-- **API Monitoring**: Request/response logging for debugging
-- **Performance Metrics**: Collection timing and throughput data
+### **Web Interface Features**
+- **Advanced Filtering**: Multi-dimensional filtering capabilities
+- **Export Options**: CSV export with selected filters
+- **Real-time Updates**: Live data refresh capabilities
+- **Statistical Summaries**: At-a-glance metrics and KPIs
 
 ## 🛡️ Error Handling & Resilience
 
-### **Network Resilience**
-- ✅ **Automatic Retries**: Failed API requests are automatically retried
-- ✅ **Graceful Degradation**: Partial failures don't stop entire collection
-- ✅ **Connection Recovery**: Handles temporary network issues
-- ✅ **Rate Limiting**: Respects API rate limits with backoff
+### **Enhanced Processing**
+- ✅ **Text Cleaning Pipeline**: Robust handling of malformed HTML/CSS
+- ✅ **Email Content Filtering**: Removes sensitive email information
+- ✅ **Smart Fallbacks**: Graceful degradation for categorization
+- ✅ **Confidence Thresholds**: Flags low-confidence classifications
 
-### **Data Integrity**
-- ✅ **Validation**: Input validation and sanitization
-- ✅ **Error Logging**: Comprehensive error tracking
-- ✅ **Rollback Support**: Failed operations can be safely retried
-- ✅ **State Recovery**: Progress can be resumed after interruption
-
-### **User Experience**
-- ✅ **Progress Persistence**: Collection progress survives navigation
-- ✅ **Token Security**: Secure handling of authentication tokens
-- ✅ **Clear Feedback**: Detailed error messages and troubleshooting tips
-- ✅ **Cancellation Support**: Users can cancel operations safely
+### **Data Quality**
+- ✅ **Duplicate Detection**: Prevents redundant entries
+- ✅ **Content Validation**: Ensures meaningful feedback extraction
+- ✅ **Source Verification**: Validates data source integrity
+- ✅ **Encoding Handling**: Manages various text encodings
 
 ## 🚀 API Endpoints
 
 ### **Web Interface**
 - `GET /` - Main collection interface
-- `GET /feedback` - Data viewer and export
+- `GET /feedback` - Enhanced data viewer with statistics
 - `GET /insights` - Power BI dashboard
 
 ### **REST API**
@@ -262,6 +238,7 @@ When written to Microsoft Fabric, data follows the same schema with additional m
 - Use meaningful variable and function names
 - Add docstrings for public functions
 - Include error handling and logging
+- Maintain backwards compatibility
 
 ## 📄 License
 
@@ -272,59 +249,23 @@ This project is proprietary and confidential. Unauthorized copying, distribution
 ## 🆘 Support & Troubleshooting
 
 ### **Common Issues**
+- **ADO Text Issues**: Verify text cleaning is working in utils.py
+- **Categorization Errors**: Check keywords.json for domain mappings
 - **Token Errors**: Verify Bearer token validity and permissions
 - **Collection Failures**: Check API credentials and network connectivity
-- **Progress Loss**: Use the progress drawer to monitor and resume operations
 
 ### **Getting Help**
 - Check the progress drawer logs for detailed error information
 - Verify all environment variables are properly configured
 - Ensure API tokens have required permissions and are not expired
+- Review Final_Implementation_Summary.md for detailed feature documentation
 
-**Last Updated**: June 2025 | **Version**: 2.0
+**Last Updated**: June 2025 | **Version**: 3.0
 
-The collected feedback is stored with the following schema:
-
-- `Feedback`: Processed main content
-- `Area`: Topic area (e.g., Workloads)
-- `Sources`: Origin of feedback (Reddit/MS Fabric Community)
-- `Impacttype`: Categorized as Bug/Feature Request/Question/Feedback
-- `Partner/Customer`: Source identification
-- `Customer`: User identification
-- `Tag`: Relevant keywords found
-- `Created`: Original post timestamp
-- `Organization`: Platform name
-- `Status`: Processing status
-- `Created_by`: System identifier
-- `Rawfeedback`: Original unprocessed content
-- `Sentiment`: Analyzed sentiment (Positive/Neutral/Negative) based on feedback content
-
-## Storage Location
-
-Data is stored locally in CSV format in the `data` directory. Each collection run creates a new timestamped file:
-```
-data/feedback_YYYYMMDD_HHMMSS.csv
-```
-
-## Logging
-
-The application logs its operations to the console with timestamps and log levels. Important events and errors are captured for monitoring and debugging.
-
-## Error Handling
-
-- Failed API requests are logged and won't crash the application
-- Invalid feedback items are skipped and logged
-- Connection issues trigger automatic retries
-- All exceptions are caught and logged appropriately
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-
-This project is proprietary and confidential. Unauthorized copying or distribution is prohibited.
+### **Key Enhancements in v3.0**
+- Domain-aware categorization system
+- Enhanced ADO text processing
+- Advanced audience detection
+- Statistical analysis and insights
+- Duplicate request identification
+- Improved UX with comprehensive filtering

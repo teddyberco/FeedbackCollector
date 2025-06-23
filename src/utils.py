@@ -1,7 +1,12 @@
 import nltk
 from textblob import TextBlob
 import logging
-from config import FEEDBACK_CATEGORIES_WITH_KEYWORDS, DEFAULT_CATEGORY
+import re
+from config import (
+    FEEDBACK_CATEGORIES_WITH_KEYWORDS, DEFAULT_CATEGORY,
+    ENHANCED_FEEDBACK_CATEGORIES, AUDIENCE_DETECTION_KEYWORDS, PRIORITY_LEVELS,
+    DOMAIN_CATEGORIES
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -42,6 +47,108 @@ def download_nltk_resources():
 # Call download_nltk_resources when the module is loaded
 # This ensures that the resources are checked/downloaded once.
 download_nltk_resources()
+
+def clean_feedback_text(text: str) -> str:
+    """
+    Clean and normalize feedback text from various sources, especially ADO which contains HTML/CSS.
+    
+    Args:
+        text: Raw feedback text that may contain HTML, CSS, or other formatting
+    
+    Returns:
+        Cleaned text suitable for analysis and display
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    
+    # Remove CSS styles (common in ADO feedback) - more aggressive approach
+    # Remove everything that looks like CSS class definitions and rules
+    text = re.sub(r'[a-zA-Z0-9\.\#\-_,\s]*\{[^}]*\}', '', text)
+    
+    # Remove specific CSS patterns that might be missed
+    text = re.sub(r'p\.MsoNormal[^}]*}?', '', text)
+    text = re.sub(r'li\.MsoNormal[^}]*}?', '', text)
+    text = re.sub(r'div\.MsoNormal[^}]*}?', '', text)
+    text = re.sub(r'span\.EmailStyle\d+[^}]*}?', '', text)
+    text = re.sub(r'\.MsoChpDefault[^}]*}?', '', text)
+    text = re.sub(r'div\.WordSection\d+[^}]*}?', '', text)
+    
+    # Remove any remaining CSS-like patterns
+    text = re.sub(r'[a-zA-Z\-]+:[^;]{1,50};', '', text)  # CSS properties
+    text = re.sub(r'margin:[^;]+;?', '', text)
+    text = re.sub(r'font-[^;]+;?', '', text)
+    text = re.sub(r'color:[^;]+;?', '', text)
+    
+    # Remove class name lists that might remain (including x_ prefixed versions)
+    text = re.sub(r'p\.x?_?MsoNormal,?\s*li\.x?_?MsoNormal,?\s*div\.x?_?MsoNormal', '', text)
+    text = re.sub(r'p\.x_MsoNormal,?\s*li\.x_MsoN[^,\s]*', '', text)  # Handle truncated versions
+    
+    # Remove any remaining CSS class patterns with x_ prefix
+    text = re.sub(r'[a-zA-Z\.x_]+MsoNormal[^,\s]*,?\s*', '', text)
+    
+    # Remove HTML entities and tags
+    text = re.sub(r'&nbsp;', ' ', text)
+    text = re.sub(r'&[a-zA-Z0-9#]+;', ' ', text)  # HTML entities
+    text = re.sub(r'<[^>]+>', '', text)  # HTML tags
+    
+    # Remove font specifications and styling
+    text = re.sub(r'font-family:[^;]+;', '', text)
+    text = re.sub(r'font-size:[^;]+;', '', text)
+    text = re.sub(r'margin:[^;]+;', '', text)
+    text = re.sub(r'color:[^;]+;', '', text)
+    
+    # Remove common CSS properties
+    text = re.sub(r'[a-zA-Z-]+:\s*[^;]+;', '', text)
+    
+    # Clean up whitespace and formatting
+    text = re.sub(r'\s+', ' ', text)  # Multiple spaces to single space
+    text = re.sub(r'\n\s*\n', '\n\n', text)  # Multiple newlines to double newline
+    text = text.strip()
+    
+    # Remove empty lines and excessive whitespace
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    text = '\n'.join(lines)
+    
+    # Remove patterns like "Description:" that appear anywhere in the text
+    text = re.sub(r'\bDescription:\s*', '', text, flags=re.IGNORECASE)
+    
+    # Remove "microsoft.com Description:" pattern specifically
+    text = re.sub(r'microsoft\.com\s+Description:\s*', 'microsoft.com ', text, flags=re.IGNORECASE)
+    
+    # EMAIL REMOVAL - Simple regex approach
+    # Remove email headers
+    text = re.sub(r'^From:\s*.*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'^To:\s*.*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'^Sent:\s*.*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'^Subject:\s*.*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'^Cc:\s*.*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    
+    # Remove email addresses (replace with placeholder to avoid removing context)
+    text = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '[email-removed]', text)
+    
+    # Remove external email markers
+    text = re.sub(r'\[EXTERNAL\]\s*', '', text, flags=re.IGNORECASE)
+    
+    # Remove email signatures
+    text = re.sub(r'Best regards,?\s*.*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'Thanks,?\s*.*$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    
+    # Remove email threading
+    text = re.sub(r'-----Original Message-----.*', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Clean up whitespace and formatting
+    text = re.sub(r'\s+', ' ', text)  # Multiple spaces to single space
+    text = re.sub(r'\n\s*\n', '\n\n', text)  # Multiple newlines to double newline
+    text = text.strip()
+    
+    # Remove empty lines and excessive whitespace
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    text = '\n'.join(lines)
+    
+    # Remove excessive punctuation
+    text = re.sub(r'[.,;:!?]{3,}', '...', text)
+    
+    return text.strip()
 
 def generate_feedback_gist(text: str, max_length: int = 150, num_phrases: int = 3) -> str:
     """
@@ -97,8 +204,8 @@ def generate_feedback_gist(text: str, max_length: int = 150, num_phrases: int = 
 
 def categorize_feedback(text: str) -> str:
     """
-    Categorizes feedback text based on keywords defined in config.
-    Returns the name of the first matching category or a default category.
+    Legacy categorization function for backward compatibility.
+    Use enhanced_categorize_feedback for new functionality.
     """
     if not text or not isinstance(text, str):
         return DEFAULT_CATEGORY
@@ -109,6 +216,362 @@ def categorize_feedback(text: str) -> str:
             if keyword.lower() in text_lower:
                 return category_info['name']
     return DEFAULT_CATEGORY
+
+def detect_audience(text: str, source: str = "", scenario: str = "", organization: str = "") -> str:
+    """
+    Detect the primary audience (Developer, Customer, ISV) based on content and context.
+    
+    Args:
+        text: The feedback text to analyze
+        source: Source of the feedback (Reddit, GitHub, etc.)
+        scenario: Scenario field (Customer, Partner, Internal)
+        organization: Organization field
+    
+    Returns:
+        Detected audience: 'Developer', 'Customer', 'ISV', or 'Unknown'
+    """
+    if not text or not isinstance(text, str):
+        return 'Unknown'
+    
+    text_lower = text.lower()
+    audience_scores = {'Developer': 0, 'Customer': 0, 'ISV': 0}
+    
+    # Score based on keywords
+    for audience, keywords in AUDIENCE_DETECTION_KEYWORDS.items():
+        for keyword in keywords:
+            if keyword.lower() in text_lower:
+                audience_scores[audience] += 1
+    
+    # Strong contextual scoring based on source and scenario
+    # GitHub and ADO are primarily developer-oriented
+    if source.lower() in ['github', 'github discussions', 'azure devops', 'ado', 'azure devops child tasks']:
+        audience_scores['Developer'] += 3  # Strong bias for developer sources
+    elif source.lower() == 'reddit':
+        audience_scores['Customer'] += 1
+    elif source.lower() in ['fabric community', 'fabric community search']:
+        # Fabric community could be either, slight customer bias
+        audience_scores['Customer'] += 0.5
+    
+    if scenario.lower() == 'partner':
+        audience_scores['ISV'] += 2
+    elif scenario.lower() == 'customer':
+        audience_scores['Customer'] += 2
+    elif scenario.lower() == 'internal':
+        audience_scores['Developer'] += 2
+    
+    # ISV-specific organization patterns
+    if organization and 'isv' in organization.lower():
+        audience_scores['ISV'] += 2
+    elif organization and any(dev_org in organization.lower() for dev_org in ['github', 'ado', 'azure devops']):
+        audience_scores['Developer'] += 1
+    
+    # Find the highest scoring audience
+    max_score = max(audience_scores.values())
+    if max_score == 0:
+        return 'Unknown'
+    
+    # Return the audience with the highest score
+    for audience, score in audience_scores.items():
+        if score == max_score:
+            return audience
+    
+    return 'Unknown'
+
+def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = "", organization: str = "") -> dict:
+    """
+    Enhanced categorization that provides hierarchical categorization with audience detection.
+    
+    Args:
+        text: The feedback text to analyze
+        source: Source of the feedback (Reddit, GitHub, etc.)
+        scenario: Scenario field (Customer, Partner, Internal)
+        organization: Organization field
+    
+    Returns:
+        Dictionary containing:
+        - primary_category: Main category name
+        - subcategory: Subcategory name
+        - audience: Detected audience
+        - priority: Priority level
+        - feature_area: Feature area classification
+        - confidence: Confidence score (0.0 to 1.0)
+        - legacy_category: For backward compatibility
+    """
+    if not text or not isinstance(text, str):
+        return {
+            'primary_category': 'Other',
+            'subcategory': 'Uncategorized',
+            'audience': 'Unknown',
+            'priority': 'medium',
+            'feature_area': 'General',
+            'confidence': 0.0,
+            'legacy_category': DEFAULT_CATEGORY
+        }
+    
+    text_lower = text.lower()
+    
+    # Detect audience first
+    audience = detect_audience(text, source, scenario, organization)
+    
+    # Initialize result
+    result = {
+        'primary_category': 'Other',
+        'subcategory': 'Uncategorized',
+        'audience': audience,
+        'priority': 'medium',
+        'feature_area': 'General',
+        'confidence': 0.0,
+        'legacy_category': categorize_feedback(text)
+    }
+    
+    best_match = None
+    best_score = 0
+    total_keywords_found = 0
+    
+    # Analyze all categories and subcategories
+    for category_id, category_info in ENHANCED_FEEDBACK_CATEGORIES.items():
+        for subcategory_id, subcategory_info in category_info['subcategories'].items():
+            score = 0
+            keywords_found = 0
+            
+            # Count keyword matches
+            for keyword in subcategory_info['keywords']:
+                if keyword.lower() in text_lower:
+                    score += 1
+                    keywords_found += 1
+            
+            # Bonus for audience alignment
+            if category_info['audience'] == audience or category_info['audience'] == 'All':
+                score += 2
+            
+            # Bonus for source alignment
+            if audience == 'Developer' and source.lower() == 'github':
+                score += 1
+            elif audience == 'Customer' and source.lower() in ['reddit', 'fabric community']:
+                score += 1
+            
+            if score > best_score:
+                best_score = score
+                best_match = {
+                    'primary_category': category_info['name'],
+                    'subcategory': subcategory_info['name'],
+                    'priority': subcategory_info['priority'],
+                    'feature_area': subcategory_info['feature_area']
+                }
+                total_keywords_found = keywords_found
+    
+    # Update result if we found a good match
+    if best_match and best_score > 0:
+        result.update(best_match)
+        
+        # Calculate confidence based on keyword matches and context
+        max_possible_keywords = max([
+            len(subcategory['keywords'])
+            for category in ENHANCED_FEEDBACK_CATEGORIES.values()
+            for subcategory in category['subcategories'].values()
+        ])
+        
+        keyword_confidence = min(total_keywords_found / max(max_possible_keywords * 0.1, 1), 1.0)
+        context_confidence = 0.5 if audience != 'Unknown' else 0.2
+        
+        result['confidence'] = round((keyword_confidence + context_confidence) / 2, 2)
+    
+    # Detect domains (cross-cutting concerns)
+    detected_domains = detect_domain(text)
+    result['domains'] = detected_domains
+    result['primary_domain'] = detected_domains[0]['domain'] if detected_domains else None
+    
+    return result
+
+def get_category_statistics(feedback_items: list) -> dict:
+    """
+    Generate comprehensive statistics about feedback categorization.
+    
+    Args:
+        feedback_items: List of feedback items to analyze
+    
+    Returns:
+        Dictionary with category statistics
+    """
+    if not feedback_items:
+        return {}
+    
+    from collections import defaultdict
+    
+    stats = {
+        'total_items': len(feedback_items),
+        'by_audience': defaultdict(int),
+        'by_enhanced_category': defaultdict(int),
+        'by_subcategory': defaultdict(int),
+        'by_priority': defaultdict(int),
+        'by_domain': defaultdict(int),
+        'by_feature_area': defaultdict(int),
+        'by_source': defaultdict(int),
+        'audience_category_matrix': defaultdict(lambda: defaultdict(int)),
+        'domain_audience_matrix': defaultdict(lambda: defaultdict(int)),
+        'priority_distribution': {},
+        'confidence_stats': {'high': 0, 'medium': 0, 'low': 0}
+    }
+    
+    # Analyze each feedback item
+    for item in feedback_items:
+        # Basic counts
+        audience = item.get('Audience', 'Unknown')
+        enhanced_category = item.get('Enhanced_Category', 'Other')
+        subcategory = item.get('Subcategory', 'Uncategorized')
+        priority = item.get('Priority', 'medium')
+        domain = item.get('Primary_Domain', 'General')
+        feature_area = item.get('Feature_Area', 'General')
+        source = item.get('Sources', 'Unknown')
+        
+        stats['by_audience'][audience] += 1
+        stats['by_enhanced_category'][enhanced_category] += 1
+        stats['by_subcategory'][subcategory] += 1
+        stats['by_priority'][priority] += 1
+        stats['by_domain'][domain] += 1
+        stats['by_feature_area'][feature_area] += 1
+        stats['by_source'][source] += 1
+        
+        # Cross-tabulations
+        stats['audience_category_matrix'][audience][enhanced_category] += 1
+        stats['domain_audience_matrix'][domain][audience] += 1
+        
+        # Confidence analysis
+        confidence = item.get('Categorization_Confidence', 0)
+        if confidence >= 0.7:
+            stats['confidence_stats']['high'] += 1
+        elif confidence >= 0.4:
+            stats['confidence_stats']['medium'] += 1
+        else:
+            stats['confidence_stats']['low'] += 1
+    
+    # Calculate percentages for priority distribution
+    for priority, count in stats['by_priority'].items():
+        stats['priority_distribution'][priority] = {
+            'count': count,
+            'percentage': round((count / stats['total_items']) * 100, 1)
+        }
+    
+    # Convert defaultdicts to regular dicts for JSON serialization
+    stats['by_audience'] = dict(stats['by_audience'])
+    stats['by_enhanced_category'] = dict(stats['by_enhanced_category'])
+    stats['by_subcategory'] = dict(stats['by_subcategory'])
+    stats['by_priority'] = dict(stats['by_priority'])
+    stats['by_domain'] = dict(stats['by_domain'])
+    stats['by_feature_area'] = dict(stats['by_feature_area'])
+    stats['by_source'] = dict(stats['by_source'])
+    
+    # Convert nested defaultdicts
+    stats['audience_category_matrix'] = {
+        audience: dict(categories)
+        for audience, categories in stats['audience_category_matrix'].items()
+    }
+    stats['domain_audience_matrix'] = {
+        domain: dict(audiences)
+        for domain, audiences in stats['domain_audience_matrix'].items()
+    }
+    
+    return stats
+
+def get_priority_weight(priority: str) -> int:
+    """
+    Get the numeric weight for a priority level.
+    
+    Args:
+        priority: Priority level string
+    
+    Returns:
+        Numeric weight for sorting/analysis
+    """
+    return PRIORITY_LEVELS.get(priority.lower(), PRIORITY_LEVELS['medium'])['weight']
+
+def analyze_feedback_trends(feedback_items: list) -> dict:
+    """
+    Analyze trends in categorized feedback items.
+    
+    Args:
+        feedback_items: List of feedback items with enhanced categorization
+    
+    Returns:
+        Dictionary with trend analysis
+    """
+    if not feedback_items:
+        return {}
+    
+    trends = {
+        'total_items': len(feedback_items),
+        'by_audience': {},
+        'by_primary_category': {},
+        'by_subcategory': {},
+        'by_priority': {},
+        'by_feature_area': {},
+        'top_developer_requests': [],
+        'top_customer_requests': [],
+        'critical_issues': []
+    }
+    
+    # Analyze each feedback item
+    for item in feedback_items:
+        # Get enhanced categorization if not already present
+        if 'enhanced_category' not in item:
+            enhanced = enhanced_categorize_feedback(
+                item.get('Feedback', ''),
+                item.get('Sources', ''),
+                item.get('Scenario', ''),
+                item.get('Organization', '')
+            )
+            item['enhanced_category'] = enhanced
+        else:
+            enhanced = item['enhanced_category']
+        
+        # Count by audience
+        audience = enhanced['audience']
+        trends['by_audience'][audience] = trends['by_audience'].get(audience, 0) + 1
+        
+        # Count by primary category
+        primary = enhanced['primary_category']
+        trends['by_primary_category'][primary] = trends['by_primary_category'].get(primary, 0) + 1
+        
+        # Count by subcategory
+        subcategory = enhanced['subcategory']
+        trends['by_subcategory'][subcategory] = trends['by_subcategory'].get(subcategory, 0) + 1
+        
+        # Count by priority
+        priority = enhanced['priority']
+        trends['by_priority'][priority] = trends['by_priority'].get(priority, 0) + 1
+        
+        # Count by feature area
+        feature_area = enhanced['feature_area']
+        trends['by_feature_area'][feature_area] = trends['by_feature_area'].get(feature_area, 0) + 1
+        
+        # Collect specific request types
+        if audience == 'Developer' and enhanced['priority'] in ['high', 'critical']:
+            trends['top_developer_requests'].append({
+                'feedback': item.get('Feedback_Gist', ''),
+                'subcategory': subcategory,
+                'priority': priority
+            })
+        
+        if audience == 'Customer' and enhanced['priority'] in ['high', 'critical']:
+            trends['top_customer_requests'].append({
+                'feedback': item.get('Feedback_Gist', ''),
+                'subcategory': subcategory,
+                'priority': priority
+            })
+        
+        if enhanced['priority'] == 'critical':
+            trends['critical_issues'].append({
+                'feedback': item.get('Feedback_Gist', ''),
+                'audience': audience,
+                'subcategory': subcategory
+            })
+    
+    # Limit lists to top items
+    trends['top_developer_requests'] = trends['top_developer_requests'][:10]
+    trends['top_customer_requests'] = trends['top_customer_requests'][:10]
+    trends['critical_issues'] = trends['critical_issues'][:10]
+    
+    return trends
 
 def analyze_sentiment(text: str) -> dict:
     """
@@ -211,3 +674,220 @@ def call_mcp_tool(server_name: str, tool_name: str, arguments: dict):
     }
 
 # Removed _call_ado_tool_direct function - replaced with direct MCP integration recommendation
+
+def detect_domain(text: str) -> list:
+    """
+    Detect domain categories (Governance, UX, Authentication, Performance, etc.) from feedback text.
+    
+    Args:
+        text: The feedback text to analyze
+    
+    Returns:
+        List of detected domain categories with confidence scores
+    """
+    if not text or not isinstance(text, str):
+        return []
+    
+    text_lower = text.lower()
+    detected_domains = []
+    
+    for domain_id, domain_info in DOMAIN_CATEGORIES.items():
+        score = 0
+        matched_keywords = []
+        
+        for keyword in domain_info['keywords']:
+            if keyword.lower() in text_lower:
+                score += 1
+                matched_keywords.append(keyword)
+        
+        if score > 0:
+            confidence = min(score / len(domain_info['keywords']), 1.0)
+            detected_domains.append({
+                'domain': domain_info['name'],
+                'domain_id': domain_id,
+                'confidence': round(confidence, 2),
+                'score': score,
+                'matched_keywords': matched_keywords,
+                'color': domain_info['color']
+            })
+    
+    # Sort by confidence score descending
+    detected_domains.sort(key=lambda x: x['confidence'], reverse=True)
+    return detected_domains
+
+def find_similar_feedback(feedback_text: str, all_feedback: list, similarity_threshold: float = 0.7) -> list:
+    """
+    Find similar/repeating feedback items based on text similarity.
+    
+    Args:
+        feedback_text: The feedback text to find similar items for
+        all_feedback: List of all feedback items to search through
+        similarity_threshold: Minimum similarity score (0.0 to 1.0)
+    
+    Returns:
+        List of similar feedback items with similarity scores
+    """
+    if not feedback_text or not all_feedback:
+        return []
+    
+    from difflib import SequenceMatcher
+    import re
+    
+    def clean_text(text):
+        """Clean and normalize text for comparison"""
+        if not text:
+            return ""
+        # Convert to lowercase, remove extra whitespace, remove punctuation
+        text = re.sub(r'[^\w\s]', ' ', text.lower())
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+    
+    def calculate_similarity(text1, text2):
+        """Calculate similarity between two texts"""
+        clean1 = clean_text(text1)
+        clean2 = clean_text(text2)
+        
+        if not clean1 or not clean2:
+            return 0.0
+        
+        # Use SequenceMatcher for similarity
+        similarity = SequenceMatcher(None, clean1, clean2).ratio()
+        
+        # Boost similarity for exact keyword matches
+        words1 = set(clean1.split())
+        words2 = set(clean2.split())
+        common_words = words1.intersection(words2)
+        word_boost = len(common_words) / max(len(words1), len(words2), 1) * 0.2
+        
+        return min(similarity + word_boost, 1.0)
+    
+    clean_input = clean_text(feedback_text)
+    similar_items = []
+    
+    for item in all_feedback:
+        item_text = item.get('Feedback', '') or item.get('Feedback_Gist', '')
+        if not item_text or item_text == feedback_text:
+            continue
+        
+        similarity = calculate_similarity(feedback_text, item_text)
+        
+        if similarity >= similarity_threshold:
+            similar_items.append({
+                'feedback_item': item,
+                'similarity': round(similarity, 3),
+                'matched_text': item_text[:100] + "..." if len(item_text) > 100 else item_text
+            })
+    
+    # Sort by similarity descending
+    similar_items.sort(key=lambda x: x['similarity'], reverse=True)
+    return similar_items
+
+def analyze_repeating_requests(feedback_items: list) -> dict:
+    """
+    Analyze feedback items to find repeating requests and common themes.
+    
+    Args:
+        feedback_items: List of feedback items to analyze
+    
+    Returns:
+        Dictionary with repeating request analysis
+    """
+    if not feedback_items:
+        return {}
+    
+    from collections import defaultdict
+    import re
+    
+    def extract_keywords(text, min_length=3):
+        """Extract meaningful keywords from text"""
+        if not text:
+            return []
+        
+        # Clean text and extract words
+        clean_text = re.sub(r'[^\w\s]', ' ', text.lower())
+        words = [w for w in clean_text.split() if len(w) >= min_length]
+        
+        # Filter out common stop words
+        stop_words = {
+            'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her',
+            'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its',
+            'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 'did', 'don', 'way',
+            'with', 'have', 'this', 'will', 'your', 'from', 'they', 'know', 'want',
+            'been', 'good', 'much', 'some', 'time', 'very', 'when', 'come', 'here',
+            'just', 'like', 'long', 'make', 'many', 'over', 'such', 'take', 'than',
+            'them', 'well', 'were', 'what', 'need', 'would', 'there', 'should'
+        }
+        
+        return [w for w in words if w not in stop_words]
+    
+    # Group similar feedback by clustering
+    clusters = []
+    processed = set()
+    
+    for i, item in enumerate(feedback_items):
+        if i in processed:
+            continue
+        
+        item_text = item.get('Feedback', '') or item.get('Feedback_Gist', '')
+        if not item_text:
+            continue
+        
+        similar_items = find_similar_feedback(item_text, feedback_items, similarity_threshold=0.3)
+        
+        if similar_items:
+            cluster = {
+                'primary_item': item,
+                'similar_items': similar_items,
+                'count': len(similar_items) + 1,
+                'keywords': extract_keywords(item_text),
+                'sources': list(set([item.get('Sources', 'Unknown')] + 
+                                  [si['feedback_item'].get('Sources', 'Unknown') for si in similar_items])),
+                'audiences': list(set([item.get('Audience', 'Unknown')] + 
+                                    [si['feedback_item'].get('Audience', 'Unknown') for si in similar_items])),
+                'priorities': list(set([item.get('Priority', 'medium')] + 
+                                     [si['feedback_item'].get('Priority', 'medium') for si in similar_items]))
+            }
+            clusters.append(cluster)
+            
+            processed.add(i)
+            for similar in similar_items:
+                # Find index of similar item to mark as processed
+                for j, check_item in enumerate(feedback_items):
+                    if check_item == similar['feedback_item']:
+                        processed.add(j)
+                        break
+    
+    # Sort clusters by count (most frequent first)
+    clusters.sort(key=lambda x: x['count'], reverse=True)
+    
+    # Analyze keyword frequency across all feedback
+    keyword_freq = defaultdict(int)
+    for item in feedback_items:
+        text = item.get('Feedback', '') or item.get('Feedback_Gist', '')
+        keywords = extract_keywords(text)
+        for keyword in keywords:
+            keyword_freq[keyword] += 1
+    
+    # Get top keywords
+    top_keywords = sorted(keyword_freq.items(), key=lambda x: x[1], reverse=True)[:20]
+    
+    analysis = {
+        'total_items': len(feedback_items),
+        'unique_requests': len(feedback_items) - sum(len(c['similar_items']) for c in clusters),
+        'repeating_clusters': clusters[:10],  # Top 10 most frequent clusters
+        'cluster_count': len(clusters),
+        'repetition_rate': round(sum(len(c['similar_items']) for c in clusters) / len(feedback_items) * 100, 1),
+        'top_keywords': top_keywords,
+        'top_repeating_requests': [
+            {
+                'summary': cluster['primary_item'].get('Feedback_Gist', '')[:100],
+                'count': cluster['count'],
+                'sources': cluster['sources'],
+                'audiences': cluster['audiences'],
+                'keywords': cluster['keywords'][:5]
+            }
+            for cluster in clusters[:5]
+        ]
+    }
+    
+    return analysis

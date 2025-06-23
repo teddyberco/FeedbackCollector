@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 import re 
 import time 
 import config 
-from utils import generate_feedback_gist, categorize_feedback 
+from utils import generate_feedback_gist, categorize_feedback, enhanced_categorize_feedback, clean_feedback_text
 
 logging.basicConfig(level=logging.INFO) 
 logger = logging.getLogger(__name__)
@@ -54,23 +54,39 @@ class RedditCollector:
                 
                 tag_value = self._extract_flair(submission)
 
+                # Enhanced categorization
+                enhanced_cat = enhanced_categorize_feedback(
+                    full_feedback_text,
+                    source='Reddit',
+                    scenario='Customer',
+                    organization=f'Reddit/{config.REDDIT_SUBREDDIT}'
+                )
+                
                 feedback_items.append({
                     'Feedback_Gist': generate_feedback_gist(full_feedback_text),
                     'Feedback': full_feedback_text,
                     'Url': reddit_url,
-                    'Area': 'Workloads', 
+                    'Area': 'Workloads',
                     'Sources': 'Reddit',
                     'Impacttype': self._determine_impact_type_content(submission.title + " " + submission.selftext),
                     'Scenario': 'Customer',
                     'Customer': str(submission.author) if submission.author else "N/A",
-                    'Tag': tag_value, 
+                    'Tag': tag_value,
                     'Created': datetime.fromtimestamp(submission.created_utc).isoformat(),
                     'Organization': f'Reddit/{config.REDDIT_SUBREDDIT}',
                     'Status': config.DEFAULT_STATUS,
                     'Created_by': config.SYSTEM_USER,
                     'Rawfeedback': f"Source URL: {reddit_url}\nRaw Data: {str(vars(submission))}",
                     'Sentiment': analyze_sentiment(full_feedback_text),
-                    'Category': categorize_feedback(full_feedback_text)
+                    'Category': enhanced_cat['legacy_category'],  # Backward compatibility
+                    'Enhanced_Category': enhanced_cat['primary_category'],
+                    'Subcategory': enhanced_cat['subcategory'],
+                    'Audience': enhanced_cat['audience'],
+                    'Priority': enhanced_cat['priority'],
+                    'Feature_Area': enhanced_cat['feature_area'],
+                    'Categorization_Confidence': enhanced_cat['confidence'],
+                    'Domains': enhanced_cat.get('domains', []),
+                    'Primary_Domain': enhanced_cat.get('primary_domain', None)
                 })
                 count += 1
             
@@ -230,17 +246,33 @@ class FabricCommunityCollector:
                             "body_preview_used": bool(body_container_tag and body_container_tag.get_text(strip=True))
                         }
                         
+                        # Enhanced categorization
+                        enhanced_cat = enhanced_categorize_feedback(
+                            feedback_text,
+                            source='Fabric Community',
+                            scenario='Customer',
+                            organization='Microsoft Fabric Community'
+                        )
+                        
                         feedback_items.append({
                             'Feedback_Gist': gist, 'Feedback': feedback_text, 'Url': thread_url,
                             'Area': 'Fabric Platform Search', 'Sources': self.source_name,
                             'Impacttype': self._determine_impact_type_content(title + " " + feedback_text), # Use title + feedback for impact
                             'Scenario': 'Customer', 'Customer': author_name,
-                            'Tag': tag_value, 
+                            'Tag': tag_value,
                             'Created': created_utc.isoformat(),
                             'Organization': 'Microsoft Fabric Community', 'Status': config.DEFAULT_STATUS,
                             'Created_by': config.SYSTEM_USER, 'Rawfeedback': json.dumps(raw_feedback_data),
                             'Sentiment': analyze_sentiment(feedback_text), # Analyze new feedback_text
-                            'Category': categorize_feedback(feedback_text) # Categorize new feedback_text
+                            'Category': enhanced_cat['legacy_category'],  # Backward compatibility
+                            'Enhanced_Category': enhanced_cat['primary_category'],
+                            'Subcategory': enhanced_cat['subcategory'],
+                            'Audience': enhanced_cat['audience'],
+                            'Priority': enhanced_cat['priority'],
+                            'Feature_Area': enhanced_cat['feature_area'],
+                            'Categorization_Confidence': enhanced_cat['confidence'],
+                            'Domains': enhanced_cat.get('domains', []),
+                            'Primary_Domain': enhanced_cat.get('primary_domain', None)
                         })
                         if len(feedback_items) % 10 == 0 and len(feedback_items) > 0:
                             logger.info(f"Collected {len(feedback_items)} relevant items from {self.source_name} search...")
@@ -351,20 +383,36 @@ class GitHubDiscussionsCollector:
                 
                 tag_value = ""
 
+                # Enhanced categorization
+                enhanced_cat = enhanced_categorize_feedback(
+                    full_feedback_text_github,
+                    source='GitHub Discussions',
+                    scenario='Partner',
+                    organization=f'GitHub/{config.GITHUB_REPO_OWNER}'
+                )
+                
                 feedback_items.append({
                     'Feedback_Gist': generate_feedback_gist(full_feedback_text_github),
                     'Feedback': full_feedback_text_github, 'Url': url,
-                    'Area': discussion.get('category', {}).get('name', 'Workloads'), 
+                    'Area': discussion.get('category', {}).get('name', 'Workloads'),
                     'Sources': 'GitHub Discussions',
                     'Impacttype': self._determine_impact_type_content(full_feedback_text_github),
                     'Scenario': 'Partner', 'Customer': author,
-                    'Tag': tag_value, 
-                    'Created': created_at_str, 
+                    'Tag': tag_value,
+                    'Created': created_at_str,
                     'Organization': f'GitHub/{config.GITHUB_REPO_OWNER}', 'Status': config.DEFAULT_STATUS,
                     'Created_by': config.SYSTEM_USER,
                     'Rawfeedback': f"Source URL: {url}\nRaw API Response: {json.dumps(discussion, indent=2)}",
                     'Sentiment': analyze_sentiment(full_feedback_text_github),
-                    'Category': categorize_feedback(full_feedback_text_github)
+                    'Category': enhanced_cat['legacy_category'],  # Backward compatibility
+                    'Enhanced_Category': enhanced_cat['primary_category'],
+                    'Subcategory': enhanced_cat['subcategory'],
+                    'Audience': enhanced_cat['audience'],
+                    'Priority': enhanced_cat['priority'],
+                    'Feature_Area': enhanced_cat['feature_area'],
+                    'Categorization_Confidence': enhanced_cat['confidence'],
+                    'Domains': enhanced_cat.get('domains', []),
+                    'Primary_Domain': enhanced_cat.get('primary_domain', None)
                 })
                 count +=1
             logger.info(f"Collected {len(feedback_items)} relevant feedback items from GitHub Discussions")
@@ -446,8 +494,33 @@ class ADOChildTasksCollector:
             # Convert processed tasks to feedback items
             for task_data in processed_tasks.values():
                 try:
-                    full_feedback_text = f"{task_data['title']}\n\n{task_data['description']}"
+                    # Clean the description text to remove HTML/CSS formatting
+                    raw_description = task_data['description']
+                    raw_title = task_data['title']
+                    
+                    cleaned_description = clean_feedback_text(raw_description)
+                    cleaned_title = clean_feedback_text(raw_title)
+                    
+                    # Debug logging to see if cleaning is working
+                    logger.info(f"ADO Text Cleaning Debug - Original desc length: {len(raw_description)}, Cleaned length: {len(cleaned_description)}")
+                    if 'Description:' in raw_description and 'Description:' not in cleaned_description:
+                        logger.info("✓ Successfully removed 'Description:' text")
+                    if 'MsoNormal' in raw_description and 'MsoNormal' not in cleaned_description:
+                        logger.info("✓ Successfully removed CSS styling")
+                    
+                    full_feedback_text = f"{cleaned_title}\n\n{cleaned_description}"
                     work_item_url = f"{self.org_url}/{self.project_name}/_workitems/edit/{task_data['work_item_id']}"
+                    
+                    # Enhanced categorization
+                    enhanced_cat = enhanced_categorize_feedback(
+                        full_feedback_text,
+                        source='Azure DevOps',
+                        scenario='Internal',
+                        organization=f'ADO/{self.project_name}'
+                    )
+                    
+                    # Debug logging for categorization
+                    logger.info(f"ADO Categorization Debug - Audience: {enhanced_cat.get('audience', 'MISSING')}, Category: {enhanced_cat.get('primary_category', 'MISSING')}")
                     
                     feedback_items.append({
                         'Feedback_Gist': generate_feedback_gist(full_feedback_text),
@@ -464,8 +537,16 @@ class ADOChildTasksCollector:
                         'Status': config.DEFAULT_STATUS,
                         'Created_by': config.SYSTEM_USER,
                         'Rawfeedback': f"Source URL: {work_item_url}\nParent Work Item: {self.parent_work_item_id}\nRaw Data: {json.dumps(task_data['raw_task'], indent=2)}",
-                        'Sentiment': analyze_sentiment(task_data['description']),
-                        'Category': categorize_feedback(full_feedback_text)
+                        'Sentiment': analyze_sentiment(cleaned_description),
+                        'Category': enhanced_cat['legacy_category'],  # Backward compatibility
+                        'Enhanced_Category': enhanced_cat['primary_category'],
+                        'Subcategory': enhanced_cat['subcategory'],
+                        'Audience': enhanced_cat['audience'],
+                        'Priority': enhanced_cat['priority'],
+                        'Feature_Area': enhanced_cat['feature_area'],
+                        'Categorization_Confidence': enhanced_cat['confidence'],
+                        'Domains': enhanced_cat.get('domains', []),
+                        'Primary_Domain': enhanced_cat.get('primary_domain', None)
                     })
                 except Exception as e:
                     logger.error(f"Error creating feedback item for task {task_data.get('work_item_id', 'unknown')}: {e}")

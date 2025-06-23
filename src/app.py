@@ -136,28 +136,45 @@ def collect_feedback_route():
             description = item.get('description', '')
             ado_url = item.get('url')  # Already formatted in working client
             
-            # Use description + title for content (what user sees on feedback cards)
-            full_content = f"{title}"
-            if description and description != 'No description available':
-                full_content += f"\n\nDescription: {description}"
+            # Clean the text to remove HTML/CSS formatting (like the updated collector)
+            cleaned_title = utils.clean_feedback_text(title)
+            cleaned_description = utils.clean_feedback_text(description) if description and description != 'No description available' else ""
             
-            # Categorize based on the full feedback content (title + description)
-            category = utils.categorize_feedback(full_content)
+            # Use cleaned description + title for content
+            full_content = cleaned_title
+            if cleaned_description:
+                full_content += f"\n\n{cleaned_description}"
             
-            # Analyze sentiment of the feedback content
-            sentiment_analysis = utils.analyze_sentiment(full_content)
+            # Enhanced categorization (like the updated collector)
+            enhanced_cat = utils.enhanced_categorize_feedback(
+                full_content,
+                source='Azure DevOps',
+                scenario='Internal',
+                organization='ADO/WorkingClient'
+            )
+            
+            # Analyze sentiment of the cleaned content
+            sentiment_analysis = utils.analyze_sentiment(cleaned_description if cleaned_description else cleaned_title)
             
             ado_feedback.append({
-                'Title': f"[ADO-{work_item_id}] {title}",
-                'Feedback_Gist': f"[ADO-{work_item_id}] {title}",  # For card title
-                'Feedback': full_content,  # This is what shows in the card content
+                'Title': f"[ADO-{work_item_id}] {cleaned_title}",
+                'Feedback_Gist': utils.generate_feedback_gist(full_content),  # For card title
+                'Feedback': full_content,  # This is what shows in the card content (now cleaned!)
                 'Content': full_content,  # Backup field
                 'Author': item.get('createdBy', ''),
                 'Created': item.get('createdDate', ''),
                 'Url': ado_url,  # Proper field name for "View Source" button
                 'URL': ado_url,  # Backup field
                 'Sources': 'Azure DevOps',
-                'Category': category,  # Use text-based categorization
+                'Category': enhanced_cat['legacy_category'],  # Backward compatibility
+                'Enhanced_Category': enhanced_cat['primary_category'],  # Enhanced categorization
+                'Subcategory': enhanced_cat['subcategory'],
+                'Audience': enhanced_cat['audience'],  # This should now be "Developer"!
+                'Priority': enhanced_cat['priority'],
+                'Feature_Area': enhanced_cat['feature_area'],
+                'Categorization_Confidence': enhanced_cat['confidence'],
+                'Domains': enhanced_cat.get('domains', []),
+                'Primary_Domain': enhanced_cat.get('primary_domain', None),
                 'Sentiment': sentiment_analysis['label'],
                 'Sentiment_Score': sentiment_analysis['polarity'],
                 'Sentiment_Confidence': sentiment_analysis['confidence'],
@@ -251,9 +268,14 @@ def feedback_viewer():
     global last_collected_feedback
     
     source_filter = request.args.get('source', 'All')
-    category_filter = request.args.get('category', 'All')
+    category_filter = request.args.get('category', 'All')  # Legacy category filter
+    enhanced_category_filter = request.args.get('enhanced_category', 'All')  # New enhanced category filter
+    audience_filter = request.args.get('audience', 'All')  # New audience filter
+    priority_filter = request.args.get('priority', 'All')  # New priority filter
+    domain_filter = request.args.get('domain', 'All')  # New domain filter
     sentiment_filter = request.args.get('sentiment', 'All')
     sort_by = request.args.get('sort', 'newest')  # Default to newest first
+    show_repeating = request.args.get('show_repeating', 'false').lower() == 'true'  # Show repeating requests
     
     # If no feedback in memory, try loading from CSV
     if not last_collected_feedback:
@@ -275,7 +297,7 @@ def feedback_viewer():
     source_info_message = f"Displaying all {len(feedback_to_display)} collected items."
 
     # Debug logging
-    logger.info(f"Feedback viewer - Initial count: {len(feedback_to_display)}, Source filter: {source_filter}, Category filter: {category_filter}, Sort: {sort_by}")
+    logger.info(f"Feedback viewer - Initial count: {len(feedback_to_display)}, Source: {source_filter}, Enhanced Category: {enhanced_category_filter}, Audience: {audience_filter}, Priority: {priority_filter}, Sort: {sort_by}")
 
     if source_filter != 'All':
         feedback_to_display = [item for item in feedback_to_display if item.get('Sources') == source_filter]
@@ -283,7 +305,23 @@ def feedback_viewer():
     
     if category_filter != 'All':
         feedback_to_display = [item for item in feedback_to_display if item.get('Category') == category_filter]
-        logger.info(f"After category filter '{category_filter}': {len(feedback_to_display)} items")
+        logger.info(f"After legacy category filter '{category_filter}': {len(feedback_to_display)} items")
+    
+    if enhanced_category_filter != 'All':
+        feedback_to_display = [item for item in feedback_to_display if item.get('Enhanced_Category') == enhanced_category_filter]
+        logger.info(f"After enhanced category filter '{enhanced_category_filter}': {len(feedback_to_display)} items")
+    
+    if audience_filter != 'All':
+        feedback_to_display = [item for item in feedback_to_display if item.get('Audience') == audience_filter]
+        logger.info(f"After audience filter '{audience_filter}': {len(feedback_to_display)} items")
+    
+    if priority_filter != 'All':
+        feedback_to_display = [item for item in feedback_to_display if item.get('Priority') == priority_filter]
+        logger.info(f"After priority filter '{priority_filter}': {len(feedback_to_display)} items")
+    
+    if domain_filter != 'All':
+        feedback_to_display = [item for item in feedback_to_display if item.get('Primary_Domain') == domain_filter]
+        logger.info(f"After domain filter '{domain_filter}': {len(feedback_to_display)} items")
     
     if sentiment_filter != 'All':
         feedback_to_display = [item for item in feedback_to_display if item.get('Sentiment') == sentiment_filter]
@@ -336,18 +374,44 @@ def feedback_viewer():
         except Exception as e:
             logger.warning(f"Error sorting feedback by date: {e}")
 
-    if source_filter != 'All' or category_filter != 'All' or sentiment_filter != 'All':
+    # Analyze repeating requests if requested
+    repeating_analysis = None
+    if show_repeating and feedback_to_display:
+        from utils import analyze_repeating_requests
+        repeating_analysis = analyze_repeating_requests(feedback_to_display)
+        logger.info(f"Repeating requests analysis: {repeating_analysis.get('cluster_count', 0)} clusters found")
+
+    # Generate category statistics
+    category_stats = None
+    if feedback_to_display:
+        from utils import get_category_statistics
+        category_stats = get_category_statistics(feedback_to_display)
+        logger.info(f"Category statistics: {category_stats.get('total_items', 0)} items analyzed")
+
+    if any(f != 'All' for f in [source_filter, category_filter, enhanced_category_filter, audience_filter, priority_filter, domain_filter, sentiment_filter]):
         filters_applied = []
         if source_filter != 'All':
             filters_applied.append(f"Source: {source_filter}")
         if category_filter != 'All':
-            filters_applied.append(f"Category: {category_filter}")
+            filters_applied.append(f"Legacy Category: {category_filter}")
+        if enhanced_category_filter != 'All':
+            filters_applied.append(f"Category: {enhanced_category_filter}")
+        if audience_filter != 'All':
+            filters_applied.append(f"Audience: {audience_filter}")
+        if priority_filter != 'All':
+            filters_applied.append(f"Priority: {priority_filter}")
+        if domain_filter != 'All':
+            filters_applied.append(f"Domain: {domain_filter}")
         if sentiment_filter != 'All':
             filters_applied.append(f"Sentiment: {sentiment_filter}")
         source_info_message = f"Filtered by {', '.join(filters_applied)}. Showing {len(feedback_to_display)} items."
 
     all_sources = sorted(list(set(item.get('Sources', 'Unknown') for item in last_collected_feedback if item.get('Sources'))))
     all_categories = sorted(list(set(item.get('Category', 'Uncategorized') for item in last_collected_feedback if item.get('Category'))))
+    all_enhanced_categories = sorted(list(set(item.get('Enhanced_Category', 'Other') for item in last_collected_feedback if item.get('Enhanced_Category'))))
+    all_audiences = sorted(list(set(item.get('Audience', 'Unknown') for item in last_collected_feedback if item.get('Audience'))))
+    all_priorities = sorted(list(set(item.get('Priority', 'medium') for item in last_collected_feedback if item.get('Priority'))))
+    all_domains = sorted(list(set(item.get('Primary_Domain') for item in last_collected_feedback if item.get('Primary_Domain'))))
     all_sentiments = sorted(list(set(item.get('Sentiment', 'Neutral') for item in last_collected_feedback if item.get('Sentiment'))))
 
     trending_category_name = None
@@ -365,9 +429,20 @@ def feedback_viewer():
                            current_source=source_filter,
                            all_categories=all_categories,
                            current_category=category_filter,
+                           all_enhanced_categories=all_enhanced_categories,
+                           current_enhanced_category=enhanced_category_filter,
+                           all_audiences=all_audiences,
+                           current_audience=audience_filter,
+                           all_priorities=all_priorities,
+                           current_priority=priority_filter,
+                           all_domains=all_domains,
+                           current_domain=domain_filter,
                            all_sentiments=all_sentiments,
                            current_sentiment=sentiment_filter,
                            current_sort=sort_by,
+                           show_repeating=show_repeating,
+                           repeating_analysis=repeating_analysis,
+                           category_stats=category_stats,
                            trending_category_name=trending_category_name,
                            trending_category_count=trending_category_count
                            )

@@ -33,7 +33,192 @@ OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 FABRIC_STORAGE_URL = os.getenv('FABRIC_STORAGE_URL')
 FABRIC_STORAGE_KEY = os.getenv('FABRIC_STORAGE_KEY')
 
-# Feedback Categories - Display Names
+# Enhanced Hierarchical Feedback Categories
+ENHANCED_FEEDBACK_CATEGORIES = {
+    'DEVELOPER_REQUESTS': {
+        'name': 'Developer Experience Requests',
+        'audience': 'Developer',
+        'description': 'Feedback related to workload development using WDK/SDK',
+        'subcategories': {
+            'WDK_FEATURES': {
+                'name': 'WDK Enhancement',
+                'keywords': [
+                    'wdk', 'workload development kit', 'development kit', 'build', 'compile', 'debug',
+                    'testing framework', 'unit test', 'deployment', 'packaging', 'manifest', 'workload project'
+                ],
+                'priority': 'high',
+                'feature_area': 'Workload Development'
+            },
+            'SDK_FEATURES': {
+                'name': 'SDK Enhancement',
+                'keywords': [
+                    'sdk', 'software development kit', 'api', 'connector', 'authentication', 'data source',
+                    'data connection', 'rest api', 'graphql', 'oauth', 'service principal', 'token'
+                ],
+                'priority': 'high',
+                'feature_area': 'Workload Development'
+            },
+            'DEV_TOOLS': {
+                'name': 'Development Tools',
+                'keywords': [
+                    'ide', 'visual studio', 'vs code', 'intellisense', 'git', 'version control',
+                    'source control', 'debugging', 'breakpoint', 'profiling', 'local development'
+                ],
+                'priority': 'medium',
+                'feature_area': 'Development Experience'
+            },
+            'DEV_DOCUMENTATION': {
+                'name': 'Developer Documentation',
+                'keywords': [
+                    'developer docs', 'api documentation', 'sample code', 'code samples', 'tutorial',
+                    'developer guide', 'how to develop', 'best practices', 'reference', 'sdk docs'
+                ],
+                'priority': 'medium',
+                'feature_area': 'Documentation'
+            },
+            'DEV_EXPERIENCE': {
+                'name': 'Development Experience',
+                'keywords': [
+                    'developer experience', 'dx', 'workflow', 'productivity', 'automation',
+                    'ci/cd', 'continuous integration', 'testing automation', 'build pipeline'
+                ],
+                'priority': 'medium',
+                'feature_area': 'Development Experience'
+            }
+        }
+    },
+    'CUSTOMER_REQUESTS': {
+        'name': 'Customer Experience Requests',
+        'audience': 'Customer',
+        'description': 'Feedback related to using workloads from Workload Hub/Marketplace',
+        'subcategories': {
+            'WORKLOAD_HUB': {
+                'name': 'Workload Hub Experience',
+                'keywords': [
+                    'workload hub', 'hub', 'browse workloads', 'discover workloads', 'find workloads',
+                    'workload gallery', 'workload store', 'search workloads', 'filter workloads'
+                ],
+                'priority': 'high',
+                'feature_area': 'Workload Discovery'
+            },
+            'MARKETPLACE': {
+                'name': 'Marketplace Features',
+                'keywords': [
+                    'marketplace', 'publish workload', 'workload publishing', 'certification',
+                    'workload approval', 'listing', 'pricing', 'billing', 'monetization'
+                ],
+                'priority': 'high',
+                'feature_area': 'Workload Publishing'
+            },
+            'INSTALLATION': {
+                'name': 'Installation & Setup',
+                'keywords': [
+                    'install workload', 'installation', 'setup', 'configure', 'deployment',
+                    'getting started', 'onboarding', 'first time setup', 'workload configuration'
+                ],
+                'priority': 'high',
+                'feature_area': 'Workload Usage'
+            },
+            'WORKLOAD_USAGE': {
+                'name': 'Workload Usage Experience',
+                'keywords': [
+                    'using workload', 'workload performance', 'workload ui', 'workload interface',
+                    'workload features', 'workload functionality', 'user experience', 'usability'
+                ],
+                'priority': 'high',
+                'feature_area': 'Workload Usage'
+            },
+            'CUSTOMER_SUPPORT': {
+                'name': 'Customer Support & Help',
+                'keywords': [
+                    'help', 'support', 'customer support', 'documentation', 'user guide',
+                    'how to use', 'tutorial', 'faq', 'troubleshooting', 'knowledge base'
+                ],
+                'priority': 'medium',
+                'feature_area': 'Support'
+            }
+        }
+    },
+    'PLATFORM_REQUESTS': {
+        'name': 'Platform & Infrastructure Requests',
+        'audience': 'Platform',
+        'description': 'Feedback related to platform-level features and infrastructure',
+        'subcategories': {
+            'INFRASTRUCTURE': {
+                'name': 'Infrastructure & Scaling',
+                'keywords': [
+                    'infrastructure', 'scaling', 'scale', 'capacity', 'resources', 'multi-tenant',
+                    'regional', 'availability', 'reliability', 'uptime', 'disaster recovery'
+                ],
+                'priority': 'high',
+                'feature_area': 'Platform Infrastructure'
+            },
+            'SECURITY': {
+                'name': 'Security & Compliance',
+                'keywords': [
+                    'security', 'vulnerability', 'exploit', 'permission', 'access control', 'rbac',
+                    'authentication', 'authorization', 'compliance', 'gdpr', 'privacy', 'audit'
+                ],
+                'priority': 'critical',
+                'feature_area': 'Security'
+            },
+            'MONITORING': {
+                'name': 'Monitoring & Analytics',
+                'keywords': [
+                    'monitoring', 'analytics', 'metrics', 'telemetry', 'logging', 'diagnostics',
+                    'performance monitoring', 'usage analytics', 'business intelligence', 'reporting'
+                ],
+                'priority': 'medium',
+                'feature_area': 'Platform Services'
+            },
+            'INTEGRATION': {
+                'name': 'Platform Integration',
+                'keywords': [
+                    'integration', 'fabric integration', 'power bi', 'teams', 'office', 'azure',
+                    'third-party', 'connector', 'api integration', 'service integration'
+                ],
+                'priority': 'medium',
+                'feature_area': 'Platform Integration'
+            }
+        }
+    },
+    'TECHNICAL_ISSUES': {
+        'name': 'Technical Issues & Bugs',
+        'audience': 'All',
+        'description': 'Bug reports and technical issues across all areas',
+        'subcategories': {
+            'BUGS': {
+                'name': 'Bug Reports',
+                'keywords': [
+                    'bug', 'error', 'issue', 'problem', 'broken', 'not working', 'crash',
+                    'exception', 'failure', 'malfunction', 'incorrect behavior'
+                ],
+                'priority': 'critical',
+                'feature_area': 'Quality'
+            },
+            'PERFORMANCE': {
+                'name': 'Performance Issues',
+                'keywords': [
+                    'slow', 'performance', 'speed', 'lag', 'delay', 'timeout', 'hang', 'freeze',
+                    'response time', 'latency', 'throughput', 'optimization'
+                ],
+                'priority': 'high',
+                'feature_area': 'Performance'
+            },
+            'COMPATIBILITY': {
+                'name': 'Compatibility Issues',
+                'keywords': [
+                    'compatibility', 'incompatible', 'version', 'browser', 'environment',
+                    'platform support', 'cross-platform', 'backwards compatibility'
+                ],
+                'priority': 'medium',
+                'feature_area': 'Compatibility'
+            }
+        }
+    }
+}
+
+# Legacy category mapping for backward compatibility
 FEEDBACK_CATEGORY_DISPLAY_NAMES = {
     'UI_USABILITY': 'User Interface / Usability',
     'PERFORMANCE': 'Performance / Reliability',
@@ -48,7 +233,7 @@ FEEDBACK_CATEGORY_DISPLAY_NAMES = {
     'OTHER': 'Other / Uncategorized'
 }
 
-# Feedback Categories with Keywords for automated categorization
+# Legacy categories with keywords (kept for backward compatibility)
 FEEDBACK_CATEGORIES_WITH_KEYWORDS = {
     'FEATURE_REQUEST': {
         'name': FEEDBACK_CATEGORY_DISPLAY_NAMES['FEATURE_REQUEST'],
@@ -75,7 +260,98 @@ FEEDBACK_CATEGORIES_WITH_KEYWORDS = {
         'keywords': ['security', 'vulnerability', 'exploit', 'permission', 'access control', 'auth', 'authentication', 'authorization', 'compliance', 'gdpr']
     },
 }
+
 DEFAULT_CATEGORY = FEEDBACK_CATEGORY_DISPLAY_NAMES['OTHER']
+
+# Audience detection keywords
+AUDIENCE_DETECTION_KEYWORDS = {
+    'Developer': [
+        'wdk', 'sdk', 'development kit', 'api', 'develop', 'developing', 'developer',
+        'code', 'programming', 'build', 'compile', 'debug', 'visual studio', 'ide',
+        'git', 'version control', 'deployment', 'testing', 'unit test'
+    ],
+    'Customer': [
+        'workload hub', 'marketplace', 'install', 'using', 'user', 'customer',
+        'browse', 'discover', 'find workloads', 'workload gallery', 'end user',
+        'business user', 'analyst', 'report', 'dashboard'
+    ],
+    'ISV': [
+        'isv', 'independent software vendor', 'partner', 'publish', 'publishing',
+        'certification', 'monetize', 'sell', 'distribute', 'listing'
+    ]
+}
+
+# Priority levels
+PRIORITY_LEVELS = {
+    'critical': {'weight': 4, 'sla_days': 1},
+    'high': {'weight': 3, 'sla_days': 7},
+    'medium': {'weight': 2, 'sla_days': 14},
+    'low': {'weight': 1, 'sla_days': 30}
+}
+
+# Domain Categories for cross-cutting concerns
+DOMAIN_CATEGORIES = {
+    'GOVERNANCE': {
+        'name': 'Governance',
+        'description': 'Compliance, policies, data governance, regulatory requirements',
+        'keywords': [
+            'governance', 'compliance', 'policy', 'policies', 'regulation', 'regulatory',
+            'audit', 'auditing', 'data governance', 'data lineage', 'gdpr', 'privacy',
+            'retention', 'classification', 'data classification', 'metadata', 'catalog'
+        ],
+        'color': '#6f42c1'  # Purple
+    },
+    'USER_EXPERIENCE': {
+        'name': 'User Experience',
+        'description': 'UI/UX design, usability, accessibility, user workflows',
+        'keywords': [
+            'user experience', 'ux', 'ui', 'interface', 'usability', 'accessibility',
+            'design', 'layout', 'navigation', 'workflow', 'user journey', 'intuitive',
+            'confusing', 'hard to use', 'easy to use', 'user-friendly', 'responsive'
+        ],
+        'color': '#28a745'  # Green
+    },
+    'AUTHENTICATION': {
+        'name': 'Authentication & Security',
+        'description': 'Identity, access control, security, permissions, SSO',
+        'keywords': [
+            'authentication', 'auth', 'login', 'sso', 'single sign-on', 'identity',
+            'access control', 'permissions', 'rbac', 'security', 'authorization',
+            'token', 'oauth', 'saml', 'azure ad', 'active directory', 'mfa'
+        ],
+        'color': '#dc3545'  # Red
+    },
+    'PERFORMANCE': {
+        'name': 'Performance & Scalability',
+        'description': 'Speed, scalability, optimization, resource usage, latency',
+        'keywords': [
+            'performance', 'speed', 'slow', 'fast', 'scalability', 'scale', 'optimization',
+            'latency', 'response time', 'throughput', 'memory', 'cpu', 'resource',
+            'timeout', 'lag', 'delay', 'bottleneck', 'capacity', 'load'
+        ],
+        'color': '#fd7e14'  # Orange
+    },
+    'INTEGRATION': {
+        'name': 'Integration & APIs',
+        'description': 'APIs, connectors, third-party integrations, data flow',
+        'keywords': [
+            'api', 'integration', 'connector', 'connect', 'third-party', 'external',
+            'webhook', 'rest', 'graphql', 'endpoint', 'data flow', 'etl', 'pipeline',
+            'sync', 'synchronization', 'import', 'export', 'federation'
+        ],
+        'color': '#17a2b8'  # Cyan
+    },
+    'ANALYTICS': {
+        'name': 'Analytics & Reporting',
+        'description': 'Business intelligence, reporting, dashboards, metrics, insights',
+        'keywords': [
+            'analytics', 'reporting', 'report', 'dashboard', 'visualization', 'chart',
+            'metric', 'kpi', 'insight', 'business intelligence', 'bi', 'data analysis',
+            'trending', 'statistics', 'aggregation', 'summary', 'drill-down'
+        ],
+        'color': '#ffc107'  # Yellow
+    }
+}
 
 # Table Schema
 TABLE_COLUMNS = [
@@ -85,7 +361,15 @@ TABLE_COLUMNS = [
     'Sources',
     'Impacttype',
     'Scenario',
-    'Category',
+    'Category',  # Legacy category field for backward compatibility
+    'Enhanced_Category',  # New primary category
+    'Subcategory',  # New subcategory field
+    'Audience',  # Developer/Customer/ISV classification
+    'Priority',  # Priority level (critical/high/medium/low)
+    'Feature_Area',  # Feature area classification
+    'Categorization_Confidence',  # Confidence score for categorization
+    'Domains',  # Cross-cutting domain concerns (JSON array)
+    'Primary_Domain',  # Primary domain classification
     'Tag',
     'Customer',
     'Created',

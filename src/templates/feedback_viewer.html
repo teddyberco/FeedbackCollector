@@ -64,6 +64,91 @@
             70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
             100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
         }
+        
+        /* Enhanced categorization styles */
+        .audience-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            border-radius: 12px;
+            padding: 4px 8px;
+            margin-right: 4px;
+        }
+        .audience-developer { background-color: #007bff; color: white; }
+        .audience-customer { background-color: #28a745; color: white; }
+        .audience-isv { background-color: #6f42c1; color: white; }
+        .audience-platform { background-color: #fd7e14; color: white; }
+        .audience-unknown { background-color: #6c757d; color: white; }
+        
+        .priority-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 3px 6px;
+            margin-left: 4px;
+        }
+        .priority-critical {
+            background-color: #dc3545;
+            color: white;
+            animation: pulse-red 2s infinite;
+        }
+        .priority-high { background-color: #fd7e14; color: white; }
+        .priority-medium { background-color: #ffc107; color: #212529; }
+        .priority-low { background-color: #6c757d; color: white; }
+        
+        .category-info {
+            font-size: 0.75rem;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }
+        
+        .filter-section {
+            background-color: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .filter-group {
+            margin-bottom: 15px;
+        }
+        
+        .filter-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .filter-label {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+            display: block;
+        }
+        
+        .domain-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 3px 6px;
+            margin-right: 4px;
+            color: white;
+        }
+        
+        .repeating-analysis {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .similarity-indicator {
+            font-size: 0.75rem;
+            background-color: #e3f2fd;
+            color: #1976d2;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
@@ -71,7 +156,48 @@
         <h1>Collected Feedback</h1>
         <p><a href="/">Back to Collector</a></p>
 
-        {% if trending_category_name and trending_category_count > 0 %}
+        <!-- Enhanced Statistics Dashboard -->
+        {% if category_stats %}
+        <div class="alert alert-info" role="alert">
+            <h5 class="alert-heading">📊 Category Statistics</h5>
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>By Audience:</strong>
+                    <ul class="mb-0">
+                        {% for audience, count in category_stats.by_audience.items() %}
+                        <li>{{ audience }}: {{ count }} ({{ "%.1f"|format((count/category_stats.total_items)*100) }}%)</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <strong>By Priority:</strong>
+                    <ul class="mb-0">
+                        {% for priority, data in category_stats.priority_distribution.items() %}
+                        <li>{{ priority|title }}: {{ data.count }} ({{ data.percentage }}%)</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <strong>By Domain:</strong>
+                    <ul class="mb-0">
+                        {% for domain, count in category_stats.by_domain.items() %}
+                        {% if count > 0 %}
+                        <li>{{ domain }}: {{ count }}</li>
+                        {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-md-3">
+                    <strong>Top Categories:</strong>
+                    <ul class="mb-0">
+                        {% for category, count in (category_stats.by_enhanced_category.items()|list)[:3] %}
+                        <li>{{ category[:20] }}{% if category|length > 20 %}...{% endif %}: {{ count }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% elif trending_category_name and trending_category_count > 0 %}
         <div class="alert alert-info" role="alert">
             <h5 class="alert-heading">🔥 Trending Category</h5>
             <p>The most frequent category in the current view is: <strong>{{ trending_category_name }}</strong> ({{ trending_category_count }} item{% if trending_category_count != 1 %}s{% endif %}).</p>
@@ -98,49 +224,153 @@
         </div>
         {% endif %}
 
-        {% if all_sources %}
-        <div class="mb-3">
-            <strong>Filter by source:</strong>
-            <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Source filters">
-                <a href="{{ url_for('feedback_viewer', source='All', category=current_category if current_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_source == 'All' or not current_source %}btn-primary{% else %}btn-outline-primary{% endif %}">All Sources</a>
-                {% for src in all_sources %}
-                <a href="{{ url_for('feedback_viewer', source=src, category=current_category if current_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_source == src %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ src }}</a>
-                {% endfor %}
+        <!-- Enhanced Filter Section -->
+        <div class="filter-section">
+            <h5 class="mb-3">🔍 Enhanced Filters</h5>
+            
+            <!-- Audience Filter -->
+            <div class="filter-group">
+                <span class="filter-label">👥 Filter by Audience:</span>
+                <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Audience filters">
+                    <a href="{{ url_for('feedback_viewer', audience='All', source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, priority=current_priority if current_priority != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_audience == 'All' or not current_audience %}btn-secondary{% else %}btn-outline-secondary{% endif %}">All Audiences</a>
+                    <a href="{{ url_for('feedback_viewer', audience='Developer', source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, priority=current_priority if current_priority != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_audience == 'Developer' %}btn-primary{% else %}btn-outline-primary{% endif %}">🛠️ Developer</a>
+                    <a href="{{ url_for('feedback_viewer', audience='Customer', source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, priority=current_priority if current_priority != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_audience == 'Customer' %}btn-success{% else %}btn-outline-success{% endif %}">👤 Customer</a>
+                    <a href="{{ url_for('feedback_viewer', audience='ISV', source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, priority=current_priority if current_priority != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_audience == 'ISV' %}btn-info{% else %}btn-outline-info{% endif %}">🏢 ISV</a>
+                    <a href="{{ url_for('feedback_viewer', audience='Platform', source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, priority=current_priority if current_priority != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_audience == 'Platform' %}btn-warning{% else %}btn-outline-warning{% endif %}">⚙️ Platform</a>
+                </div>
             </div>
-        </div>
-        {% endif %}
 
-        {% if all_categories %}
-        <div class="mb-3">
-            <strong>Filter by Category:</strong>
-            <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Category filters">
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category='All', sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_category == 'All' or not current_category %}btn-primary{% else %}btn-outline-primary{% endif %}">All Categories</a>
-                {% for cat in all_categories %}
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=cat, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}" class="btn {% if current_category == cat %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ cat }}</a>
-                {% endfor %}
+            <!-- Priority Filter -->
+            <div class="filter-group">
+                <span class="filter-label">⚡ Filter by Priority:</span>
+                <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Priority filters">
+                    <a href="{{ url_for('feedback_viewer', priority='All', audience=current_audience if current_audience != 'All' else None, source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_priority == 'All' or not current_priority %}btn-secondary{% else %}btn-outline-secondary{% endif %}">All Priorities</a>
+                    <a href="{{ url_for('feedback_viewer', priority='critical', audience=current_audience if current_audience != 'All' else None, source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_priority == 'critical' %}btn-danger{% else %}btn-outline-danger{% endif %}">🔴 Critical</a>
+                    <a href="{{ url_for('feedback_viewer', priority='high', audience=current_audience if current_audience != 'All' else None, source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_priority == 'high' %}btn-warning{% else %}btn-outline-warning{% endif %}">🟠 High</a>
+                    <a href="{{ url_for('feedback_viewer', priority='medium', audience=current_audience if current_audience != 'All' else None, source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_priority == 'medium' %}btn-info{% else %}btn-outline-info{% endif %}">🟡 Medium</a>
+                    <a href="{{ url_for('feedback_viewer', priority='low', audience=current_audience if current_audience != 'All' else None, source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_priority == 'low' %}btn-light{% else %}btn-outline-dark{% endif %}">⚪ Low</a>
+                </div>
             </div>
-        </div>
-        {% endif %}
 
-        {% if all_sentiments %}
-        <div class="mb-3">
-            <strong>Filter by Sentiment:</strong>
-            <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Sentiment filters">
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sentiment='All', sort=current_sort if current_sort else None) }}" class="btn {% if current_sentiment == 'All' or not current_sentiment %}btn-warning{% else %}btn-outline-warning{% endif %}">All Sentiments</a>
-                {% for sentiment in all_sentiments %}
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sentiment=sentiment, sort=current_sort if current_sort else None) }}" class="btn {% if current_sentiment == sentiment %}btn-warning{% else %}btn-outline-warning{% endif %}">{{ sentiment }}</a>
-                {% endfor %}
+            <!-- Enhanced Category Filter -->
+            {% if all_enhanced_categories %}
+            <div class="filter-group">
+                <span class="filter-label">📂 Filter by Enhanced Category:</span>
+                <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Enhanced category filters">
+                    <a href="{{ url_for('feedback_viewer', enhanced_category='All', audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, source=current_source if current_source != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_enhanced_category == 'All' or not current_enhanced_category %}btn-secondary{% else %}btn-outline-secondary{% endif %}">All Categories</a>
+                    {% for cat in all_enhanced_categories %}
+                    <a href="{{ url_for('feedback_viewer', enhanced_category=cat, audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, source=current_source if current_source != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_enhanced_category == cat %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ cat[:30] }}{% if cat|length > 30 %}...{% endif %}</a>
+                    {% endfor %}
+                </div>
             </div>
-        </div>
-        {% endif %}
+            {% endif %}
 
-        <div class="mb-3">
-            <strong>Sort by Date:</strong>
-            <div class="btn-group btn-group-sm mt-1" role="group" aria-label="Date sort options">
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort='newest') }}" class="btn {% if current_sort == 'newest' or not current_sort %}btn-success{% else %}btn-outline-success{% endif %}">📅 Newest First</a>
-                <a href="{{ url_for('feedback_viewer', source=current_source if current_source != 'All' else None, category=current_category if current_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort='oldest') }}" class="btn {% if current_sort == 'oldest' %}btn-success{% else %}btn-outline-success{% endif %}">📆 Oldest First</a>
+            <!-- Domain Filter -->
+            {% if all_domains %}
+            <div class="filter-group">
+                <span class="filter-label">🎯 Filter by Domain:</span>
+                <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Domain filters">
+                    <a href="{{ url_for('feedback_viewer', domain='All', audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, source=current_source if current_source != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_domain == 'All' or not current_domain %}btn-secondary{% else %}btn-outline-secondary{% endif %}">All Domains</a>
+                    {% for domain in all_domains %}
+                    <a href="{{ url_for('feedback_viewer', domain=domain, audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, source=current_source if current_source != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_domain == domain %}btn-dark{% else %}btn-outline-dark{% endif %}">{{ domain }}</a>
+                    {% endfor %}
+                </div>
             </div>
-        </div>
+            {% endif %}
+
+            <!-- Source Filter -->
+            {% if all_sources %}
+            <div class="filter-group">
+                <span class="filter-label">📡 Filter by Source:</span>
+                <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Source filters">
+                    <a href="{{ url_for('feedback_viewer', source='All', audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_source == 'All' or not current_source %}btn-secondary{% else %}btn-outline-secondary{% endif %}">All Sources</a>
+                    {% for src in all_sources %}
+                    <a href="{{ url_for('feedback_viewer', source=src, audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_source == src %}btn-info{% else %}btn-outline-info{% endif %}">{{ src }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Sentiment Filter -->
+            {% if all_sentiments %}
+            <div class="filter-group">
+                <span class="filter-label">😊 Filter by Sentiment:</span>
+                <div class="btn-group btn-group-sm flex-wrap" role="group" aria-label="Sentiment filters">
+                    <a href="{{ url_for('feedback_viewer', sentiment='All', audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_sentiment == 'All' or not current_sentiment %}btn-secondary{% else %}btn-outline-secondary{% endif %}">All Sentiments</a>
+                    {% for sentiment in all_sentiments %}
+                    <a href="{{ url_for('feedback_viewer', sentiment=sentiment, audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sort=current_sort if current_sort else None) }}"
+                       class="btn {% if current_sentiment == sentiment %}btn-warning{% else %}btn-outline-warning{% endif %}">{{ sentiment }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Sort Options -->
+            <div class="filter-group">
+                <span class="filter-label">📅 Sort by Date:</span>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Date sort options">
+                    <a href="{{ url_for('feedback_viewer', sort='newest', audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None) }}"
+                       class="btn {% if current_sort == 'newest' or not current_sort %}btn-success{% else %}btn-outline-success{% endif %}">📅 Newest First</a>
+                    <a href="{{ url_for('feedback_viewer', sort='oldest', audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None) }}"
+                       class="btn {% if current_sort == 'oldest' %}btn-success{% else %}btn-outline-success{% endif %}">📆 Oldest First</a>
+               </div>
+           </div>
+           
+           <!-- Repeating Requests Toggle -->
+           <div class="filter-group">
+               <span class="filter-label">🔄 Repeating Requests Analysis:</span>
+               <div class="btn-group btn-group-sm" role="group" aria-label="Repeating requests toggle">
+                   <a href="{{ url_for('feedback_viewer', show_repeating='false', audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, domain=current_domain if current_domain != 'All' else None, source=current_source if current_source != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                      class="btn {% if not show_repeating %}btn-outline-info{% else %}btn-info{% endif %}">Hide Analysis</a>
+                   <a href="{{ url_for('feedback_viewer', show_repeating='true', audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, domain=current_domain if current_domain != 'All' else None, source=current_source if current_source != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
+                      class="btn {% if show_repeating %}btn-info{% else %}btn-outline-info{% endif %}">🔍 Analyze Repeating Requests</a>
+               </div>
+           </div>
+       </div>
+
+       <!-- Repeating Requests Analysis -->
+       {% if show_repeating and repeating_analysis %}
+       <div class="repeating-analysis">
+           <h5>🔄 Repeating Requests Analysis</h5>
+           <div class="row">
+               <div class="col-md-6">
+                   <p><strong>Summary:</strong></p>
+                   <ul>
+                       <li>Total feedback items: {{ repeating_analysis.total_items }}</li>
+                       <li>Unique requests: {{ repeating_analysis.unique_requests }}</li>
+                       <li>Repeating clusters: {{ repeating_analysis.cluster_count }}</li>
+                       <li>Repetition rate: {{ repeating_analysis.repetition_rate }}%</li>
+                   </ul>
+               </div>
+               <div class="col-md-6">
+                   <p><strong>Top Repeating Requests:</strong></p>
+                   {% for req in repeating_analysis.top_repeating_requests[:3] %}
+                   <div class="mb-2">
+                       <strong>{{ req.count }}x:</strong> {{ req.summary }}
+                       <br><small class="text-muted">Audiences: {{ req.audiences|join(', ') }} | Sources: {{ req.sources|join(', ') }}</small>
+                   </div>
+                   {% endfor %}
+               </div>
+           </div>
+       </div>
+       {% endif %}
 
         {% if source_info %}
             <p class="text-muted"><em>{{ source_info }}</em></p>
@@ -169,6 +399,55 @@
                                     - {{ item.Created.split('T')[0] }} {# Show Date part only #}
                                 {% endif %}
                             </h6>
+                            
+                            <!-- Enhanced Categorization Info -->
+                            {% if item.Audience or item.Enhanced_Category or item.Priority %}
+                            <div class="category-info">
+                                {% if item.Audience and item.Audience|trim != '' %}
+                                    <span class="audience-badge audience-{{ item.Audience|lower }}">
+                                        {% if item.Audience == 'Developer' %}🛠️ Developer
+                                        {% elif item.Audience == 'Customer' %}👤 Customer
+                                        {% elif item.Audience == 'ISV' %}🏢 ISV
+                                        {% elif item.Audience == 'Platform' %}⚙️ Platform
+                                        {% else %}{{ item.Audience }}{% endif %}
+                                    </span>
+                                {% endif %}
+                                
+                                {% if item.Priority and item.Priority|trim != '' %}
+                                    <span class="priority-badge priority-{{ item.Priority|lower }}" title="Priority: {{ item.Priority|title }}">
+                                        {% if item.Priority|lower == 'critical' %}🔴 Critical
+                                        {% elif item.Priority|lower == 'high' %}🟠 High
+                                        {% elif item.Priority|lower == 'medium' %}🟡 Medium
+                                        {% elif item.Priority|lower == 'low' %}⚪ Low
+                                        {% else %}{{ item.Priority|title }}{% endif %}
+                                    </span>
+                                {% endif %}
+                            </div>
+                            
+                            {% if item.Enhanced_Category and item.Enhanced_Category|trim != '' %}
+                            <div class="category-info">
+                                <strong>Category:</strong> {{ item.Enhanced_Category }}
+                                {% if item.Subcategory and item.Subcategory|trim != '' %}
+                                    → {{ item.Subcategory }}
+                                {% endif %}
+                                {% if item.Feature_Area and item.Feature_Area|trim != '' %}
+                                    <br><strong>Area:</strong> {{ item.Feature_Area }}
+                                {% endif %}
+                                {% if item.Categorization_Confidence %}
+                                    <span class="text-muted">({{ (item.Categorization_Confidence * 100)|round|int }}% confidence)</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            
+                            <!-- Domain Information -->
+                            {% if item.Primary_Domain and item.Primary_Domain|trim != '' %}
+                            <div class="category-info">
+                                <strong>Domain:</strong>
+                                <span class="domain-badge" style="background-color: #6c757d;">{{ item.Primary_Domain }}</span>
+                            </div>
+                            {% endif %}
+                            {% endif %}
+                            
                             <p class="card-text feedback-content mb-auto">
                                 {{ item.Feedback }}
                             </p>
