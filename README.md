@@ -1,44 +1,51 @@
 # Microsoft Fabric Workloads Feedback Collector
 
-A comprehensive web-based tool that collects feedback about Microsoft Fabric Workloads from multiple sources, provides intelligent categorization with domain analysis, and offers seamless integration with Microsoft Fabric Lakehouse for analytics.
+A comprehensive, enterprise-grade web-based tool that intelligently collects, processes, and manages feedback about Microsoft Fabric Workloads from multiple sources. Features advanced categorization, state management, and seamless integration with Microsoft Fabric SQL Database and Lakehouse for analytics.
 
-## 🌟 Features
+## 🌟 Key Features
 
 ### **Multi-Source Data Collection**
-- **Reddit**: r/MicrosoftFabric community discussions
+- **Reddit**: r/MicrosoftFabric community discussions with real-time monitoring
 - **Microsoft Fabric Community**: Official forums and discussions
 - **GitHub Discussions**: Microsoft-Fabric-workload-development-sample repository
 - **Azure DevOps**: Work items and task feedback with advanced text cleaning
 
-### **Enhanced Intelligence**
+### **Advanced Intelligence & Processing**
 - **Domain-Aware Categorization**: Maps feedback to 6 cross-cutting business domains
 - **Smart Audience Detection**: Automatically identifies Developer/Customer/ISV feedback
 - **Enhanced Text Processing**: Removes CSS, HTML, and email content from ADO items
 - **Duplicate Detection**: Identifies repeating requests with 30% similarity threshold
 - **Priority Classification**: Automatic priority assignment based on content analysis
 - **Confidence Scoring**: Provides categorization confidence levels
+- **State Management**: Tracks feedback lifecycle and user interactions
 
-### **Web Interface & User Experience**
-- **Modern Web UI**: Bootstrap-powered responsive interface
+### **Enterprise Web Interface**
+- **Modern Web UI**: Bootstrap-powered responsive interface with real-time updates
 - **Enhanced Feedback Viewer**: Advanced filtering by category, audience, domain, and priority
+- **Interactive State Management**: Users can update feedback status and add comments
 - **Statistical Insights**: Comprehensive analytics with cross-tabulation matrices
 - **Progress Drawer**: Real-time collection monitoring with detailed logging
 - **Token Management**: Secure Bearer token handling for Fabric integration
 
 ### **Microsoft Fabric Integration**
-- **Lakehouse Writing**: Direct integration with Fabric Lakehouse
+- **SQL Database Integration**: Direct connection to Fabric SQL Database for state persistence
+- **Lakehouse Writing**: Seamless integration with Fabric Lakehouse for analytics
 - **Async Operations**: Non-blocking data transfers with progress monitoring
-- **Bearer Token Authentication**: Secure API access management
+- **Bearer Token Authentication**: Secure API access management with user context
 - **Power BI Integration**: Ready-to-use analytics dashboard
 
 ## 🛠️ Prerequisites
 
 - **Python 3.8+**
+- **Microsoft SQL Server ODBC Driver** (18, 17, 13, or Native Client 11.0)
 - **API Credentials**:
   - Reddit API (client_id, client_secret, user_agent)
   - GitHub Personal Access Token (repo scope)
   - Azure DevOps PAT (Work Items Read scope)
-- **Microsoft Fabric Access**: Bearer token for Lakehouse operations
+- **Microsoft Fabric Access**: 
+  - Bearer token for Lakehouse and SQL Database operations
+  - SQL Database connection permissions
+- **Azure AD Authentication**: Interactive authentication for development environments
 
 ## 🚀 Quick Start
 
@@ -49,22 +56,30 @@ cd FeedbackCollector
 pip install -r src/requirements.txt
 ```
 
-### 2. **Environment Setup**
+### 2. **ODBC Driver Setup**
+Ensure you have one of the supported ODBC drivers installed:
+- ODBC Driver 18 for SQL Server (recommended)
+- ODBC Driver 17 for SQL Server
+- ODBC Driver 13 for SQL Server
+- SQL Server Native Client 11.0
+
+### 3. **Environment Setup**
 ```bash
 cp src/.env.template src/.env
 # Edit src/.env with your API credentials
 ```
 
-### 3. **Launch Web Interface**
+### 4. **Launch Web Interface**
 ```bash
 cd src
 python run_web.py
 ```
 
-### 4. **Access Application**
+### 5. **Access Application**
 - Open browser to `http://localhost:5000`
+- Authenticate with your Bearer token
 - Start collecting feedback with real-time progress tracking
-- View collected data at `/feedback` endpoint with enhanced filtering
+- View and manage feedback at `/feedback` endpoint with state management
 - Access Power BI insights at `/insights` endpoint
 
 ## 🔧 Configuration
@@ -85,11 +100,24 @@ ADO_ORG_URL=https://dev.azure.com/your-org
 ADO_PROJECT_NAME=your_project
 ADO_PARENT_WORK_ITEM_ID=your_parent_item_id
 
+# Microsoft Fabric
+FABRIC_LIVY_ENDPOINT=your_fabric_livy_endpoint
+FABRIC_TARGET_TABLE_NAME=your_target_table
+FABRIC_WRITE_MODE=append
+FABRIC_STORAGE_URL=your_storage_url
+FABRIC_STORAGE_KEY=your_storage_key
+
 # Power BI (Optional)
 POWERBI_EMBED_BASE_URL=your_powerbi_url
 POWERBI_REPORT_ID=your_report_id
 POWERBI_TENANT_ID=your_tenant_id
 ```
+
+### **Fabric SQL Database Configuration**
+The application automatically connects to the Fabric SQL Database for state management:
+- **Server**: `x6eps4xrq2xudenlfv6naeo3i4-cfyeshmtnhnuzlhe7juljtqiie.msit-database.fabric.microsoft.com,1433`
+- **Database**: `Feedbackstate-6b85be29-3a09-4773-894f-7976ad58c8b3`
+- **Authentication**: Azure AD Interactive (development) or Bearer Token (production)
 
 ### **API Credentials Setup**
 
@@ -121,41 +149,55 @@ POWERBI_TENANT_ID=your_tenant_id
   - Integration & Interoperability
   - Analytics & Reporting
 
+### **State Management & Collaboration**
+- **Feedback States**: NEW, IN_PROGRESS, UNDER_REVIEW, RESOLVED, REJECTED, ARCHIVED
+- **User Context**: Tracks who made changes and when
+- **Comments System**: Add notes and observations to feedback items
+- **State History**: Complete audit trail of all state changes
+- **Collaborative Workflow**: Multiple users can work on feedback simultaneously
+
 ### **Advanced Text Processing**
 - **CSS/HTML Removal**: Cleans ADO feedback from formatting artifacts
 - **Email Filtering**: Removes email headers, signatures, and threading
 - **Smart Text Extraction**: Preserves meaningful content while removing noise
 - **Description Pattern Removal**: Eliminates redundant "Description:" prefixes
+- **Encoding Handling**: Robust handling of various text encodings
 
-### **Statistical Analysis**
+### **Statistical Analysis & Insights**
 - **Category Distribution**: Visual breakdown of feedback by category
 - **Audience Segmentation**: Developer vs Customer vs ISV analysis
 - **Priority Matrix**: High/Medium/Low priority distribution
 - **Domain Coverage**: Cross-domain impact analysis
 - **Confidence Metrics**: Categorization reliability scoring
+- **State Analytics**: Workflow progress and bottleneck identification
 
 ## 📁 Project Structure
 ```
 FeedbackCollector/
 ├── src/
-│   ├── app.py                    # Main Flask application with enhanced ADO
-│   ├── collectors.py             # Data collection with text cleaning
+│   ├── app.py                    # Main Flask application with state management
+│   ├── collectors.py             # Data collection with enhanced text cleaning
 │   ├── fabric_writer.py          # Fabric Lakehouse integration
+│   ├── fabric_sql_writer.py      # Fabric SQL Database integration
+│   ├── fabric_state_writer.py    # State management for Fabric
 │   ├── ado_client.py             # Azure DevOps integration
-│   ├── config.py                 # Configuration management
+│   ├── config.py                 # Configuration management with state definitions
+│   ├── state_manager.py          # Feedback state management utilities
+│   ├── id_generator.py           # Unique ID generation for feedback items
 │   ├── run_web.py               # Web server launcher
 │   ├── utils.py                 # Enhanced categorization & text processing
 │   ├── keywords.json            # Domain and category keywords
 │   ├── requirements.txt         # Python dependencies
 │   ├── .env.template           # Environment template
 │   └── templates/               # HTML templates
-│       ├── index.html           # Main interface
-│       ├── feedback_viewer.html # Enhanced data viewer
+│       ├── index.html           # Main interface with state management
+│       ├── feedback_viewer.html # Enhanced data viewer with state controls
 │       └── insights_page.html   # Power BI dashboard
-├── data/                        # CSV output files (gitignored)
-├── .gitignore                   # Enhanced git exclusions
-├── README.md                    # This file
-└── Final_Implementation_Summary.md # Detailed feature documentation
+├── data/                        # CSV output files with timestamped collections
+├── test_fabric_sql_connection.py # SQL Database connectivity testing
+├── test_state_management.py     # State management testing utilities
+├── .gitignore                   # Git exclusions
+└── README.md                    # This file
 ```
 
 ## 📋 Enhanced Data Schema
@@ -165,6 +207,7 @@ Each feedback item contains the following fields:
 
 | Field | Description | Example |
 |-------|-------------|---------|
+| `feedback_id` | Unique identifier for feedback | "f123e4567-e89b-12d3-a456-426614174000" |
 | `Feedback` | Cleaned, processed content | "Workload development challenges..." |
 | `Feedback_Gist` | Smart summary of feedback | "Issue with workload deployment" |
 | `Area` | Topic area classification | "Workloads", "Development" |
@@ -180,6 +223,18 @@ Each feedback item contains the following fields:
 | `Sentiment` | AI-analyzed sentiment | "Positive", "Neutral", "Negative" |
 | `Created` | Original timestamp | "2025-06-20 15:30:45" |
 | `Organization` | Platform/org name | "ADO/FabricPlatform" |
+| `current_state` | Current feedback state | "NEW", "IN_PROGRESS", "RESOLVED" |
+| `assigned_user` | User managing feedback | "user@company.com" |
+| `last_updated` | Last modification time | "2025-07-08 10:30:00" |
+
+### **SQL Database Schema**
+The Fabric SQL Database stores feedback state information:
+
+| Table | Description | Key Fields |
+|-------|-------------|------------|
+| `feedback_states` | Current state of all feedback | `feedback_id`, `current_state`, `assigned_user` |
+| `state_history` | Complete audit trail | `feedback_id`, `old_state`, `new_state`, `changed_by`, `changed_at` |
+| `feedback_comments` | User comments and notes | `feedback_id`, `comment`, `created_by`, `created_at` |
 
 ## 🔍 Monitoring & Analytics
 
@@ -190,12 +245,24 @@ Each feedback item contains the following fields:
 - **Domain Coverage**: Cross-functional impact visualization
 - **Duplicate Detection**: Identifies patterns in repeated feedback
 - **Trend Analysis**: Time-based feedback patterns
+- **State Analytics**: Workflow progress and bottleneck identification
+- **User Activity**: Track who's working on what feedback
 
 ### **Web Interface Features**
 - **Advanced Filtering**: Multi-dimensional filtering capabilities
+- **State Management**: Update feedback status with user context
+- **Comments System**: Add notes and observations to feedback items
 - **Export Options**: CSV export with selected filters
 - **Real-time Updates**: Live data refresh capabilities
 - **Statistical Summaries**: At-a-glance metrics and KPIs
+- **Collaborative Workflow**: Multiple users can work on feedback simultaneously
+
+### **SQL Database Integration**
+- **State Persistence**: All state changes are persisted to Fabric SQL Database
+- **Audit Trail**: Complete history of all state changes with user attribution
+- **Comments Storage**: User comments and notes are stored and retrievable
+- **User Context**: Track which user made changes and when
+- **Concurrent Access**: Multiple users can work on feedback simultaneously
 
 ## 🛡️ Error Handling & Resilience
 
@@ -204,24 +271,45 @@ Each feedback item contains the following fields:
 - ✅ **Email Content Filtering**: Removes sensitive email information
 - ✅ **Smart Fallbacks**: Graceful degradation for categorization
 - ✅ **Confidence Thresholds**: Flags low-confidence classifications
+- ✅ **SQL Connection Retry**: Automatic retry with multiple ODBC drivers
+- ✅ **State Synchronization**: Ensures consistency between local and remote state
 
-### **Data Quality**
+### **Data Quality & Reliability**
 - ✅ **Duplicate Detection**: Prevents redundant entries
 - ✅ **Content Validation**: Ensures meaningful feedback extraction
 - ✅ **Source Verification**: Validates data source integrity
 - ✅ **Encoding Handling**: Manages various text encodings
+- ✅ **Transaction Safety**: All state changes are atomic and reversible
+- ✅ **Concurrent Access**: Handles multiple users safely
+
+### **Database Resilience**
+- ✅ **Multiple Driver Support**: Tries multiple ODBC drivers in order of preference
+- ✅ **Interactive Auth Fallback**: Falls back to different authentication methods
+- ✅ **Connection Pooling**: Efficient database connection management
+- ✅ **Error Recovery**: Graceful handling of database connectivity issues
 
 ## 🚀 API Endpoints
 
 ### **Web Interface**
-- `GET /` - Main collection interface
-- `GET /feedback` - Enhanced data viewer with statistics
-- `GET /insights` - Power BI dashboard
+- `GET /` - Main collection interface with state management
+- `GET /feedback` - Enhanced data viewer with state controls and statistics
+- `GET /insights` - Power BI dashboard integration
 
 ### **REST API**
-- `POST /api/collect` - Start feedback collection
-- `POST /api/write_to_fabric_async` - Write to Fabric Lakehouse
+- `POST /api/collect` - Start feedback collection process
+- `POST /api/write_to_fabric_async` - Write to Fabric Lakehouse asynchronously
 - `GET /api/fabric_progress/{id}` - Monitor Fabric operation progress
+- `POST /api/update_feedback_state` - Update feedback state with user context
+- `GET /api/feedback_states` - Get current state information for all feedback
+- `POST /api/add_comment` - Add comment to feedback item
+- `GET /api/feedback_comments/{feedback_id}` - Get comments for specific feedback
+
+### **State Management API**
+- `GET /api/state/current` - Get current state for all feedback items
+- `POST /api/state/update` - Update feedback state with audit trail
+- `GET /api/state/history/{feedback_id}` - Get state change history
+- `POST /api/state/comment` - Add comment with user attribution
+- `GET /api/state/analytics` - Get state analytics and workflow metrics
 
 ## 🤝 Contributing
 
@@ -249,23 +337,44 @@ This project is proprietary and confidential. Unauthorized copying, distribution
 ## 🆘 Support & Troubleshooting
 
 ### **Common Issues**
+- **SQL Connection Issues**: 
+  - Verify ODBC driver is installed (18, 17, 13, or Native Client)
+  - Check Azure AD authentication permissions
+  - Ensure Fabric SQL Database access is granted
+- **State Management Problems**:
+  - Verify Bearer token has SQL Database permissions
+  - Check state_manager.py for proper user extraction
+  - Ensure SQL tables exist and are accessible
 - **ADO Text Issues**: Verify text cleaning is working in utils.py
 - **Categorization Errors**: Check keywords.json for domain mappings
 - **Token Errors**: Verify Bearer token validity and permissions
 - **Collection Failures**: Check API credentials and network connectivity
 
+### **Database Troubleshooting**
+- **Driver Issues**: Run test_fabric_sql_connection.py to verify connectivity
+- **Authentication Problems**: Check Azure AD permissions and token validity
+- **Table Access**: Verify table permissions and schema matches expectations
+- **Concurrent Access**: Check for locking issues in state management
+
+### **Testing & Validation**
+- **SQL Connection**: Use `test_fabric_sql_connection.py` to verify database connectivity
+- **State Management**: Use `test_state_management.py` to test state operations
+- **API Endpoints**: Test all endpoints with proper authentication
+- **User Context**: Verify user extraction from Bearer tokens is working
+
 ### **Getting Help**
 - Check the progress drawer logs for detailed error information
 - Verify all environment variables are properly configured
 - Ensure API tokens have required permissions and are not expired
-- Review Final_Implementation_Summary.md for detailed feature documentation
+- Review SQL connection logs for authentication and permission issues
+- Test database connectivity before running the full application
 
-**Last Updated**: June 2025 | **Version**: 3.0
+**Last Updated**: July 2025 | **Version**: 4.0
 
-### **Key Enhancements in v3.0**
-- Domain-aware categorization system
-- Enhanced ADO text processing
-- Advanced audience detection
-- Statistical analysis and insights
-- Duplicate request identification
-- Improved UX with comprehensive filtering
+### **Key Enhancements in v4.0**
+- **Fabric SQL Database Integration**: Direct SQL database connectivity for state management
+- **Enhanced State Management**: Complete feedback lifecycle tracking with user context
+- **Collaborative Workflow**: Multiple users can work on feedback simultaneously
+- **Advanced Analytics**: State-based analytics and workflow insights
+- **Robust Error Handling**: Enhanced resilience and error recovery
+- **ODBC Driver Support**: Multiple driver compatibility for broad deployment

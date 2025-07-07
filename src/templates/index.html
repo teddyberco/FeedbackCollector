@@ -19,6 +19,9 @@
         }
         /* NO iframe-container CSS here */
     </style>
+    
+    <!-- Badge State Manager -->
+    <script src="{{ url_for('static', filename='js/badge-state-manager.js') }}"></script>
 </head>
 <body>
     <div class="container mt-5">
@@ -28,6 +31,10 @@
             <button class="btn btn-outline-primary mt-2" id="collectionProgressBtn" onclick="toggleCollectionProgress()">
                 <i class="bi bi-activity me-1"></i>Collection Progress
                 <span class="badge bg-secondary ms-1" id="progressBadge">Ready</span>
+            </button>
+            <button class="btn btn-outline-success mt-2" id="fabricAuthBtn" onclick="toggleFabricAuth()">
+                <i class="bi bi-shield-check me-1"></i>Fabric Auth
+                <span class="badge bg-secondary ms-1" id="fabricAuthBadge">Not Connected</span>
             </button>
             <a href="/insights" class="btn btn-secondary mt-2">View Feedback Insights</a>
         </p>
@@ -74,9 +81,12 @@
                         <hr class="my-4">
                         <h5>Optional: Write to Fabric Lakehouse</h5>
                         <div class="mb-3">
-                            <label for="fabricToken" class="form-label">Fabric Access Token (Bearer)</label>
-                            <input type="password" class="form-control" id="fabricToken" placeholder="Paste your Fabric token here">
-                            <div class="form-text">This token will be used to authenticate with Fabric. It is not stored.</div>
+                            <div class="alert alert-info d-flex align-items-center">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <div>
+                                    Use the <strong>"Fabric Auth"</strong> button above to configure your authentication token, then click the write button below.
+                                </div>
+                            </div>
                         </div>
                         <button class="btn btn-success" onclick="writeToFabric()">Write Last Collected to Fabric</button>
                         <div id="fabricResults" class="mt-3"></div>
@@ -194,6 +204,107 @@
         </div>
     </div>
 
+    <!-- Fabric Auth Drawer (hidden initially) -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="fabricAuthDrawer" data-bs-backdrop="false" data-bs-keyboard="false">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title">
+                <i class="bi bi-shield-check me-2"></i>Fabric Authentication
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" id="closeFabricAuthDrawer" onclick="hideFabricAuth()"></button>
+        </div>
+        <div class="offcanvas-body">
+            <!-- Current Token Status -->
+            <div class="mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted">Connection Status</span>
+                    <span id="fabricConnectionStatus" class="badge bg-secondary">Not Connected</span>
+                </div>
+                <div class="alert" id="fabricStatusAlert" role="alert" style="display: none;">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2" role="status" id="fabricAuthSpinner" style="display: none;">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <span id="fabricStatusText">Ready to connect</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Token Input -->
+            <div class="mb-4">
+                <h6 class="text-muted mb-3">Fabric Bearer Token</h6>
+                <div class="mb-3">
+                    <label for="fabricAuthToken" class="form-label">Bearer Token</label>
+                    <div class="input-group">
+                        <input type="password" class="form-control" id="fabricAuthToken" placeholder="Paste your Fabric bearer token here...">
+                        <button class="btn btn-outline-secondary" type="button" onclick="toggleTokenVisibility()">
+                            <i class="bi bi-eye" id="tokenVisibilityIcon"></i>
+                        </button>
+                    </div>
+                    <div class="form-text">
+                        This token is used to authenticate with Microsoft Fabric Lakehouse.
+                        <br><strong>Your token is securely stored in your browser session only.</strong>
+                    </div>
+                </div>
+                
+                <!-- Token Help -->
+                <div class="card bg-light mb-3">
+                    <div class="card-body py-2">
+                        <h6 class="card-title mb-1">How to get your token:</h6>
+                        <ol class="mb-0 small">
+                            <li>Open browser Developer Tools (F12)</li>
+                            <li>Go to Network tab and reload Fabric page</li>
+                            <li>Find any API request to fabric.microsoft.com</li>
+                            <li>Copy the Authorization header value (without "Bearer ")</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Token Info -->
+            <div class="mb-4" id="currentTokenInfo" style="display: none;">
+                <h6 class="text-muted mb-2">Current Token</h6>
+                <div class="card">
+                    <div class="card-body py-2">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <span class="small text-muted">Last Validated</span>
+                            <span class="badge bg-success" id="lastValidatedTime">Never</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mt-1">
+                            <span class="small text-muted">Token Status</span>
+                            <span class="badge" id="tokenStatusBadge">Unknown</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="d-grid gap-2">
+                <button class="btn btn-primary" id="validateTokenBtn" onclick="validateFabricToken()">
+                    <i class="bi bi-check-circle me-1"></i>Validate & Connect
+                </button>
+                <button class="btn btn-outline-warning" id="updateTokenBtn" onclick="updateFabricToken()" style="display: none;">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Update Token
+                </button>
+                <button class="btn btn-outline-danger" id="clearTokenBtn" onclick="clearFabricToken()" style="display: none;">
+                    <i class="bi bi-x-circle me-1"></i>Clear Token
+                </button>
+            </div>
+
+            <!-- Validation Log -->
+            <div class="mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="text-muted mb-0">Validation Log</h6>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearFabricLog()">
+                        <i class="bi bi-trash"></i> Clear
+                    </button>
+                </div>
+                <div class="border rounded p-2" id="fabricLogContainer" style="height: 200px; overflow-y: auto; background-color: #f8f9fa;">
+                    <div id="fabricLog" class="font-monospace small"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let lastCollectionHadData = false; // Flag to track if collection yielded data
         let currentKeywords = []; // Local cache of keywords for the UI
@@ -201,6 +312,241 @@
         let collectionProgressInterval = null;
         let collectionStartTime = null;
         let collectionOperationId = null;
+        
+        // Fabric Auth variables
+        let fabricAuthDrawer = null;
+        let fabricToken = null;
+        let fabricConnectionStatus = 'disconnected';
+
+        // Initialize Fabric Auth drawer on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            fabricAuthDrawer = new bootstrap.Offcanvas(document.getElementById('fabricAuthDrawer'));
+            checkStoredFabricToken();
+        });
+
+        // Toggle Fabric Auth drawer
+        function toggleFabricAuth() {
+            if (fabricAuthDrawer) {
+                fabricAuthDrawer.show();
+            }
+        }
+
+        // Hide Fabric Auth drawer
+        function hideFabricAuth() {
+            if (fabricAuthDrawer) {
+                fabricAuthDrawer.hide();
+            }
+        }
+
+        // Check for stored token on page load
+        function checkStoredFabricToken() {
+            fetch('/api/fabric/token/status')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.has_token) {
+                        updateFabricAuthUI('connected', 'Token stored in session');
+                        document.getElementById('currentTokenInfo').style.display = 'block';
+                        document.getElementById('updateTokenBtn').style.display = 'block';
+                        document.getElementById('clearTokenBtn').style.display = 'block';
+                        document.getElementById('lastValidatedTime').textContent = data.last_validated || 'Unknown';
+                        fabricToken = 'stored';
+                    } else {
+                        updateFabricAuthUI('disconnected', 'No token stored');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking token status:', error);
+                    updateFabricAuthUI('error', 'Error checking token status');
+                });
+        }
+
+        // Toggle token visibility
+        function toggleTokenVisibility() {
+            const tokenInput = document.getElementById('fabricAuthToken');
+            const visibilityIcon = document.getElementById('tokenVisibilityIcon');
+            
+            if (tokenInput.type === 'password') {
+                tokenInput.type = 'text';
+                visibilityIcon.className = 'bi bi-eye-slash';
+            } else {
+                tokenInput.type = 'password';
+                visibilityIcon.className = 'bi bi-eye';
+            }
+        }
+
+        // Validate Fabric token
+        function validateFabricToken() {
+            const token = document.getElementById('fabricAuthToken').value.trim();
+            if (!token) {
+                alert('Please enter a Fabric bearer token');
+                return;
+            }
+
+            updateFabricAuthUI('validating', 'Validating token...');
+            addFabricLog('🔄 Starting fast token validation...');
+            
+            fetch('/api/fabric/token/validate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({token: token})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    fabricToken = token;
+                    addFabricLog('✅ Token validation successful');
+                    addFabricLog('🚀 Livy session starting in background');
+                    addFabricLog('📝 Token stored in session');
+                    
+                    if (data.session_id) {
+                        addFabricLog(`🔗 Session ID: ${data.session_id}`);
+                    }
+                    
+                    // Update badge using BadgeStateManager
+                    if (window.badgeStateManager) {
+                        window.badgeStateManager.setFabricAuthState('connected', 'Connected', data.session_id);
+                    }
+                    
+                    // Update drawer UI
+                    updateFabricAuthUI('connected', 'Token validated - Livy session starting');
+                    
+                    // Show token management buttons
+                    document.getElementById('currentTokenInfo').style.display = 'block';
+                    document.getElementById('updateTokenBtn').style.display = 'block';
+                    document.getElementById('clearTokenBtn').style.display = 'block';
+                    document.getElementById('lastValidatedTime').textContent = new Date().toLocaleString();
+                    
+                    // Clear token input for security
+                    document.getElementById('fabricAuthToken').value = '';
+                } else {
+                    // Update badge using BadgeStateManager for error state
+                    if (window.badgeStateManager) {
+                        window.badgeStateManager.setFabricAuthState('error', 'Error');
+                    }
+                    
+                    updateFabricAuthUI('error', data.message || 'Token validation failed');
+                    addFabricLog('❌ Token validation failed: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error validating token:', error);
+                updateFabricAuthUI('error', 'Error validating token');
+                addFabricLog('❌ Validation error: ' + error.message);
+            });
+        }
+
+        // Update existing token
+        function updateFabricToken() {
+            document.getElementById('fabricAuthToken').value = '';
+            document.getElementById('fabricAuthToken').focus();
+            document.getElementById('currentTokenInfo').style.display = 'none';
+            document.getElementById('updateTokenBtn').style.display = 'none';
+            document.getElementById('clearTokenBtn').style.display = 'none';
+            updateFabricAuthUI('disconnected', 'Ready to enter new token');
+            addFabricLog('🔄 Ready to update token');
+        }
+
+        // Clear stored token
+        function clearFabricToken() {
+            if (!confirm('Are you sure you want to clear the stored Fabric token?')) {
+                return;
+            }
+
+            fetch('/api/fabric/token/clear', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    fabricToken = null;
+                    updateFabricAuthUI('disconnected', 'Token cleared');
+                    addFabricLog('🗑️ Token cleared from session');
+                    
+                    // Hide token management buttons
+                    document.getElementById('currentTokenInfo').style.display = 'none';
+                    document.getElementById('updateTokenBtn').style.display = 'none';
+                    document.getElementById('clearTokenBtn').style.display = 'none';
+                } else {
+                    addFabricLog('❌ Error clearing token: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error clearing token:', error);
+                addFabricLog('❌ Clear error: ' + error.message);
+            });
+        }
+
+        // Update Fabric Auth UI
+        function updateFabricAuthUI(status, message) {
+            const statusBadge = document.getElementById('fabricConnectionStatus');
+            const authBadge = document.getElementById('fabricAuthBadge');
+            const statusAlert = document.getElementById('fabricStatusAlert');
+            const statusText = document.getElementById('fabricStatusText');
+            const spinner = document.getElementById('fabricAuthSpinner');
+            
+            statusText.textContent = message;
+            statusAlert.style.display = 'block';
+            
+            switch (status) {
+                case 'connected':
+                    statusBadge.className = 'badge bg-success';
+                    statusBadge.textContent = 'Connected';
+                    authBadge.className = 'badge bg-success ms-1';
+                    authBadge.textContent = 'Connected';
+                    statusAlert.className = 'alert alert-success';
+                    spinner.style.display = 'none';
+                    break;
+                case 'validating':
+                    statusBadge.className = 'badge bg-warning';
+                    statusBadge.textContent = 'Validating';
+                    authBadge.className = 'badge bg-warning ms-1';
+                    authBadge.textContent = 'Validating';
+                    statusAlert.className = 'alert alert-warning';
+                    spinner.style.display = 'block';
+                    break;
+                case 'error':
+                    statusBadge.className = 'badge bg-danger';
+                    statusBadge.textContent = 'Error';
+                    authBadge.className = 'badge bg-danger ms-1';
+                    authBadge.textContent = 'Error';
+                    statusAlert.className = 'alert alert-danger';
+                    spinner.style.display = 'none';
+                    break;
+                default: // disconnected
+                    statusBadge.className = 'badge bg-secondary';
+                    statusBadge.textContent = 'Not Connected';
+                    authBadge.className = 'badge bg-secondary ms-1';
+                    authBadge.textContent = 'Not Connected';
+                    statusAlert.className = 'alert alert-secondary';
+                    spinner.style.display = 'none';
+                    break;
+            }
+            
+            fabricConnectionStatus = status;
+        }
+
+        // Add log entry to Fabric log
+        function addFabricLog(message) {
+            const log = document.getElementById('fabricLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `<span class="text-muted">[${timestamp}]</span> ${message}`;
+            log.appendChild(logEntry);
+            
+            // Auto-scroll to bottom
+            const container = document.getElementById('fabricLogContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Clear Fabric log
+        function clearFabricLog() {
+            document.getElementById('fabricLog').innerHTML = '';
+        }
 
         // Function to render the keyword list in the UI
         function renderKeywordList(keywords) {
@@ -595,9 +941,16 @@
                                         <strong>🎉 Fabric Lakehouse Write Successful!</strong><br>
                                         <small><strong>Status:</strong> ${data.message}</small><br>
                                         <small><strong>Result:</strong> Data successfully ingested to Lakehouse</small><br>
-                                        <small><strong>Next:</strong> Data is now available for analytics</small>
+                                        <small><strong>Next:</strong> Visit <a href="/feedback" target="_blank">Feedback Viewer</a> to manage items</small>
                                     </div>
                                 `;
+                                
+                                // Set global flag to hide duplicates when viewing feedback
+                                if (data.hide_duplicates) {
+                                    addCollectionLog('🔄 Setting up duplicate filtering for feedback viewer...', 'info');
+                                    localStorage.setItem('hideDuplicatesAfterSync', 'true');
+                                    localStorage.setItem('syncTimestamp', Date.now().toString());
+                                }
                             } else {
                                 // Enhanced error logging
                                 addCollectionLog('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'secondary');
@@ -826,14 +1179,24 @@
         }
 
         function writeToFabric() {
-            const tokenInput = document.getElementById('fabricToken');
-            const fabricToken = tokenInput.value.trim();
             const fabricResultsDiv = document.getElementById('fabricResults');
-
-            if (!fabricToken) {
-                fabricResultsDiv.innerHTML = '<div class="alert alert-warning">Please provide a Fabric Access Token.</div>';
+            
+            // Check if we have a stored token from Fabric Auth
+            if (!fabricToken || fabricToken === null) {
+                fabricResultsDiv.innerHTML = `
+                    <div class="alert alert-warning">
+                        <strong>No Fabric token available!</strong><br>
+                        Please use the <strong>"Fabric Auth"</strong> button above to configure your authentication token first.
+                        <button class="btn btn-outline-primary btn-sm ms-2" onclick="toggleFabricAuth()">
+                            <i class="bi bi-shield-check me-1"></i>Open Fabric Auth
+                        </button>
+                    </div>
+                `;
                 return;
             }
+            
+            // Use the stored token
+            const fabricTokenToUse = fabricToken === 'stored' ? 'stored' : fabricToken;
 
             if (!lastCollectionHadData) {
                  fabricResultsDiv.innerHTML = '<div class="alert alert-warning">No data from last collection, or last collection failed/yielded no items. Please collect feedback first.</div>';
@@ -866,7 +1229,7 @@
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ fabric_token: fabricToken }),
+                body: JSON.stringify({ fabric_token: fabricTokenToUse }),
             })
             .then(response => response.json())
             .then(data => {
@@ -975,8 +1338,13 @@
             // Load saved token from localStorage
             const savedToken = localStorage.getItem('fabricToken');
             if (savedToken) {
-                document.getElementById('fabricToken').value = savedToken;
-                console.log('Loaded saved token from localStorage');
+                const fabricTokenElement = document.getElementById('fabricAuthToken');
+                if (fabricTokenElement) {
+                    fabricTokenElement.value = savedToken;
+                    console.log('Loaded saved token from localStorage');
+                } else {
+                    console.warn('fabricAuthToken element not found - token not restored');
+                }
             }
             
             // Restore progress state from localStorage

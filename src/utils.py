@@ -219,7 +219,8 @@ def categorize_feedback(text: str) -> str:
 
 def detect_audience(text: str, source: str = "", scenario: str = "", organization: str = "") -> str:
     """
-    Detect the primary audience (Developer, Customer, ISV) based on content and context.
+    Detect the primary audience (Developer, Customer) based on content and context.
+    Standardized to only return Developer or Customer for consistency.
     
     Args:
         text: The feedback text to analyze
@@ -228,19 +229,22 @@ def detect_audience(text: str, source: str = "", scenario: str = "", organizatio
         organization: Organization field
     
     Returns:
-        Detected audience: 'Developer', 'Customer', 'ISV', or 'Unknown'
+        Detected audience: 'Developer' or 'Customer'
     """
     if not text or not isinstance(text, str):
-        return 'Unknown'
+        return 'Customer'  # Default to Customer instead of Unknown
     
     text_lower = text.lower()
-    audience_scores = {'Developer': 0, 'Customer': 0, 'ISV': 0}
+    audience_scores = {'Developer': 0, 'Customer': 0}
     
-    # Score based on keywords
+    # Score based on keywords (map ISV keywords to Developer)
     for audience, keywords in AUDIENCE_DETECTION_KEYWORDS.items():
         for keyword in keywords:
             if keyword.lower() in text_lower:
-                audience_scores[audience] += 1
+                if audience == 'ISV':
+                    audience_scores['Developer'] += 1  # Map ISV to Developer
+                elif audience in audience_scores:
+                    audience_scores[audience] += 1
     
     # Strong contextual scoring based on source and scenario
     # GitHub and ADO are primarily developer-oriented
@@ -252,30 +256,31 @@ def detect_audience(text: str, source: str = "", scenario: str = "", organizatio
         # Fabric community could be either, slight customer bias
         audience_scores['Customer'] += 0.5
     
+    # Map partner/ISV scenarios to Developer
     if scenario.lower() == 'partner':
-        audience_scores['ISV'] += 2
+        audience_scores['Developer'] += 2  # Map Partner to Developer
     elif scenario.lower() == 'customer':
         audience_scores['Customer'] += 2
     elif scenario.lower() == 'internal':
         audience_scores['Developer'] += 2
     
-    # ISV-specific organization patterns
+    # ISV-specific organization patterns mapped to Developer
     if organization and 'isv' in organization.lower():
-        audience_scores['ISV'] += 2
+        audience_scores['Developer'] += 2  # Map ISV to Developer
     elif organization and any(dev_org in organization.lower() for dev_org in ['github', 'ado', 'azure devops']):
         audience_scores['Developer'] += 1
     
     # Find the highest scoring audience
     max_score = max(audience_scores.values())
     if max_score == 0:
-        return 'Unknown'
+        return 'Customer'  # Default to Customer
     
     # Return the audience with the highest score
     for audience, score in audience_scores.items():
         if score == max_score:
             return audience
     
-    return 'Unknown'
+    return 'Customer'  # Default fallback
 
 def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = "", organization: str = "") -> dict:
     """

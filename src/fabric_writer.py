@@ -160,6 +160,40 @@ else:
 """
     return pyspark_code
 
+def _test_fabric_token(token: str, livy_endpoint: str, spark_conf: dict = None) -> str:
+    """Fast token validation: Just test if Livy accepts session creation request"""
+    headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
+    session_payload = {'name': 'FeedbackCollectorTokenTest', 'kind': 'pyspark', 'conf': spark_conf or DEFAULT_SPARK_CONF}
+    try:
+        logger.info(f"Testing Fabric token with Livy session creation at {livy_endpoint}")
+        response = requests.post(livy_endpoint, headers=headers, json=session_payload, timeout=60)
+        response.raise_for_status()
+        session_data = response.json()
+        session_id = session_data.get('id')
+        session_state = session_data.get('state')
+        
+        if session_id is None:
+            logger.error(f"Livy rejected token - no session ID: {session_data}")
+            return None
+            
+        logger.info(f"✅ Token validation successful - Livy accepted session: ID {session_id}, State {session_state}")
+        
+        # Don't wait for session to be ready - just return the session ID
+        # The session will start in the background
+        return session_id
+        
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"HTTP error testing token: {e}. URL: {e.request.url if e.request else 'N/A'}")
+        if e.response is not None:
+            logger.error(f"Response Status: {e.response.status_code}. Response Text: {e.response.text}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"RequestException testing token: {e}");
+        return None
+    except Exception as e:
+        logger.error(f"Unexpected error testing token: {e}", exc_info=True);
+        return None
+
 def _start_livy_session(token: str, livy_endpoint: str, spark_conf: dict = None) -> str:
     headers = {'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}
     session_payload = {'name': 'FeedbackCollectorSession', 'kind': 'pyspark', 'conf': spark_conf or DEFAULT_SPARK_CONF}
@@ -318,6 +352,271 @@ def write_data_to_fabric(token: str, data_to_write: list) -> bool:
         if session_id:
             logger.info(f"Attempting to close Livy session {session_id} in finally block.")
             _close_livy_session(token, FABRIC_LIVY_ENDPOINT, session_id)
+
+def update_feedback_states_in_fabric(token: str, state_changes: list) -> bool:
+    """
+    Update specific feedback states in Fabric Lakehouse using existing infrastructure
+    
+    Args:
+        token: Fabric bearer token
+        state_changes: List of state change dictionaries with feedback_id and changes
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    if not token:
+        logger.error("Fabric access token not provided for state updates.")
+        return False
+        
+    if not state_changes:
+        logger.info("No state changes provided to write to Fabric.")
+        return True
+
+    logger.warning(f"🔥 FABRIC STATE UPDATE: Processing {len(state_changes)} state changes")
+    print(f"🔥 FABRIC STATE UPDATE: Processing {len(state_changes)} state changes", file=sys.stderr)
+
+    session_id = None
+    try:
+        # Start Livy session using existing infrastructure
+        session_id = _start_livy_session(token, FABRIC_LIVY_ENDPOINT)
+        if not session_id:
+            logger.error("Failed to start Livy session for state updates")
+            return False
+        
+        # Generate PySpark code for state updates
+        spark_code = _prepare_state_update_pyspark_code(state_changes, FABRIC_TARGET_TABLE_NAME)
+        if not spark_code:
+            logger.info("State update PySpark code is empty. Skipping submission.")
+            return True
+        
+        # Submit and execute the Spark statement
+        statement_id = _submit_spark_statement(token, FABRIC_LIVY_ENDPOINT, session_id, spark_code)
+        if not statement_id:
+            logger.error("Failed to submit state update statement")
+            return False
+        
+        # Poll for completion
+        success = _poll_statement_status(token, FABRIC_LIVY_ENDPOINT, session_id, statement_id)
+        if not success:
+            logger.error(f"State update statement {statement_id} processing failed.")
+            return False
+        
+        logger.warning("✅ FABRIC STATE UPDATE: All state changes written successfully")
+        print("✅ FABRIC STATE UPDATE: All state changes written successfully", file=sys.stderr)
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error in update_feedback_states_in_fabric: {e}", exc_info=True)
+        print(f"❌ FABRIC STATE UPDATE ERROR: {e}", file=sys.stderr)
+        return False
+    finally:
+        if session_id:
+            logger.info(f"Closing Livy session {session_id} after state update.")
+            _close_livy_session(token, FABRIC_LIVY_ENDPOINT, session_id)
+
+def _prepare_state_update_pyspark_code(state_changes: list, table_name: str) -> str:
+    """
+    Generate PySpark code to update specific feedback states in Fabric table
+    
+    Args:
+        state_changes: List of state change dictionaries
+        table_name: Target Fabric table name
+        
+    Returns:
+        str: PySpark code for state updates
+    """
+    if not state_changes:
+        return ""
+    
+    # DEBUG: Log the incoming data format
+    logger.warning(f"🔍 FABRIC DEBUG: Preparing PySpark code for {len(state_changes)} state changes")
+    for i, change in enumerate(state_changes):
+        logger.warning(f"🔍 FABRIC DEBUG: Change {i}: {change}")
+    logger.warning(f"🔍 FABRIC DEBUG: Target table: {table_name}")
+    
+    # Build update conditions for each state change
+    update_conditions = []
+    for change in state_changes:
+        feedback_id = change.get('feedback_id', '')
+        updates = []
+        
+        logger.warning(f"🔍 FABRIC DEBUG: Processing feedback_id: {feedback_id}")
+        
+        if 'state' in change:
+            updates.append(f"col('State'), '{change['state']}'")
+            logger.warning(f"🔍 FABRIC DEBUG: - State update: {change['state']}")
+        if 'notes' in change:
+            notes = change['notes'].replace("'", "\\'")  # Escape single quotes
+            updates.append(f"col('Feedback_Notes'), '{notes}'")
+            logger.warning(f"🔍 FABRIC DEBUG: - Notes update: {notes[:50]}...")
+        if 'domain' in change:
+            updates.append(f"col('Primary_Domain'), '{change['domain']}'")
+            logger.warning(f"🔍 FABRIC DEBUG: - Domain update: {change['domain']}")
+        if 'updated_by' in change:
+            updates.append(f"col('Updated_By'), '{change['updated_by']}'")
+            logger.warning(f"🔍 FABRIC DEBUG: - Updated by: {change['updated_by']}")
+        
+        # Always update timestamp
+        updates.append(f"col('Last_Updated'), current_timestamp()")
+        
+        if updates:
+            condition = f"col('Feedback_ID') == '{feedback_id}'"
+            update_pairs = ', '.join(updates)
+            update_conditions.append((condition, update_pairs))
+            logger.warning(f"🔍 FABRIC DEBUG: - Condition: {condition}")
+    
+    if not update_conditions:
+        logger.warning("🔍 FABRIC DEBUG: No valid update conditions found!")
+        return ""
+    
+    logger.warning(f"🔍 FABRIC DEBUG: Generated {len(update_conditions)} update conditions")
+    
+    # Generate the actual PySpark code with comprehensive debugging
+    pyspark_code = f"""
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, when, current_timestamp
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+spark = SparkSession.builder.appName("FeedbackStateUpdate").getOrCreate()
+
+try:
+    logger.info("🔥 FABRIC DEBUG: Starting Lakehouse state update operation")
+    print("🔥 FABRIC DEBUG: Starting Lakehouse state update operation")
+    
+    # Read the existing feedback table
+    table_name = "{table_name}"
+    logger.info(f"🔍 FABRIC DEBUG: Attempting to read table: {{table_name}}")
+    print(f"🔍 FABRIC DEBUG: Attempting to read table: {{table_name}}")
+    
+    try:
+        df = spark.read.table(table_name)
+        row_count = df.count()
+        logger.info(f"📊 FABRIC DEBUG: Successfully read table {{table_name}} with {{row_count}} rows")
+        print(f"📊 FABRIC DEBUG: Successfully read table {{table_name}} with {{row_count}} rows")
+        
+        # Show table schema for debugging
+        logger.info("🔍 FABRIC DEBUG: Table schema:")
+        print("🔍 FABRIC DEBUG: Table schema:")
+        df.printSchema()
+        
+        # Show column names
+        columns = df.columns
+        logger.info(f"🔍 FABRIC DEBUG: Available columns: {{columns}}")
+        print(f"🔍 FABRIC DEBUG: Available columns: {{columns}}")
+        
+        # Show sample data (first 5 rows, first few columns)
+        sample_df = df.select("*").limit(5)
+        logger.info("🔍 FABRIC DEBUG: Sample data (first 5 rows):")
+        print("🔍 FABRIC DEBUG: Sample data (first 5 rows):")
+        sample_df.show(truncate=False)
+        
+        # Check if Feedback_ID column exists and show sample IDs
+        if "Feedback_ID" in columns:
+            feedback_ids = df.select("Feedback_ID").distinct().limit(10)
+            logger.info("🔍 FABRIC DEBUG: Sample Feedback_IDs in table:")
+            print("🔍 FABRIC DEBUG: Sample Feedback_IDs in table:")
+            feedback_ids.show(truncate=False)
+        else:
+            logger.error("❌ FABRIC DEBUG: Feedback_ID column not found!")
+            print("❌ FABRIC DEBUG: Feedback_ID column not found!")
+            
+    except Exception as read_error:
+        logger.error(f"❌ FABRIC DEBUG: Error reading table {{table_name}}: {{read_error}}")
+        print(f"❌ FABRIC DEBUG: Error reading table {{table_name}}: {{read_error}}")
+        raise read_error
+    
+    # Apply state updates using when/otherwise conditions
+    updated_df = df"""
+    
+    # Add each update condition
+    for i, (condition, update_pairs) in enumerate(update_conditions):
+        feedback_id = state_changes[i].get('feedback_id', '')
+        pyspark_code += f"""
+    # Update for feedback ID: {feedback_id}
+    updated_df = updated_df.withColumn("State", when({condition}, "{state_changes[i].get('state', '')}").otherwise(col("State")))"""
+        
+        if 'notes' in state_changes[i]:
+            notes = state_changes[i]['notes'].replace('"', '\\"')
+            pyspark_code += f"""
+    updated_df = updated_df.withColumn("Feedback_Notes", when({condition}, "{notes}").otherwise(col("Feedback_Notes")))"""
+        
+        if 'domain' in state_changes[i]:
+            pyspark_code += f"""
+    updated_df = updated_df.withColumn("Primary_Domain", when({condition}, "{state_changes[i]['domain']}").otherwise(col("Primary_Domain")))"""
+        
+        if 'updated_by' in state_changes[i]:
+            pyspark_code += f"""
+    updated_df = updated_df.withColumn("Updated_By", when({condition}, "{state_changes[i]['updated_by']}").otherwise(col("Updated_By")))"""
+        
+        pyspark_code += f"""
+    updated_df = updated_df.withColumn("Last_Updated", when({condition}, current_timestamp()).otherwise(col("Last_Updated")))"""
+    
+    # Generate specific feedback ID list for debugging
+    feedback_ids_to_update = [change.get('feedback_id', '') for change in state_changes]
+    
+    pyspark_code += f"""
+    
+    # Show changes before writing
+    logger.info("🔍 FABRIC DEBUG: Comparing original vs updated data")
+    print("🔍 FABRIC DEBUG: Comparing original vs updated data")
+    
+    # Check if any rows actually changed
+    changes_detected = False
+    feedback_ids_to_check = {feedback_ids_to_update}
+    
+    for feedback_id in feedback_ids_to_check:
+        if feedback_id:  # Skip empty IDs
+            original_rows = df.filter(col('Feedback_ID') == feedback_id)
+            updated_rows = updated_df.filter(col('Feedback_ID') == feedback_id)
+            
+            if original_rows.count() > 0:
+                logger.info(f"🔍 FABRIC DEBUG: Found {{original_rows.count()}} row(s) for feedback_id: {{feedback_id}}")
+                print(f"🔍 FABRIC DEBUG: Found {{original_rows.count()}} row(s) for feedback_id: {{feedback_id}}")
+                
+                logger.info("🔍 FABRIC DEBUG: Original row:")
+                print("🔍 FABRIC DEBUG: Original row:")
+                original_rows.show(truncate=False)
+                
+                logger.info("🔍 FABRIC DEBUG: Updated row:")
+                print("🔍 FABRIC DEBUG: Updated row:")
+                updated_rows.show(truncate=False)
+                changes_detected = True
+            else:
+                logger.error(f"❌ FABRIC DEBUG: No rows found for feedback_id: {{feedback_id}}")
+                print(f"❌ FABRIC DEBUG: No rows found for feedback_id: {{feedback_id}}")
+    
+    if not changes_detected:
+        logger.error("❌ FABRIC DEBUG: No matching rows found for any feedback IDs!")
+        print("❌ FABRIC DEBUG: No matching rows found for any feedback IDs!")
+    
+    logger.info("💾 FABRIC DEBUG: Writing updated data back to Fabric table")
+    print("💾 FABRIC DEBUG: Writing updated data back to Fabric table")
+    
+    # Count rows before and after
+    original_count = df.count()
+    updated_count = updated_df.count()
+    
+    logger.info(f"📊 FABRIC DEBUG: Original rows: {{original_count}}, Updated rows: {{updated_count}}")
+    print(f"📊 FABRIC DEBUG: Original rows: {{original_count}}, Updated rows: {{updated_count}}")
+    
+    # Write the updated dataframe back to the table
+    updated_df.write.format("delta").mode("overwrite").option("overwriteSchema", "false").saveAsTable(table_name)
+    
+    logger.info("✅ FABRIC DEBUG: Lakehouse state update completed successfully")
+    print("✅ FABRIC DEBUG: Lakehouse state update completed successfully")
+    
+except Exception as e:
+    logger.error(f"❌ FABRIC DEBUG: Error during state update: {{e}}")
+    print(f"❌ FABRIC DEBUG: Error during state update: {{e}}")
+    raise e
+finally:
+    spark.stop()
+"""
+    
+    return pyspark_code
 
 if __name__ == '__main__':
     # if not logging.getLogger().hasHandlers():

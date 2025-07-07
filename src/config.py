@@ -355,6 +355,7 @@ DOMAIN_CATEGORIES = {
 
 # Table Schema
 TABLE_COLUMNS = [
+    'Feedback_ID',  # NEW: Unique identifier for each feedback item
     'Feedback_Gist',
     'Feedback',
     'Area',
@@ -370,6 +371,10 @@ TABLE_COLUMNS = [
     'Categorization_Confidence',  # Confidence score for categorization
     'Domains',  # Cross-cutting domain concerns (JSON array)
     'Primary_Domain',  # Primary domain classification
+    'State',  # NEW: Current state of feedback (New, Triaged, Closed, Irrelevant)
+    'Feedback_Notes',  # NEW: Notes about the feedback
+    'Last_Updated',  # NEW: When the state was last changed
+    'Updated_By',  # NEW: Who made the last change (extracted from bearer token)
     'Tag',
     'Customer',
     'Created',
@@ -446,6 +451,36 @@ REDDIT_SUBREDDIT = "MicrosoftFabric"
 GITHUB_REPO_OWNER = "microsoft"
 GITHUB_REPO_NAME = "Microsoft-Fabric-workload-development-sample"
 
+# Feedback State Management Configuration
+FEEDBACK_STATES = {
+    'NEW': {
+        'name': 'New',
+        'description': 'Newly collected feedback that hasn\'t been reviewed',
+        'color': '#6c757d',  # Gray
+        'default': True
+    },
+    'TRIAGED': {
+        'name': 'Triaged',
+        'description': 'Feedback that has been reviewed and categorized',
+        'color': '#007bff',  # Blue
+        'default': False
+    },
+    'CLOSED': {
+        'name': 'Closed',
+        'description': 'Feedback that has been addressed and resolved',
+        'color': '#28a745',  # Green
+        'default': False
+    },
+    'IRRELEVANT': {
+        'name': 'Irrelevant',
+        'description': 'Feedback that doesn\'t apply to the product scope',
+        'color': '#dc3545',  # Red
+        'default': False
+    }
+}
+
+# Default state for new feedback
+DEFAULT_FEEDBACK_STATE = 'NEW'
 # Processing Configuration
 MAX_ITEMS_PER_RUN = 500
 DEFAULT_STATUS = "New"
