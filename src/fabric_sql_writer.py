@@ -9,6 +9,7 @@ import pandas as pd
 import logging
 from datetime import datetime
 from typing import List, Dict, Any
+from config import FABRIC_SQL_SERVER, FABRIC_SQL_DATABASE, FABRIC_SQL_AUTHENTICATION
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +18,14 @@ class FabricSQLWriter:
     
     def __init__(self, bearer_token: str = None):
         self.bearer_token = bearer_token
-        self.server = "x6eps4xrq2xudenlfv6naeo3i4-cfyeshmtnhnuzlhe7juljtqiie.msit-database.fabric.microsoft.com,1433"
-        self.database = "Feedbackstate-6b85be29-3a09-4773-894f-7976ad58c8b3"
+        self.server = FABRIC_SQL_SERVER
+        self.database = FABRIC_SQL_DATABASE
+        self.auth_method = FABRIC_SQL_AUTHENTICATION
         self.current_user = None  # Will be set after connection
+        
+        # Validate that required configuration is present
+        if not self.server or not self.database:
+            raise ValueError("FABRIC_SQL_SERVER and FABRIC_SQL_DATABASE must be configured in .env file")
     
     def connect_interactive(self):
         """Connect using interactive Azure AD authentication (for development)"""

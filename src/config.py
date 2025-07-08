@@ -33,6 +33,11 @@ OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 FABRIC_STORAGE_URL = os.getenv('FABRIC_STORAGE_URL')
 FABRIC_STORAGE_KEY = os.getenv('FABRIC_STORAGE_KEY')
 
+# Fabric SQL Database Configuration
+FABRIC_SQL_SERVER = os.getenv('FABRIC_SQL_SERVER')
+FABRIC_SQL_DATABASE = os.getenv('FABRIC_SQL_DATABASE')
+FABRIC_SQL_AUTHENTICATION = os.getenv('FABRIC_SQL_AUTHENTICATION', 'AzureActiveDirectoryInteractive')
+
 # Enhanced Hierarchical Feedback Categories
 ENHANCED_FEEDBACK_CATEGORIES = {
     'DEVELOPER_REQUESTS': {
