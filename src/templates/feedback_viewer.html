@@ -2592,15 +2592,8 @@
             if (currentParams.get('show_repeating') === 'true') params.set('show_repeating', 'true');
             if (currentParams.get('show_only_stored') === 'true') params.set('show_only_stored', 'true');
             
-            // Add fabric connection indicator if user is connected
-            if (typeof fabricConnected !== 'undefined' && fabricConnected && typeof stateManagementEnabled !== 'undefined' && stateManagementEnabled) {
-                params.set('fabric_connected', 'true');
-            }
-            
-            // Also check if we have state data loaded (indicates connection)
-            if (typeof window !== 'undefined' && window.fabricStateData && Object.keys(window.fabricStateData).length > 0) {
-                params.set('fabric_connected', 'true');
-            }
+            // Remove the fabric_connected parameter logic to prevent false connection state
+            // Connection state should only be determined by server-side session token presence
             
             // Collect selected filters
             const filterTypes = ['audience', 'priority', 'state', 'source', 'domain', 'sentiment', 'enhanced_category'];

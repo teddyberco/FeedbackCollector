@@ -391,6 +391,31 @@ def feedback_viewer():
                     item['Sentiment'] = sentiment_analysis['label']
                     item['Sentiment_Score'] = sentiment_analysis['polarity']
                     item['Sentiment_Confidence'] = sentiment_analysis['confidence']
+                
+                # Apply audience detection if not already present or if value is invalid
+                audience = item.get('Audience')
+                if not audience or audience in ['', 'nan', 'None', None] or pd.isna(audience):
+                    text_content = item.get('Feedback', '') or item.get('Content', '') or item.get('Title', '')
+                    source = item.get('Sources', '')
+                    scenario = item.get('Scenario', '')
+                    organization = item.get('Organization', '')
+                    
+                    # Detect audience using the same logic as enhanced categorization
+                    detected_audience = utils.detect_audience(text_content, source, scenario, organization)
+                    item['Audience'] = detected_audience
+                    
+                    # Also apply enhanced categorization if not present
+                    if not item.get('Enhanced_Category') or item.get('Enhanced_Category') in ['', 'nan', 'None', None]:
+                        enhanced_cat = utils.enhanced_categorize_feedback(text_content, source, scenario, organization)
+                        item['Enhanced_Category'] = enhanced_cat['primary_category']
+                        item['Subcategory'] = enhanced_cat['subcategory']
+                        item['Priority'] = enhanced_cat['priority']
+                        item['Feature_Area'] = enhanced_cat['feature_area']
+                        item['Categorization_Confidence'] = enhanced_cat['confidence']
+                        item['Domains'] = enhanced_cat.get('domains', [])
+                        item['Primary_Domain'] = enhanced_cat.get('primary_domain', None)
+                        # Update audience from enhanced categorization as well
+                        item['Audience'] = enhanced_cat['audience']
     
     # Check if bearer token is available in session (from previous Fabric write)
     from flask import session
@@ -482,20 +507,18 @@ def feedback_viewer():
     # Check if user should have SQL state data loaded based on various indicators
     should_load_states = False
     
-    # Check 1: Session token available
+    # Check 1: Session token available (most reliable indicator)
     if stored_token and stored_token.strip() and stored_token != 'None':
         should_load_states = True
         logger.info("🔑 Session token available - will load SQL state data")
     
-    # Check 2: Request parameter indicating fabric connection
-    elif request.args.get('fabric_connected') == 'true':
-        should_load_states = True
-        logger.info("🔗 Fabric connection parameter found - will load SQL state data")
-    
-    # Check 3: States already loaded in session
+    # Check 2: States already loaded in session (persistent indicator)
     elif states_already_loaded:
         should_load_states = True
-        logger.info("📊 States already loaded in session - will load SQL state data")
+        logger.info("� States already loaded in session - will load SQL state data")
+    
+    # Remove the fabric_connected URL parameter check to prevent false positives
+    # The URL parameter can be manipulated by filtering and doesn't represent true connection state
     
     if should_load_states:
         try:
@@ -1335,61 +1358,24 @@ def sync_states_to_fabric():
             
             if new_state and not state_manager.validate_state(new_state):
                 return jsonify({'status': 'error', 'message': f'Invalid state: {new_state}'}), 400
+        logger.info(f"🔥 FABRIC SQL SYNC: Writing {len(state_changes)} state changes to Fabric SQL Database")
+        print(f"🔥 FABRIC SQL SYNC: Processing {len(state_changes)} state changes")
         
-        # Write state changes to Fabric SQL Database (much more reliable than lakehouse)
-        try:
-            import fabric_sql_writer
+        # Update in Fabric SQL database using state_manager (no bearer token needed)
+        success = state_manager.update_feedback_states_in_fabric_sql(
+            auth_header.replace('Bearer ', ''),
+            state_changes
+        )
+        
+        if not success:
+            logger.error("❌ FABRIC SQL SYNC FAILED: Could not write to Fabric SQL Database")
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to write state changes to Fabric SQL Database'
+            }), 500
             
-            # Add user information to each change
-            for change in state_changes:
-                change['updated_by'] = user
-            
-            logger.warning(f"🔥 FABRIC SQL SYNC: Writing {len(state_changes)} state changes to Fabric SQL Database")
-            print(f"🔥 FABRIC SQL SYNC: Processing {len(state_changes)} state changes")
-            
-            # Use new SQL-based fabric writer (much more reliable)
-            fabric_success = fabric_sql_writer.update_feedback_states_in_fabric_sql(
-                auth_header.replace('Bearer ', ''),
-                state_changes
-            )
-            
-            if not fabric_success:
-                logger.error("❌ FABRIC SQL SYNC FAILED: Could not write to Fabric SQL Database")
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Failed to write state changes to Fabric SQL Database'
-                }), 500
-                
-            logger.warning("✅ FABRIC SQL SYNC SUCCESS: All state changes written to Fabric SQL Database")
-            print("✅ FABRIC SQL SYNC COMPLETED SUCCESSFULLY")
-            
-        except ImportError:
-            logger.error("❌ FABRIC SQL WRITER NOT FOUND: fabric_sql_writer.py not available")
-            fabric_success = False
-            
-        # If SQL failed (including ODBC driver issues), try lakehouse fallback
-        if not fabric_success:
-            try:
-                import fabric_writer
-                logger.warning("🔄 FABRIC SQL FAILED - Falling back to lakehouse writer...")
-                
-                fabric_success = fabric_writer.update_feedback_states_in_fabric(
-                    auth_header.replace('Bearer ', ''),
-                    state_changes
-                )
-                
-                if fabric_success:
-                    logger.warning("✅ FABRIC LAKEHOUSE FALLBACK SUCCESS")
-                else:
-                    raise Exception("Lakehouse fallback also failed")
-                    
-            except Exception as fallback_error:
-                logger.error(f"❌ BOTH SQL AND LAKEHOUSE FAILED: {fallback_error}")
-                return jsonify({
-                    'status': 'error',
-                    'message': 'Both SQL and Lakehouse writers failed'
-                }), 500
-                
+        logger.warning("✅ FABRIC SQL SYNC SUCCESS: All state changes written to Fabric SQL Database")
+        print("✅ FABRIC SQL SYNC COMPLETED SUCCESSFULLY")
         
         # Update in-memory data after successful Fabric write
         global last_collected_feedback
@@ -1740,5 +1726,78 @@ def update_audience_sql():
         logger.error(f"Error updating audience: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+@app.route('/api/feedback/query/getting_started', methods=['GET'])
+def get_getting_started_feedback_ids():
+    """Get all Feedback IDs that are tagged with 'Getting Started' domain"""
+    try:
+        import state_manager
+        
+        # Get all feedback states from SQL database
+        all_states = state_manager.get_all_feedback_states()
+        
+        if not all_states:
+            return jsonify({
+                'status': 'success',
+                'total_found': 0,
+                'feedback_ids': [],
+                'details': [],
+                'delete_sql': '',
+                'message': 'No feedback states found in database'
+            })
+        
+        # Filter for Getting Started domain
+        getting_started_ids = []
+        getting_started_details = []
+        
+        for feedback_id, state_data in all_states.items():
+            domain = state_data.get('domain', '')
+            if domain and ('Getting Started' in domain or 'GETTING_STARTED' in domain):
+                getting_started_ids.append(feedback_id)
+                getting_started_details.append({
+                    'feedback_id': feedback_id,
+                    'domain': domain,
+                    'state': state_data.get('state', ''),
+                    'notes': state_data.get('notes', ''),
+                    'last_updated': state_data.get('last_updated', ''),
+                    'updated_by': state_data.get('updated_by', '')
+                })
+        
+        # Generate SQL DELETE statement
+        delete_sql = ""
+        transaction_sql = ""
+        
+        if getting_started_ids:
+            ids_list = "', '".join(getting_started_ids)
+            delete_sql = f"DELETE FROM FeedbackState WHERE Feedback_ID IN ('{ids_list}');"
+            
+            # Create safer transaction version
+            transaction_sql = f"""BEGIN TRANSACTION;
+
+-- Preview what will be deleted
+SELECT Feedback_ID, Primary_Domain, State, Feedback_Notes 
+FROM FeedbackState 
+WHERE Feedback_ID IN ('{ids_list}');
+
+-- Uncomment the line below to actually delete (after reviewing the preview)
+-- DELETE FROM FeedbackState WHERE Feedback_ID IN ('{ids_list}');
+
+-- Commit or rollback as needed
+-- COMMIT;
+-- ROLLBACK;"""
+        
+        return jsonify({
+            'status': 'success',
+            'total_found': len(getting_started_ids),
+            'total_stored': len(all_states),
+            'feedback_ids': getting_started_ids,
+            'details': getting_started_details,
+            'delete_sql': delete_sql,
+            'transaction_sql': transaction_sql,
+            'message': f'Found {len(getting_started_ids)} feedback items tagged with Getting Started out of {len(all_states)} total items'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error querying Getting Started feedback: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# State Management API Endpoints
