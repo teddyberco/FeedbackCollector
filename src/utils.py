@@ -152,54 +152,157 @@ def clean_feedback_text(text: str) -> str:
 
 def generate_feedback_gist(text: str, max_length: int = 150, num_phrases: int = 3) -> str:
     """
-    Generates a concise gist or title from feedback text using noun phrase extraction.
-
+    Generates a concise, informative gist from feedback text using multiple strategies.
+    
     Args:
         text: The feedback text.
         max_length: The maximum desired length for the gist.
-        num_phrases: The number of noun phrases to try to combine.
-
+        num_phrases: The number of key phrases to try to combine.
+    
     Returns:
         A string representing the feedback gist.
     """
     if not text or not isinstance(text, str):
         return "No content"
-
+    
+    # Clean the text
+    text = text.strip()
+    if not text:
+        return "Empty feedback"
+    
     try:
-        blob = TextBlob(text)
-        noun_phrases = blob.noun_phrases
+        # Strategy 1: Extract title from structured content (if available)
+        title_match = re.search(r'^([^.\n!?]+)[.\n!?]', text)
+        if title_match:
+            potential_title = title_match.group(1).strip()
+            if len(potential_title) > 10 and len(potential_title) < max_length:
+                # Check if it looks like a meaningful title
+                if not potential_title.lower().startswith(('hey', 'hi', 'hello', 'i ', 'we ', 'the ', 'a ', 'an ')):
+                    return potential_title
         
-        if noun_phrases:
-            # Take unique noun phrases to avoid repetition if the same phrase appears multiple times early on
-            unique_phrases = []
-            for phrase in noun_phrases:
-                if phrase.lower() not in [p.lower() for p in unique_phrases]:
-                    unique_phrases.append(phrase)
+        # Strategy 2: Domain-specific keyword extraction
+        fabric_keywords = {
+            'workloads': ['workload', 'workloads', 'marketplace', 'hub'],
+            'development': ['wdk', 'sdk', 'develop', 'developing', 'development', 'api', 'build'],
+            'data': ['pipeline', 'notebooks', 'lakehouse', 'warehouse', 'delta', 'spark'],
+            'integration': ['connector', 'integration', 'authenticate', 'oauth', 'token'],
+            'performance': ['slow', 'performance', 'speed', 'optimization', 'latency'],
+            'security': ['security', 'permission', 'access', 'authentication', 'authorization'],
+            'ui': ['interface', 'ui', 'ux', 'usability', 'design', 'navigation'],
+            'multi-tenant': ['tenant', 'tenancy', 'isv', 'multi-tenant', 'customer'],
+            'architecture': ['architecture', 'structure', 'pattern', 'design'],
+            'issues': ['error', 'bug', 'issue', 'problem', 'crash', 'fail', 'not working']
+        }
+        
+        # Find relevant domain keywords
+        text_lower = text.lower()
+        found_categories = []
+        for category, keywords in fabric_keywords.items():
+            if any(keyword in text_lower for keyword in keywords):
+                found_categories.append(category)
+        
+        # Strategy 3: Enhanced extractive summarization
+        sentences = re.split(r'[.!?]+', text)
+        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
+        
+        if sentences:
+            # Find the most informative sentence (contains keywords, not too long, not a question)
+            best_sentence = None
+            best_score = 0
             
-            selected_phrases = unique_phrases[:num_phrases]
-            gist = "... ".join(selected_phrases).strip()
+            for sentence in sentences[:3]:  # Only check first 3 sentences
+                if len(sentence) > max_length:
+                    continue
+                
+                score = 0
+                sentence_lower = sentence.lower()
+                
+                # Boost score for domain keywords
+                for category in found_categories:
+                    if category in fabric_keywords:
+                        for keyword in fabric_keywords[category]:
+                            if keyword in sentence_lower:
+                                score += 2
+                
+                # Boost score for technical terms
+                technical_terms = ['fabric', 'microsoft', 'azure', 'sql', 'database', 'workspace']
+                for term in technical_terms:
+                    if term in sentence_lower:
+                        score += 1
+                
+                # Penalize questions and conversational starts
+                if sentence.strip().endswith('?'):
+                    score -= 1
+                if sentence_lower.startswith(('hey', 'hi', 'hello', 'i am', 'we are')):
+                    score -= 2
+                
+                if score > best_score:
+                    best_score = score
+                    best_sentence = sentence
+            
+            if best_sentence and best_score > 0:
+                return best_sentence.strip()
+        
+        # Strategy 4: Generate descriptive title from categories and key terms
+        if found_categories:
+            # Extract key business terms
+            business_terms = []
+            patterns = [
+                r'\b(multi-tenant|isv|customer|workspace|pipeline|notebook|lakehouse|warehouse)\b',
+                r'\b(workload|development|integration|performance|security|authentication)\b',
+                r'\b(fabric|power bi|azure|sql|database|api|connector)\b'
+            ]
+            
+            for pattern in patterns:
+                matches = re.findall(pattern, text_lower)
+                business_terms.extend(matches)
+            
+            # Remove duplicates while preserving order
+            unique_terms = []
+            for term in business_terms:
+                if term not in unique_terms:
+                    unique_terms.append(term)
+            
+            # Create descriptive title
+            if unique_terms:
+                if len(found_categories) == 1:
+                    category = found_categories[0].replace('-', ' ').title()
+                    key_terms = ' '.join(unique_terms[:3]).title()
+                    gist = f"{category} - {key_terms}"
+                else:
+                    key_terms = ' '.join(unique_terms[:4]).title()
+                    gist = f"{key_terms} - {' & '.join(found_categories[:2]).title()}"
+                
+                if len(gist) <= max_length:
+                    return gist
+        
+        # Strategy 5: Improved fallback - use most meaningful words
+        words = text.split()
+        
+        # Filter out common stop words and conversational starts
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'between', 'among', 'within', 'without', 'against', 'hey', 'hi', 'hello', 'i', 'we', 'you', 'they', 'it', 'this', 'that', 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'cannot'}
+        
+        meaningful_words = []
+        for word in words:
+            clean_word = re.sub(r'[^\w]', '', word.lower())
+            if clean_word and clean_word not in stop_words and len(clean_word) > 2:
+                meaningful_words.append(word)
+        
+        if meaningful_words:
+            # Take first 8-12 meaningful words
+            selected_words = meaningful_words[:min(12, len(meaningful_words))]
+            gist = ' '.join(selected_words)
             
             if len(gist) > max_length:
                 gist = gist[:max_length-3] + "..."
-            elif not gist: # Fallback if selected phrases were empty (e.g. very short phrases)
-                gist = text[:max_length-3] + "..." if len(text) > max_length else text
             
-            # Capitalize first letter of the gist
-            if gist:
-                gist = gist[0].upper() + gist[1:]
-            return gist if gist else "Summary unavailable"
-
-        else:
-            # Fallback if no noun phrases are found
-            words = text.split()
-            gist = " ".join(words[:10]) # First 10 words
-            if len(words) > 10:
-                gist += "..."
-            return gist if gist else "Summary unavailable"
-            
+            return gist
+        
+        # Final fallback - simple truncation
+        return text[:max_length-3] + "..." if len(text) > max_length else text
+        
     except Exception as e:
-        logger.error(f"Error generating feedback gist: {e}. Falling back to simple truncation.")
-        # Fallback in case of any TextBlob/NLTK error
+        logger.error(f"Error generating feedback gist: {e}. Using fallback truncation.")
         return text[:max_length-3] + "..." if len(text) > max_length else text
 
 def categorize_feedback(text: str) -> str:
@@ -219,8 +322,7 @@ def categorize_feedback(text: str) -> str:
 
 def detect_audience(text: str, source: str = "", scenario: str = "", organization: str = "") -> str:
     """
-    Detect the primary audience (Developer, Customer) based on content and context.
-    Standardized to only return Developer or Customer for consistency.
+    Detect the audience for feedback based on text analysis and contextual clues.
     
     Args:
         text: The feedback text to analyze
@@ -229,22 +331,24 @@ def detect_audience(text: str, source: str = "", scenario: str = "", organizatio
         organization: Organization field
     
     Returns:
-        Detected audience: 'Developer' or 'Customer'
+        Detected audience: 'Developer', 'Customer', or 'ISV'
     """
     if not text or not isinstance(text, str):
         return 'Customer'  # Default to Customer instead of Unknown
     
     text_lower = text.lower()
-    audience_scores = {'Developer': 0, 'Customer': 0}
+    audience_scores = {'Developer': 0, 'Customer': 0, 'ISV': 0}
     
-    # Score based on keywords (map ISV keywords to Developer)
+    # Score based on keywords - now including ISV as separate category
     for audience, keywords in AUDIENCE_DETECTION_KEYWORDS.items():
         for keyword in keywords:
             if keyword.lower() in text_lower:
-                if audience == 'ISV':
-                    audience_scores['Developer'] += 1  # Map ISV to Developer
-                elif audience in audience_scores:
-                    audience_scores[audience] += 1
+                audience_scores[audience] += 1
+    
+    # DevGateway and related terms get very strong Developer scoring
+    devgateway_terms = ['devgateway', 'dev gateway', 'developer gateway', 'dev portal', 'developer portal']
+    if any(term in text_lower for term in devgateway_terms):
+        audience_scores['Developer'] += 5  # Very strong Developer indication
     
     # Strong contextual scoring based on source and scenario
     # GitHub and ADO are primarily developer-oriented
@@ -256,19 +360,29 @@ def detect_audience(text: str, source: str = "", scenario: str = "", organizatio
         # Fabric community could be either, slight customer bias
         audience_scores['Customer'] += 0.5
     
-    # Map partner/ISV scenarios to Developer
+    # Scenario-based scoring
     if scenario.lower() == 'partner':
-        audience_scores['Developer'] += 2  # Map Partner to Developer
+        # Partner could be ISV or Developer, check context
+        if any(isv_term in text_lower for isv_term in ['isv', 'independent software vendor', 'multi-tenant', 'tenant', 'saas']):
+            audience_scores['ISV'] += 3
+        else:
+            audience_scores['Developer'] += 2
     elif scenario.lower() == 'customer':
         audience_scores['Customer'] += 2
     elif scenario.lower() == 'internal':
         audience_scores['Developer'] += 2
     
-    # ISV-specific organization patterns mapped to Developer
-    if organization and 'isv' in organization.lower():
-        audience_scores['Developer'] += 2  # Map ISV to Developer
-    elif organization and any(dev_org in organization.lower() for dev_org in ['github', 'ado', 'azure devops']):
-        audience_scores['Developer'] += 1
+    # Organization-based scoring
+    if organization:
+        org_lower = organization.lower()
+        if 'isv' in org_lower or any(isv_term in org_lower for isv_term in ['vendor', 'partner', 'saas']):
+            audience_scores['ISV'] += 2
+        elif any(dev_org in org_lower for dev_org in ['github', 'ado', 'azure devops', 'devgateway']):
+            audience_scores['Developer'] += 2
+    
+    # Multi-tenant and SaaS patterns strongly indicate ISV
+    if any(term in text_lower for term in ['multi-tenant', 'saas', 'software as a service', 'independent software vendor']):
+        audience_scores['ISV'] += 3
     
     # Find the highest scoring audience
     max_score = max(audience_scores.values())
@@ -280,7 +394,7 @@ def detect_audience(text: str, source: str = "", scenario: str = "", organizatio
         if score == max_score:
             return audience
     
-    return 'Customer'  # Default fallback
+    return 'Customer'  # Fallback
 
 def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = "", organization: str = "") -> dict:
     """
@@ -720,7 +834,7 @@ def detect_domain(text: str) -> list:
     detected_domains.sort(key=lambda x: x['confidence'], reverse=True)
     return detected_domains
 
-def find_similar_feedback(feedback_text: str, all_feedback: list, similarity_threshold: float = 0.7) -> list:
+def find_similar_feedback(feedback_text: str, all_feedback: list, similarity_threshold: float = 0.7, exclude_self: bool = True) -> list:
     """
     Find similar/repeating feedback items based on text similarity.
     
@@ -728,6 +842,7 @@ def find_similar_feedback(feedback_text: str, all_feedback: list, similarity_thr
         feedback_text: The feedback text to find similar items for
         all_feedback: List of all feedback items to search through
         similarity_threshold: Minimum similarity score (0.0 to 1.0)
+        exclude_self: Whether to exclude the exact same feedback item
     
     Returns:
         List of similar feedback items with similarity scores
@@ -771,7 +886,11 @@ def find_similar_feedback(feedback_text: str, all_feedback: list, similarity_thr
     
     for item in all_feedback:
         item_text = item.get('Feedback', '') or item.get('Feedback_Gist', '')
-        if not item_text or item_text == feedback_text:
+        if not item_text:
+            continue
+        
+        # Skip exact matches only if exclude_self is True
+        if exclude_self and item_text == feedback_text:
             continue
         
         similarity = calculate_similarity(feedback_text, item_text)
@@ -798,7 +917,15 @@ def analyze_repeating_requests(feedback_items: list) -> dict:
         Dictionary with repeating request analysis
     """
     if not feedback_items:
-        return {}
+        return {
+            'total_items': 0,
+            'unique_requests': 0,
+            'repeating_clusters': [],
+            'cluster_count': 0,
+            'repetition_rate': 0.0,
+            'top_keywords': [],
+            'top_repeating_requests': []
+        }
     
     from collections import defaultdict
     import re
@@ -829,6 +956,8 @@ def analyze_repeating_requests(feedback_items: list) -> dict:
     clusters = []
     processed = set()
     
+    logger.info(f"Starting repeating request analysis with {len(feedback_items)} items")
+    
     for i, item in enumerate(feedback_items):
         if i in processed:
             continue
@@ -837,7 +966,11 @@ def analyze_repeating_requests(feedback_items: list) -> dict:
         if not item_text:
             continue
         
-        similar_items = find_similar_feedback(item_text, feedback_items, similarity_threshold=0.3)
+        # Find similar items with a lower threshold for clustering
+        similar_items = find_similar_feedback(item_text, feedback_items, similarity_threshold=0.3, exclude_self=False)
+        
+        # Filter out the current item from similar items to avoid self-inclusion
+        similar_items = [si for si in similar_items if si['feedback_item'] != item]
         
         if similar_items:
             cluster = {
@@ -855,8 +988,8 @@ def analyze_repeating_requests(feedback_items: list) -> dict:
             clusters.append(cluster)
             
             processed.add(i)
+            # Mark similar items as processed
             for similar in similar_items:
-                # Find index of similar item to mark as processed
                 for j, check_item in enumerate(feedback_items):
                     if check_item == similar['feedback_item']:
                         processed.add(j)
@@ -876,16 +1009,22 @@ def analyze_repeating_requests(feedback_items: list) -> dict:
     # Get top keywords
     top_keywords = sorted(keyword_freq.items(), key=lambda x: x[1], reverse=True)[:20]
     
+    # Calculate metrics safely
+    total_items = len(feedback_items)
+    total_similar_items = sum(len(c['similar_items']) for c in clusters)
+    unique_requests = total_items - total_similar_items
+    repetition_rate = round(total_similar_items / total_items * 100, 1) if total_items > 0 else 0.0
+    
     analysis = {
-        'total_items': len(feedback_items),
-        'unique_requests': len(feedback_items) - sum(len(c['similar_items']) for c in clusters),
+        'total_items': total_items,
+        'unique_requests': unique_requests,
         'repeating_clusters': clusters[:10],  # Top 10 most frequent clusters
         'cluster_count': len(clusters),
-        'repetition_rate': round(sum(len(c['similar_items']) for c in clusters) / len(feedback_items) * 100, 1),
+        'repetition_rate': repetition_rate,
         'top_keywords': top_keywords,
         'top_repeating_requests': [
             {
-                'summary': cluster['primary_item'].get('Feedback_Gist', '')[:100],
+                'summary': cluster['primary_item'].get('Feedback_Gist', '')[:100] + "..." if len(cluster['primary_item'].get('Feedback_Gist', '')) > 100 else cluster['primary_item'].get('Feedback_Gist', ''),
                 'count': cluster['count'],
                 'sources': cluster['sources'],
                 'audiences': cluster['audiences'],
@@ -894,5 +1033,7 @@ def analyze_repeating_requests(feedback_items: list) -> dict:
             for cluster in clusters[:5]
         ]
     }
+    
+    logger.info(f"Repeating request analysis complete: {len(clusters)} clusters found, {repetition_rate}% repetition rate")
     
     return analysis

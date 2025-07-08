@@ -486,6 +486,7 @@
                             <label class="form-check-label" for="audience_{{ audience|lower }}">
                                 {% if audience == 'Developer' %}🛠️ Developer
                                 {% elif audience == 'Customer' %}👤 Customer
+                                {% elif audience == 'ISV' %}🏢 ISV
                                 {% else %}{{ audience }}{% endif %}
                             </label>
                         </div>
@@ -806,13 +807,14 @@
                             {% if item.Audience or item.Enhanced_Category or item.Priority %}
                             <div class="category-info">
                                 {% if item.Audience and item.Audience|trim != '' %}
-                                    {% set display_audience = 'Developer' if item.Audience in ['Developer', 'ISV', 'Platform'] else 'Customer' %}
-                                    <span class="audience-badge audience-{{ display_audience|lower }}"
-                                          onclick="updateAudience('{{ item.Feedback_ID or '' }}', '{{ display_audience }}')"
+                                    <span class="audience-badge audience-{{ item.Audience|lower }}"
+                                          onclick="updateAudience('{{ item.Feedback_ID or '' }}', '{{ item.Audience }}')"
                                           title="Click to update audience"
                                           style="cursor: pointer;">
-                                        {% if display_audience == 'Developer' %}🛠️ Developer
-                                        {% else %}👤 Customer{% endif %}
+                                        {% if item.Audience == 'Developer' %}🛠️ Developer
+                                        {% elif item.Audience == 'Customer' %}👤 Customer
+                                        {% elif item.Audience == 'ISV' %}🏢 ISV
+                                        {% else %}{{ item.Audience }}{% endif %}
                                     </span>
                                 {% endif %}
                                 
@@ -2699,8 +2701,9 @@
                             <div class="mb-3">
                                 <label for="audienceSelect" class="form-label">Select new audience:</label>
                                 <select class="form-select" id="audienceSelect">
-                                    <option value="Developer" ${currentAudience === 'Developer' ? 'selected' : ''}>Developer</option>
-                                    <option value="Customer" ${currentAudience === 'Customer' ? 'selected' : ''}>Customer</option>
+                                    <option value="Developer" ${currentAudience === 'Developer' ? 'selected' : ''}>🛠️ Developer</option>
+                                    <option value="Customer" ${currentAudience === 'Customer' ? 'selected' : ''}>👤 Customer</option>
+                                    <option value="ISV" ${currentAudience === 'ISV' ? 'selected' : ''}>🏢 ISV</option>
                                 </select>
                             </div>
                         </div>

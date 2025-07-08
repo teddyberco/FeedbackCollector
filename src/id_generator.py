@@ -29,7 +29,24 @@ class FeedbackIDGenerator:
     
     @staticmethod
     def generate_feedback_id(title, content, source, author=None, created_date=None):
-        """Generate deterministic feedback ID based on content"""
+        """Generate deterministic feedback ID based on STABLE content only
+        
+        IMPORTANT: This function should only use stable, immutable content that won't change
+        when we improve algorithms or processing. Do NOT use generated fields like:
+        - Feedback_Gist (can change with algorithm improvements)
+        - Processed/cleaned content that might change
+        - Derived fields that might be recalculated
+        
+        Args:
+            title: Original title or first part of feedback content (NOT generated gist)
+            content: Raw feedback content
+            source: Source platform/system
+            author: Author/customer name
+            created_date: Creation date
+            
+        Returns:
+            Deterministic UUID-like string for the feedback
+        """
         
         # Normalize all inputs
         norm_title = FeedbackIDGenerator.normalize_content(title or "")
@@ -72,10 +89,20 @@ class FeedbackIDGenerator:
     
     @staticmethod
     def generate_id_from_feedback_dict(feedback):
-        """Generate ID from feedback dictionary with proper field mapping"""
+        """Generate ID from feedback dictionary with proper field mapping
+        
+        IMPORTANT: Uses only stable, immutable content for ID generation.
+        Do NOT use generated fields like Feedback_Gist as they can change with algorithm improvements.
+        """
         # Map collector field names to ID generator field names
-        title = feedback.get('Title') or feedback.get('Feedback_Gist') or feedback.get('Feedback', '')[:100]
+        # CRITICAL: Do NOT use Feedback_Gist for ID generation as it can change with algorithm improvements
+        # Use original Title field if available, otherwise use first 100 chars of actual feedback content
+        title = feedback.get('Title') or feedback.get('Feedback', '')[:100]  # Removed Feedback_Gist dependency
+        
+        # Use the actual feedback content, not processed versions
         content = feedback.get('Content') or feedback.get('Feedback') or ''
+        
+        # These should be stable
         source = feedback.get('Source') or feedback.get('Sources') or ''
         author = feedback.get('Author') or feedback.get('Customer') or ''
         created_date = feedback.get('Created_Date') or feedback.get('Created') or ''

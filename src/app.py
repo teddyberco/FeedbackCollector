@@ -411,9 +411,9 @@ def feedback_viewer():
     all_sources = ['Reddit', 'GitHub', 'Fabric Community']
     all_categories = ['Feature Request', 'Bug Report', 'Performance Issue', 'Documentation', 'General Feedback']
     all_enhanced_categories = []
-    all_audiences = ['Developer', 'Customer']
+    all_audiences = ['Developer', 'Customer', 'ISV']  # Include ISV as a separate audience
     all_priorities = ['critical', 'high', 'medium', 'low']
-    all_domains = ['GOVERNANCE', 'USER_EXPERIENCE', 'AUTHENTICATION', 'PERFORMANCE', 'INTEGRATION', 'ANALYTICS']
+    all_domains = ['GETTING_STARTED', 'GOVERNANCE', 'USER_EXPERIENCE', 'AUTHENTICATION', 'PERFORMANCE', 'INTEGRATION', 'ANALYTICS']
     all_sentiments = ['positive', 'negative', 'neutral']
     all_states = ['NEW', 'TRIAGED', 'CLOSED', 'IRRELEVANT']
     category_stats = None
@@ -446,11 +446,11 @@ def feedback_viewer():
         if not all_sources:
             all_sources = ['Reddit', 'GitHub', 'Fabric Community']
         if not all_audiences:
-            all_audiences = ['Developer', 'Customer']
+            all_audiences = ['Developer', 'Customer', 'ISV']  # Include ISV as a separate audience
         if not all_priorities:
             all_priorities = ['critical', 'high', 'medium', 'low']
         if not all_domains:
-            all_domains = ['GOVERNANCE', 'USER_EXPERIENCE', 'AUTHENTICATION', 'PERFORMANCE', 'INTEGRATION', 'ANALYTICS']
+            all_domains = ['GETTING_STARTED', 'GOVERNANCE', 'USER_EXPERIENCE', 'AUTHENTICATION', 'PERFORMANCE', 'INTEGRATION', 'ANALYTICS']
         if not all_sentiments:
             all_sentiments = ['positive', 'negative', 'neutral']
         if not all_states:
@@ -550,23 +550,13 @@ def feedback_viewer():
         logger.info(f"After enhanced category filter '{enhanced_category_filter}': {len(feedback_to_display)} items")
     
     if audience_filters:
-        # Map ISV/Platform to Developer for filtering
-        mapped_filters = []
-        for aud in audience_filters:
-            if aud in ['ISV', 'Platform']:
-                mapped_filters.append('Developer')
-            else:
-                mapped_filters.append(aud)
+        # No mapping - treat ISV as a separate audience
         feedback_to_display = [item for item in feedback_to_display if
-                             (item.get('Audience') in mapped_filters or
-                              (item.get('Audience') in ['ISV', 'Platform'] and 'Developer' in mapped_filters))]
-        logger.info(f"After audience multi-filter {audience_filters} (mapped: {mapped_filters}): {len(feedback_to_display)} items")
+                             item.get('Audience') in audience_filters]
+        logger.info(f"After audience multi-filter {audience_filters}: {len(feedback_to_display)} items")
     elif audience_filter != 'All':  # Backwards compatibility
-        if audience_filter in ['ISV', 'Platform']:
-            audience_filter = 'Developer'  # Map legacy values
         feedback_to_display = [item for item in feedback_to_display if
-                             (item.get('Audience') == audience_filter or
-                              (item.get('Audience') in ['ISV', 'Platform'] and audience_filter == 'Developer'))]
+                             item.get('Audience') == audience_filter]
         logger.info(f"After audience filter '{audience_filter}': {len(feedback_to_display)} items")
     
     if priority_filters:

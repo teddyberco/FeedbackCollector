@@ -273,7 +273,12 @@ AUDIENCE_DETECTION_KEYWORDS = {
     'Developer': [
         'wdk', 'sdk', 'development kit', 'api', 'develop', 'developing', 'developer',
         'code', 'programming', 'build', 'compile', 'debug', 'visual studio', 'ide',
-        'git', 'version control', 'deployment', 'testing', 'unit test'
+        'git', 'version control', 'deployment', 'testing', 'unit test',
+        'devgateway', 'dev gateway', 'developer gateway', 'dev portal', 'developer portal',
+        'dev tools', 'developer tools', 'development tools', 'cicd', 'ci/cd', 'continuous integration',
+        'continuous deployment', 'azure devops', 'ado', 'github', 'source control',
+        'npm', 'nuget', 'package manager', 'maven', 'gradle', 'pip', 'conda',
+        'frontend', 'backend', 'workload development sample', 'fabric wdk', 'quickstart'
     ],
     'Customer': [
         'workload hub', 'marketplace', 'install', 'using', 'user', 'customer',
@@ -282,7 +287,8 @@ AUDIENCE_DETECTION_KEYWORDS = {
     ],
     'ISV': [
         'isv', 'independent software vendor', 'partner', 'publish', 'publishing',
-        'certification', 'monetize', 'sell', 'distribute', 'listing'
+        'certification', 'monetize', 'sell', 'distribute', 'listing', 'multi-tenant',
+        'tenant', 'saas', 'software as a service', 'reseller', 'vendor'
     ]
 }
 
@@ -296,6 +302,17 @@ PRIORITY_LEVELS = {
 
 # Domain Categories for cross-cutting concerns
 DOMAIN_CATEGORIES = {
+    'GETTING_STARTED': {
+        'name': 'Getting Started',
+        'description': 'Onboarding, tutorials, quickstart guides, initial setup',
+        'keywords': [
+            'getting started', 'quickstart', 'quick start', 'tutorial', 'onboarding',
+            'setup', 'initial setup', 'first time', 'beginner', 'introduction',
+            'walkthrough', 'guide', 'how to start', 'starting guide', 'initial configuration',
+            'setup guide', 'installation guide', 'first steps', 'basic setup'
+        ],
+        'color': '#20c997'  # Teal
+    },
     'GOVERNANCE': {
         'name': 'Governance',
         'description': 'Compliance, policies, data governance, regulatory requirements',
