@@ -515,7 +515,17 @@ def feedback_viewer():
     # Check 2: States already loaded in session (persistent indicator)
     elif states_already_loaded:
         should_load_states = True
-        logger.info("� States already loaded in session - will load SQL state data")
+        logger.info("🔑 States already loaded in session - will load SQL state data")
+    
+    # Check 3: If any state filter is applied, we need to load states to filter properly
+    elif state_filter != 'All' or state_filters:
+        should_load_states = True
+        logger.info("🔍 State filter applied - loading SQL state data for filtering")
+    
+    # Check 4: If show_only_stored is requested, we need states
+    elif show_only_stored:
+        should_load_states = True
+        logger.info("📊 Show only stored requested - loading SQL state data")
     
     # Remove the fabric_connected URL parameter check to prevent false positives
     # The URL parameter can be manipulated by filtering and doesn't represent true connection state
@@ -545,6 +555,11 @@ def feedback_viewer():
                             logger.debug(f"Applied SQL domain to {feedback_id}: {sql_state['domain']}")
                 
                 logger.info(f"✅ Applied state data from SQL to {updated_count}/{len(feedback_to_display)} items before filtering")
+                
+                # Store that states were loaded in session for future requests
+                from flask import session
+                session['states_loaded'] = True
+                
             else:
                 logger.info("📊 No state data found in state_manager")
                 
@@ -604,9 +619,19 @@ def feedback_viewer():
         logger.info(f"After sentiment filter '{sentiment_filter}': {len(feedback_to_display)} items")
     
     if state_filters:
+        logger.info(f"🔍 Applying state multi-filter {state_filters} to {len(feedback_to_display)} items")
+        # Log sample states before filtering
+        sample_states = [item.get('State', 'NEW') for item in feedback_to_display[:5]]
+        logger.info(f"Sample states before filtering: {sample_states}")
+        
         feedback_to_display = [item for item in feedback_to_display if item.get('State', 'NEW') in state_filters]
         logger.info(f"After state multi-filter {state_filters}: {len(feedback_to_display)} items")
     elif state_filter != 'All':  # Backwards compatibility
+        logger.info(f"🔍 Applying single state filter '{state_filter}' to {len(feedback_to_display)} items")
+        # Log sample states before filtering
+        sample_states = [item.get('State', 'NEW') for item in feedback_to_display[:5]]
+        logger.info(f"Sample states before filtering: {sample_states}")
+        
         feedback_to_display = [item for item in feedback_to_display if item.get('State', 'NEW') == state_filter]
         logger.info(f"After state filter '{state_filter}': {len(feedback_to_display)} items")
 
