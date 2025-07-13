@@ -82,6 +82,145 @@ python run_web.py
 - View and manage feedback at `/feedback` endpoint with state management
 - Access Power BI insights at `/insights` endpoint
 
+## 🏗️ Architecture Overview
+
+The Feedback Collector follows a **client-server architecture** with clear separation between frontend and backend components, designed for enterprise-scale feedback aggregation and analysis.
+
+### **High-Level Architecture**
+
+```mermaid
+graph TB
+    subgraph "Frontend Layer"
+        UI[Web Interface]
+        TEMPLATES[HTML Templates]
+        STATIC[Static Assets]
+        AJAX[AJAX Client]
+    end
+    
+    subgraph "Backend - Flask Application"
+        ROUTES[API Routes]
+        COLLECTORS[Data Collectors]
+        PROCESSORS[Data Processors]
+        STATE_MGR[State Manager]
+        AUTH[Authentication]
+    end
+    
+    subgraph "Data Sources"
+        REDDIT[Reddit API]
+        GITHUB[GitHub Discussions API]
+        FABRIC_COMM[Fabric Community]
+        ADO[Azure DevOps API]
+    end
+    
+    subgraph "Storage Layer"
+        CSV[Local CSV Files]
+        FABRIC_LH[Fabric Lakehouse]
+        FABRIC_SQL[Fabric SQL Database]
+    end
+    
+    subgraph "Analytics Layer"
+        POWERBI[Power BI Embedded]
+        NLP[NLP Processing]
+        CATEGORIZATION[AI Categorization]
+    end
+    
+    UI --> AJAX
+    AJAX --> ROUTES
+    ROUTES --> AUTH
+    ROUTES --> COLLECTORS
+    COLLECTORS --> REDDIT
+    COLLECTORS --> GITHUB
+    COLLECTORS --> FABRIC_COMM
+    COLLECTORS --> ADO
+    COLLECTORS --> PROCESSORS
+    PROCESSORS --> NLP
+    PROCESSORS --> CATEGORIZATION
+    PROCESSORS --> STATE_MGR
+    STATE_MGR --> CSV
+    STATE_MGR --> FABRIC_LH
+    STATE_MGR --> FABRIC_SQL
+    FABRIC_SQL --> POWERBI
+    POWERBI --> UI
+```
+
+### **Frontend Architecture**
+
+#### **Components**
+- **Templates** (`src/templates/`): Bootstrap 5-powered responsive interfaces
+  - `index.html` - Main dashboard for keyword management and collection triggers
+  - `feedback_viewer.html` - Interactive feedback viewer with filtering and state management
+  - `insights_page.html` - Power BI embedded analytics dashboard
+
+- **Static Assets** (`src/static/js/`): Dynamic client-side functionality
+  - `badge-state-manager.js` - Real-time UI state management
+  - `modern-filter-system.js` - Advanced filtering and search functionality
+
+#### **Technologies**
+- **Bootstrap 5** - Responsive UI framework
+- **JavaScript ES6** - Dynamic interactions and AJAX calls
+- **HTML5/CSS3** - Structure and styling
+- **Real-time updates** - Polling for collection progress
+
+### **Backend Architecture**
+
+#### **Core Application Layer**
+- **Flask Application** (`src/app.py`): 2,426-line main controller with RESTful API endpoints
+- **Entry Point** (`src/run_web.py`): Application bootstrap and configuration
+- **Session Management**: Persistent authentication state and user context tracking
+
+#### **Data Collection Layer**
+- **Multi-Source Collectors** (`src/collectors.py`):
+  - `RedditCollector` - Reddit API integration using PRAW
+  - `FabricCommunityCollector` - Microsoft Fabric Community scraping
+  - `GitHubDiscussionsCollector` - GitHub Discussions API integration
+- **Azure DevOps Integration** (`src/ado_client.py`): Work item collection with authentication
+
+#### **Data Processing Layer**
+- **NLP & Categorization** (`src/utils.py`): Sentiment analysis, content categorization, text cleaning
+- **ID Generation** (`src/id_generator.py`): Deterministic feedback ID generation for deduplication
+- **Configuration Management** (`src/config.py`): Hierarchical categories and domain mappings
+
+#### **Storage & State Management**
+- **Local Storage**: CSV files for backup and development
+- **Fabric Integration**:
+  - `fabric_writer.py` - Bulk data writes to Fabric Lakehouse
+  - `fabric_sql_writer.py` - State management in Fabric SQL Database
+  - `fabric_state_writer.py` - Individual state updates
+- **State Manager** (`src/state_manager.py`): Feedback lifecycle and user authorization
+
+### **Data Flow Process**
+
+1. **Collection**: User triggers collection → Collectors gather data from multiple sources in parallel
+2. **Processing**: Sentiment analysis and categorization → State initialization for new feedback
+3. **Storage**: Save to CSV and optionally to Fabric → Progress tracking updates UI in real-time
+4. **State Management**: User updates via web interface → Validation → Database persistence → Cache sync
+
+### **Database Architecture**
+
+#### **Primary Tables**
+- **Feedback Table**: Main data storage with sentiment analysis, categorization, and metadata
+- **FeedbackState Table**: State management with audit trail and user attribution
+- **Comments System**: User notes and collaboration features
+
+#### **Key Features**
+- **ACID Compliance**: All state changes are atomic and reversible
+- **Concurrent Access**: Multiple users can work on feedback simultaneously
+- **Audit Trail**: Complete history of all changes with user attribution
+- **Connection Resilience**: Multiple ODBC driver support with automatic fallback
+
+### **Authentication & Security**
+
+#### **Multi-Modal Authentication**
+- **Azure AD Interactive** - Development/testing with interactive login
+- **Bearer Token** - Production Fabric access with user context extraction
+- **Personal Access Tokens** - External API access (GitHub, ADO)
+
+#### **Security Features**
+- Session management for persistent authentication
+- Token validation and refresh mechanisms
+- Input sanitization for SQL injection prevention
+- Environment variable protection for sensitive credentials
+
 ## 🔧 Configuration
 
 ### **Environment Variables (.env)**
