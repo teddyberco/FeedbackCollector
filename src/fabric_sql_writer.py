@@ -282,18 +282,37 @@ class FabricSQLWriter:
     def load_feedback_states(self):
         """Load state data from FeedbackState table for server-side filtering"""
         try:
-            conn = self.create_connection()
+            # Connect to database using same pattern as other methods
+            conn = None
+            if self.bearer_token:
+                try:
+                    conn = self.connect_with_token(self.bearer_token)
+                except Exception as token_error:
+                    logger.warning(f"Bearer token authentication failed: {token_error}")
+                    logger.info("Falling back to interactive authentication...")
+                    conn = self.connect_interactive()
+            else:
+                conn = self.connect_interactive()
+            
             if not conn:
                 logger.error("❌ Cannot load feedback states - no database connection")
                 return {}
             
             cursor = conn.cursor()
             
-            # Query to get all state data
+            # Query to get all state data with correct column names
+            # Use COALESCE to fallback to Feedback.Primary_Domain if FeedbackState.Primary_Domain is NULL
             query = """
-                SELECT feedback_id, state, domain, notes, last_updated, updated_by
-                FROM FeedbackState
-                ORDER BY last_updated DESC
+                SELECT 
+                    fs.Feedback_ID, 
+                    fs.State, 
+                    COALESCE(fs.Primary_Domain, f.Primary_Domain) as Primary_Domain,
+                    fs.Feedback_Notes, 
+                    fs.Last_Updated, 
+                    fs.Updated_By
+                FROM FeedbackState fs
+                LEFT JOIN Feedback f ON fs.Feedback_ID = f.Feedback_ID
+                ORDER BY fs.Last_Updated DESC
             """
             
             cursor.execute(query)
@@ -491,6 +510,16 @@ class FabricSQLWriter:
                     continue
             
             conn.commit()
+            
+            # Sync domain updates from FeedbackState to Feedback table
+            # This ensures that domain updates are not lost when the table is recreated
+            if new_items > 0:
+                logger.info("🔄 Syncing domain updates from FeedbackState to Feedback table...")
+                synced_domains = self.sync_domains_from_state_to_feedback(conn)
+                if synced_domains > 0:
+                    conn.commit()
+                    logger.info(f"✅ Domain sync complete: {synced_domains} records updated in Feedback table")
+            
             conn.close()
             
             result = {
@@ -507,6 +536,85 @@ class FabricSQLWriter:
             logger.error(f"❌ Error in bulletproof sync: {e}")
             return {'new_items': 0, 'existing_items': 0, 'total_items': len(feedback_data), 'id_regenerated': 0}
     
+    def sync_domains_from_state_to_feedback(self, conn):
+        """
+        Sync domain updates from FeedbackState table to Feedback table
+        This ensures that when the Feedback table is recreated, domain updates are not lost
+        """
+        try:
+            cursor = conn.cursor()
+            
+            # Update Feedback table with domain values from FeedbackState where they exist
+            update_query = """
+            UPDATE f
+            SET f.Primary_Domain = fs.Primary_Domain
+            FROM Feedback f
+            INNER JOIN FeedbackState fs ON f.Feedback_ID = fs.Feedback_ID
+            WHERE fs.Primary_Domain IS NOT NULL 
+            AND fs.Primary_Domain != ''
+            AND (f.Primary_Domain IS NULL OR f.Primary_Domain != fs.Primary_Domain)
+            """
+            
+            cursor.execute(update_query)
+            updated_rows = cursor.rowcount
+            
+            if updated_rows > 0:
+                logger.info(f"✅ Synced {updated_rows} domain updates from FeedbackState to Feedback table")
+            else:
+                logger.debug("No domain updates to sync from FeedbackState to Feedback table")
+                
+            cursor.close()
+            return updated_rows
+            
+        except Exception as e:
+            logger.error(f"❌ Error syncing domains from state to feedback: {e}")
+            return 0
+    
+    def sync_domains_from_state(self, use_token: bool = True) -> int:
+        """
+        Manually sync domain updates from FeedbackState to Feedback table
+        
+        Args:
+            use_token: Whether to use bearer token (True) or interactive auth (False)
+            
+        Returns:
+            int: Number of records updated
+        """
+        try:
+            # Connect to database
+            conn = None
+            if use_token and self.bearer_token:
+                try:
+                    conn = self.connect_with_token(self.bearer_token)
+                except Exception as token_error:
+                    logger.warning(f"Bearer token authentication failed: {token_error}")
+                    logger.info("Falling back to interactive authentication...")
+                    conn = self.connect_interactive()
+            else:
+                conn = self.connect_interactive()
+            
+            if not conn:
+                logger.error("❌ Cannot sync domains - no database connection")
+                return 0
+            
+            # Ensure both tables exist
+            self.ensure_feedback_table(conn)
+            self.ensure_feedback_state_table(conn)
+            
+            # Sync domains
+            updated_count = self.sync_domains_from_state_to_feedback(conn)
+            
+            if updated_count > 0:
+                conn.commit()
+                logger.info(f"✅ Domain sync complete: {updated_count} records updated")
+            
+            conn.close()
+            return updated_count
+            
+        except Exception as e:
+            logger.error(f"❌ Error in domain sync: {e}")
+            return 0
+
     def update_feedback_states(self, state_changes: List[Dict[str, Any]], use_token: bool = True) -> bool:
         """
         Update feedback states in Fabric SQL database

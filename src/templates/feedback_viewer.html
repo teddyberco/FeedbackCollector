@@ -5,6 +5,29 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Domain display name mapping -->
+    {% set domain_names = {
+        'GETTING_STARTED': 'Getting Started',
+        'GOVERNANCE': 'Governance', 
+        'USER_EXPERIENCE': 'User Experience',
+        'AUTHENTICATION': 'Authentication & Security',
+        'PERFORMANCE': 'Performance & Scalability',
+        'INTEGRATION': 'Integration & APIs',
+        'ANALYTICS': 'Analytics & Reporting'
+    } %}
+    
+    <!-- Domain color mapping -->
+    {% set domain_colors = {
+        'GETTING_STARTED': '#20c997',
+        'GOVERNANCE': '#6f42c1',
+        'USER_EXPERIENCE': '#28a745',
+        'AUTHENTICATION': '#dc3545',
+        'PERFORMANCE': '#fd7e14',
+        'INTEGRATION': '#17a2b8',
+        'ANALYTICS': '#ffc107'
+    } %}
+    
     <style>
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
@@ -117,7 +140,7 @@
         }
         
         .filter-group {
-            margin-bottom: 15px;
+            margin-bottom: 10px;
         }
         
         .filter-group:last-child {
@@ -127,8 +150,32 @@
         .filter-label {
             font-weight: 600;
             color: #495057;
-            margin-bottom: 8px;
+            margin-bottom: 5px;
             display: block;
+            font-size: 0.85rem;
+        }
+        
+        /* Horizontal filter layout */
+        .filters-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: flex-start;
+        }
+        
+        .filter-col {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        @media (max-width: 768px) {
+            .filters-row {
+                flex-direction: column;
+                gap: 10px;
+            }
+            .filter-col {
+                min-width: unset;
+            }
         }
         
         .domain-badge {
@@ -138,6 +185,11 @@
             padding: 3px 6px;
             margin-right: 4px;
             color: white;
+        }
+        
+        /* Hide duplicate domain displays - we should only use domain-badge */
+        .domain-display {
+            display: none !important;
         }
         
         .repeating-analysis {
@@ -321,10 +373,22 @@
         .state-badge:hover {
             opacity: 0.8;
         }
+
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
     
     <!-- Badge State Manager -->
     <script src="{{ url_for('static', filename='js/badge-state-manager.js') }}"></script>
+    
+    <!-- Modern Filter System -->
+    <script src="{{ url_for('static', filename='js/modern-filter-system.js') }}"></script>
 </head>
 <body>
     <div class="container-custom mt-3">
@@ -340,13 +404,12 @@
                 <i class="bi bi-database me-1"></i>Sync with Fabric
                 <span class="badge bg-light text-dark ms-1" id="fabricSyncBadge">Not Connected</span>
             </button>
+            <button class="btn btn-outline-secondary ms-2" id="domainSyncBtn" onclick="syncDomainsFromState()"
+                    title="Sync domain updates from FeedbackState to Feedback table (useful after table recreation)"
+                    style="display: none;">
+                <i class="bi bi-arrow-repeat me-1"></i>Sync Domains
+            </button>
         </p>
-
-        <!-- State Management Disabled Message -->
-        <div id="state-management-disabled" class="alert alert-info" style="display: block;">
-            <i class="bi bi-info-circle me-2"></i>
-            <strong>State Management Disabled:</strong> Click "Sync with Fabric" to connect to the SQL database and enable feedback state management.
-        </div>
 
         <!-- Fabric Auth will now be handled through the persistent drawer -->
 
@@ -422,24 +485,20 @@
         <div class="filter-section">
             <h5 class="mb-3">🔍 Enhanced Filters</h5>
             
-            <!-- State Filter - Multi-select -->
-            <div class="filter-group">
+            <div class="filters-row">
+                <!-- State Filter - Multi-select -->
+                <div class="filter-col">
+                    <div class="filter-group">
                 <label class="filter-label" for="stateFilter">📝 Filter by State:</label>
                 <div class="dropdown">
                     <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="stateFilter" data-bs-toggle="dropdown" aria-expanded="false">
                         {% if selected_states %}
                             {{ selected_states|length }} state(s) selected
                         {% else %}
-                            All States
+                            Select states
                         {% endif %}
                     </button>
                     <div class="dropdown-menu p-3" style="min-width: 250px;">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="state_all" onchange="toggleFilterAll('state')"
-                                   {% if not selected_states %}checked{% endif %}>
-                            <label class="form-check-label" for="state_all">All States</label>
-                        </div>
-                        <hr class="dropdown-divider">
                         {% for state in all_states %}
                         <div class="form-check">
                             <input class="form-check-input filter-checkbox" type="checkbox" data-filter="state"
@@ -458,26 +517,22 @@
                         <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
                     </div>
                 </div>
-            </div>
+                    </div>
+                </div>
 
-            <!-- Audience Filter - Multi-select -->
-            <div class="filter-group">
+                <!-- Audience Filter - Multi-select -->
+                <div class="filter-col">
+                    <div class="filter-group">
                 <label class="filter-label" for="audienceFilter">👥 Filter by Audience:</label>
                 <div class="dropdown">
                     <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="audienceFilter" data-bs-toggle="dropdown" aria-expanded="false">
                         {% if selected_audiences %}
                             {{ selected_audiences|length }} audience(s) selected
                         {% else %}
-                            All Audiences
+                            Select audiences
                         {% endif %}
                     </button>
                     <div class="dropdown-menu p-3" style="min-width: 250px;">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="audience_all" onchange="toggleFilterAll('audience')"
-                                   {% if not selected_audiences %}checked{% endif %}>
-                            <label class="form-check-label" for="audience_all">All Audiences</label>
-                        </div>
-                        <hr class="dropdown-divider">
                         {% for audience in all_audiences %}
                         <div class="form-check">
                             <input class="form-check-input filter-checkbox" type="checkbox" data-filter="audience"
@@ -495,26 +550,22 @@
                         <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
                     </div>
                 </div>
-            </div>
+                    </div>
+                </div>
 
-            <!-- Priority Filter - Multi-select -->
-            <div class="filter-group">
+                <!-- Priority Filter - Multi-select -->
+                <div class="filter-col">
+                    <div class="filter-group">
                 <label class="filter-label" for="priorityFilter">⚡ Filter by Priority:</label>
                 <div class="dropdown">
                     <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="priorityFilter" data-bs-toggle="dropdown" aria-expanded="false">
                         {% if selected_priorities %}
                             {{ selected_priorities|length }} priority(s) selected
                         {% else %}
-                            All Priorities
+                            Select priorities
                         {% endif %}
                     </button>
                     <div class="dropdown-menu p-3" style="min-width: 250px;">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="priority_all" onchange="toggleFilterAll('priority')"
-                                   {% if not selected_priorities %}checked{% endif %}>
-                            <label class="form-check-label" for="priority_all">All Priorities</label>
-                        </div>
-                        <hr class="dropdown-divider">
                         {% for priority in all_priorities %}
                         <div class="form-check">
                             <input class="form-check-input filter-checkbox" type="checkbox" data-filter="priority"
@@ -533,34 +584,34 @@
                         <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
                     </div>
                 </div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Enhanced Category Filter - Multi-select -->
-            {% if all_enhanced_categories %}
-            <div class="filter-group">
+            <!-- Second row of filters -->
+            <div class="filters-row">
+                <!-- Enhanced Category Filter - Multi-select -->
+                {% if all_enhanced_categories %}
+                <div class="filter-col">
+                    <div class="filter-group">
                 <label class="filter-label" for="enhanced_categoryFilter">📂 Filter by Enhanced Category:</label>
                 <div class="dropdown">
                     <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="enhanced_categoryFilter" data-bs-toggle="dropdown" aria-expanded="false">
                         {% if selected_enhanced_categories %}
                             {{ selected_enhanced_categories|length }} category(s) selected
                         {% else %}
-                            All Categories
+                            Select categories
                         {% endif %}
                     </button>
                     <div class="dropdown-menu p-3" style="min-width: 350px; max-height: 400px; overflow-y: auto;">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="enhanced_category_all" onchange="toggleFilterAll('enhanced_category')"
-                                   {% if not selected_enhanced_categories %}checked{% endif %}>
-                            <label class="form-check-label" for="enhanced_category_all">All Categories</label>
-                        </div>
-                        <hr class="dropdown-divider">
                         {% for cat in all_enhanced_categories %}
                         <div class="form-check">
                             <input class="form-check-input filter-checkbox" type="checkbox" data-filter="enhanced_category"
                                    value="{{ cat }}" id="enhanced_category_{{ loop.index }}"
                                    {% if cat in selected_enhanced_categories %}checked{% endif %}>
                             <label class="form-check-label" for="enhanced_category_{{ loop.index }}">
-                                {{ cat[:40] }}{% if cat|length > 40 %}...{% endif %}
+                                {% if cat == 'Uncategorized' %}❓ Uncategorized
+                                {% else %}{{ cat[:40] }}{% if cat|length > 40 %}...{% endif %}{% endif %}
                             </label>
                         </div>
                         {% endfor %}
@@ -568,35 +619,40 @@
                         <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
                     </div>
                 </div>
-            </div>
-            {% endif %}
+                    </div>
+                </div>
+                {% endif %}
 
-            <!-- Domain Filter - Multi-select -->
-            {% if all_domains %}
-            <div class="filter-group">
+                <!-- Domain Filter - Multi-select -->
+                {% if all_domains %}
+                <div class="filter-col">
+                    <div class="filter-group">
                 <label class="filter-label" for="domainFilter">🎯 Filter by Domain:</label>
                 <div class="dropdown">
                     <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="domainFilter" data-bs-toggle="dropdown" aria-expanded="false">
                         {% if selected_domains %}
                             {{ selected_domains|length }} domain(s) selected
                         {% else %}
-                            All Domains
+                            Select domains
                         {% endif %}
                     </button>
                     <div class="dropdown-menu p-3" style="min-width: 300px;">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="domain_all" onchange="toggleFilterAll('domain')"
-                                   {% if not selected_domains %}checked{% endif %}>
-                            <label class="form-check-label" for="domain_all">All Domains</label>
-                        </div>
-                        <hr class="dropdown-divider">
                         {% for domain in all_domains %}
                         <div class="form-check">
                             <input class="form-check-input filter-checkbox" type="checkbox" data-filter="domain"
                                    value="{{ domain }}" id="domain_{{ domain|lower|replace('_', '') }}"
                                    {% if domain in selected_domains %}checked{% endif %}>
                             <label class="form-check-label" for="domain_{{ domain|lower|replace('_', '') }}">
-                                {% if domain == 'GOVERNANCE' %}🏛️ Governance
+                                {% if domain == 'Getting Started' %}🚀 Getting Started
+                                {% elif domain == 'Governance' %}🏛️ Governance
+                                {% elif domain == 'User Experience' %}🎨 User Experience
+                                {% elif domain == 'Authentication & Security' %}🔐 Authentication & Security
+                                {% elif domain == 'Performance & Scalability' %}⚡ Performance & Scalability
+                                {% elif domain == 'Integration & APIs' %}🔗 Integration & APIs
+                                {% elif domain == 'Analytics & Reporting' %}📊 Analytics & Reporting
+                                {% elif domain == 'Uncategorized' %}❓ Uncategorized
+                                {% elif domain == 'GETTING_STARTED' %}🚀 Getting Started
+                                {% elif domain == 'GOVERNANCE' %}🏛️ Governance
                                 {% elif domain == 'USER_EXPERIENCE' %}🎨 User Experience
                                 {% elif domain == 'AUTHENTICATION' %}🔐 Authentication & Security
                                 {% elif domain == 'PERFORMANCE' %}⚡ Performance & Scalability
@@ -610,28 +666,24 @@
                         <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
                     </div>
                 </div>
-            </div>
-            {% endif %}
+                    </div>
+                </div>
+                {% endif %}
 
-            <!-- Source Filter - Multi-select -->
-            {% if all_sources %}
-            <div class="filter-group">
+                <!-- Source Filter - Multi-select -->
+                {% if all_sources %}
+                <div class="filter-col">
+                    <div class="filter-group">
                 <label class="filter-label" for="sourceFilter">📡 Filter by Source:</label>
                 <div class="dropdown">
                     <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="sourceFilter" data-bs-toggle="dropdown" aria-expanded="false">
                         {% if selected_sources %}
                             {{ selected_sources|length }} source(s) selected
                         {% else %}
-                            All Sources
+                            Select sources
                         {% endif %}
                     </button>
                     <div class="dropdown-menu p-3" style="min-width: 250px;">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="source_all" onchange="toggleFilterAll('source')"
-                                   {% if not selected_sources %}checked{% endif %}>
-                            <label class="form-check-label" for="source_all">All Sources</label>
-                        </div>
-                        <hr class="dropdown-divider">
                         {% for src in all_sources %}
                         <div class="form-check">
                             <input class="form-check-input filter-checkbox" type="checkbox" data-filter="source"
@@ -649,28 +701,27 @@
                         <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
                     </div>
                 </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
 
-            <!-- Sentiment Filter - Multi-select -->
-            {% if all_sentiments %}
-            <div class="filter-group">
+            <!-- Third row of filters -->
+            <div class="filters-row">
+                <!-- Sentiment Filter - Multi-select -->
+                {% if all_sentiments %}
+                <div class="filter-col">
+                    <div class="filter-group">
                 <label class="filter-label" for="sentimentFilter">😊 Filter by Sentiment:</label>
                 <div class="dropdown">
                     <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="sentimentFilter" data-bs-toggle="dropdown" aria-expanded="false">
                         {% if selected_sentiments %}
                             {{ selected_sentiments|length }} sentiment(s) selected
                         {% else %}
-                            All Sentiments
+                            Select sentiments
                         {% endif %}
                     </button>
                     <div class="dropdown-menu p-3" style="min-width: 250px;">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="sentiment_all" onchange="toggleFilterAll('sentiment')"
-                                   {% if not selected_sentiments %}checked{% endif %}>
-                            <label class="form-check-label" for="sentiment_all">All Sentiments</label>
-                        </div>
-                        <hr class="dropdown-divider">
                         {% for sentiment in all_sentiments %}
                         <div class="form-check">
                             <input class="form-check-input filter-checkbox" type="checkbox" data-filter="sentiment"
@@ -688,31 +739,37 @@
                         <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
                     </div>
                 </div>
-            </div>
-            {% endif %}
+                    </div>
+                </div>
+                {% endif %}
 
-            <!-- Sort Options -->
-            <div class="filter-group">
-                <span class="filter-label">📅 Sort by Date:</span>
-                <div class="btn-group btn-group-sm" role="group" aria-label="Date sort options">
-                    <a href="{{ url_for('feedback_viewer', sort='newest', state=current_state if current_state != 'All' else None, audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None) }}"
-                       class="btn {% if current_sort == 'newest' or not current_sort %}btn-success{% else %}btn-outline-success{% endif %}">📅 Newest First</a>
-                    <a href="{{ url_for('feedback_viewer', sort='oldest', state=current_state if current_state != 'All' else None, audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, source=current_source if current_source != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None) }}"
-                       class="btn {% if current_sort == 'oldest' %}btn-success{% else %}btn-outline-success{% endif %}">📆 Oldest First</a>
-               </div>
-           </div>
-           
-           <!-- Repeating Requests Toggle -->
-           <div class="filter-group">
-               <span class="filter-label">🔄 Repeating Requests Analysis:</span>
-               <div class="btn-group btn-group-sm" role="group" aria-label="Repeating requests toggle">
-                   <a href="{{ url_for('feedback_viewer', show_repeating='false', state=current_state if current_state != 'All' else None, audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, domain=current_domain if current_domain != 'All' else None, source=current_source if current_source != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
-                      class="btn {% if not show_repeating %}btn-outline-info{% else %}btn-info{% endif %}">Hide Analysis</a>
-                   <a href="{{ url_for('feedback_viewer', show_repeating='true', state=current_state if current_state != 'All' else None, audience=current_audience if current_audience != 'All' else None, priority=current_priority if current_priority != 'All' else None, enhanced_category=current_enhanced_category if current_enhanced_category != 'All' else None, domain=current_domain if current_domain != 'All' else None, source=current_source if current_source != 'All' else None, sentiment=current_sentiment if current_sentiment != 'All' else None, sort=current_sort if current_sort else None) }}"
-                      class="btn {% if show_repeating %}btn-info{% else %}btn-outline-info{% endif %}">🔍 Analyze Repeating Requests</a>
-               </div>
-           </div>
-       </div>
+                <!-- Sort Options -->
+                <div class="filter-col">
+                    <div class="filter-group">
+                        <span class="filter-label">📅 Sort by Date:</span>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Date sort options">
+                            <button onclick="if(modernFilterSystem) modernFilterSystem.updateSort('newest')"
+                               class="btn {% if current_sort == 'newest' or not current_sort %}btn-success{% else %}btn-outline-success{% endif %}">📅 Newest First</button>
+                            <button onclick="if(modernFilterSystem) modernFilterSystem.updateSort('oldest')"
+                               class="btn {% if current_sort == 'oldest' %}btn-success{% else %}btn-outline-success{% endif %}">📆 Oldest First</button>
+                       </div>
+                    </div>
+                </div>
+
+                <!-- Repeating Requests Toggle -->
+                <div class="filter-col">
+                    <div class="filter-group">
+                       <span class="filter-label">🔄 Repeating Requests Analysis:</span>
+                       <div class="btn-group btn-group-sm" role="group" aria-label="Repeating requests toggle">
+                           <button onclick="if(modernFilterSystem) modernFilterSystem.updateRepeating(false)"
+                              class="btn {% if not show_repeating %}btn-outline-info{% else %}btn-info{% endif %}">Hide Analysis</button>
+                           <button onclick="if(modernFilterSystem) modernFilterSystem.updateRepeating(true)"
+                              class="btn {% if show_repeating %}btn-info{% else %}btn-outline-info{% endif %}">🔍 Analyze Repeating Requests</button>
+                       </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
        <!-- Repeating Requests Analysis -->
        {% if show_repeating and repeating_analysis %}
@@ -741,9 +798,21 @@
        </div>
        {% endif %}
 
-        {% if source_info %}
-            <p class="text-muted"><em>{{ source_info }}</em></p>
-        {% endif %}
+        <!-- Modern Filter System Loading & Error States -->
+        <div id="filter-loading" class="alert alert-info d-none" role="alert">
+            <div class="d-flex align-items-center">
+                <div class="spinner-border spinner-border-sm me-2" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <span>Applying filters...</span>
+            </div>
+        </div>
+        
+        <div id="filter-error" class="alert alert-danger d-none" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <span id="filter-error-message">Error applying filters</span>
+            <button class="btn btn-sm btn-outline-danger ms-2" onclick="location.reload()">Reload Page</button>
+        </div>
         
         {% if error %}
             <div class="alert alert-danger">{{ error }}</div>
@@ -782,6 +851,8 @@
                 </div>
             </div>
         {% elif feedback_items %}
+            <!-- Feedback Items Container - This will be updated by AJAX -->
+            <div id="feedback-container">
             <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4"> {# Bootstrap grid for cards #}
                 {% for item in feedback_items %}
                 <div class="col">
@@ -891,8 +962,8 @@
                            </div>
                            {% endif %}
                            
-                           {% if item.Enhanced_Category and item.Enhanced_Category|trim != '' %}
                            <div class="category-info">
+                               {% if item.Enhanced_Category and item.Enhanced_Category|trim != '' %}
                                <strong>Category:</strong> {{ item.Enhanced_Category }}
                                {% if item.Subcategory and item.Subcategory|trim != '' %}
                                    → {{ item.Subcategory }}
@@ -900,19 +971,23 @@
                                {% if item.Feature_Area and item.Feature_Area|trim != '' %}
                                    <br><strong>Area:</strong> {{ item.Feature_Area }}
                                {% endif %}
+                               {% else %}
+                               <strong>Category:</strong> <em>Uncategorized</em>
+                               {% endif %}
                                {% if item.Categorization_Confidence %}
                                    <span class="text-muted">({{ (item.Categorization_Confidence * 100)|round|int }}% confidence)</span>
                                {% endif %}
                            </div>
-                           {% endif %}
                            
                            <!-- Domain Information -->
-                           {% if item.Primary_Domain and item.Primary_Domain|trim != '' %}
                            <div class="category-info">
                                <strong>Domain:</strong>
-                               <span class="domain-badge" style="background-color: #6c757d;">{{ item.Primary_Domain }}</span>
+                               {% if item.Primary_Domain and item.Primary_Domain|trim != '' %}
+                               <span class="domain-badge" style="background-color: {{ domain_colors.get(item.Primary_Domain, '#6c757d') }}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem;">{{ domain_names.get(item.Primary_Domain, item.Primary_Domain) }}</span>
+                               {% else %}
+                               <span class="domain-badge" style="background-color: #6c757d; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem;">❓ Uncategorized</span>
+                               {% endif %}
                            </div>
-                           {% endif %}
                            {% endif %}
                             
                             <p class="card-text feedback-content mb-auto">
@@ -942,7 +1017,8 @@
                     </div>
                 </div>
                 {% endfor %}
-            </div>
+            </div> <!-- End of feedback grid -->
+            </div> <!-- End of feedback-container -->
         {% else %}
             <div class="alert alert-info">No feedback data to display. Try collecting feedback first.</div>
         {% endif %}
@@ -956,6 +1032,23 @@
         let hasUnsavedChanges = false;
         let fabricConnected = false;
         let fabricStateData = {};
+        
+        // Modern Filter System
+        let modernFilterSystem = null;
+        
+        // Initialize Modern Filter System when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize the modern filter system
+            modernFilterSystem = new ModernFilterSystem({
+                apiEndpoint: '/api/feedback/filtered',
+                containerId: 'feedback-container',
+                loadingId: 'filter-loading',
+                errorId: 'filter-error',
+                errorMessageId: 'filter-error-message'
+            });
+            
+            console.log('🔧 Modern Filter System initialized');
+        });
         
         // Override any existing updateDomain function with fixed version
         function updateDomain(feedbackId, currentDomain) {
@@ -985,7 +1078,7 @@
             showDomainDropdown(feedbackId, currentDomain);
         }
         
-        // Override any existing updateNotes function too
+        // Override any existing updateNotes function
         function updateNotes(feedbackId, currentNotes) {
             console.log(`📝 Notes update requested: ${feedbackId}`);
             
@@ -1015,24 +1108,25 @@
         }
         
         function loadFabricConnectionState() {
-            const savedConnected = localStorage.getItem('fabricConnected');
-            const savedStateEnabled = localStorage.getItem('stateManagementEnabled');
-            const dataSynced = localStorage.getItem('fabricDataSynced'); // New flag for actual data sync
+            // REMOVED: No longer restore connection state from localStorage
+            // Connection state should only come from backend session verification
+            console.log('🔄 Checking backend session state (not localStorage)');
             
-            console.log('🔄 Loading fabric connection state:', {
-                savedConnected,
-                savedStateEnabled,
-                dataSynced
-            });
+            // Always start with disconnected state until backend confirms
+            fabricConnected = false;
+            stateManagementEnabled = false;
             
-            // Only restore "Connected" state if data was actually synced, not just auth
-            if (savedConnected === 'true' && dataSynced === 'true') {
+            // Check if backend has a valid session token
+            const sessionToken = '{{ stored_token or "" }}';
+            if (sessionToken && sessionToken.trim() !== '' && sessionToken !== 'None') {
+                console.log('🔑 Backend session token found - enabling connection state');
                 fabricConnected = true;
-                stateManagementEnabled = savedStateEnabled === 'true';
+                window.fabricConnected = true;
+                stateManagementEnabled = true;
                 
-                // Try multiple times to restore UI state
+                // Try to restore UI state after confirming backend session
                 let attempt = 0;
-                const maxAttempts = 20; // More attempts for filtering scenarios
+                const maxAttempts = 20;
                 
                 function attemptRestore() {
                     attempt++;
@@ -1073,37 +1167,21 @@
                 attempts++;
                 const syncBtn = document.getElementById('fabricSyncBtn');
                 const badge = document.getElementById('fabricSyncBadge');
-                const disabledMsg = document.getElementById('state-management-disabled');
                 
                 console.log(`🔄 Updating connection UI (attempt ${attempts}):`, {
                     fabricConnected,
                     syncBtn: !!syncBtn,
-                    badge: !!badge,
-                    disabledMsg: !!disabledMsg
+                    badge: !!badge
                 });
                 
                 if (fabricConnected && syncBtn && syncBtn.classList) {
-                    // Update sync button (always required)
-                    syncBtn.innerHTML = '<i class="bi bi-database me-1"></i>Connected to Fabric';
-                    syncBtn.classList.remove('btn-primary');
-                    syncBtn.classList.add('btn-success');
-                    console.log('✅ Updated sync button to connected state');
+                    // Update sync button - always use btn-primary styling for consistency
+                    syncBtn.innerHTML = '<i class="bi bi-database me-1"></i>Sync with Fabric <span class="badge bg-success ms-1">Connected</span>';
+                    syncBtn.className = 'btn btn-primary ms-2'; // Force btn-primary styling
+                    console.log('✅ Updated sync button to connected state with btn-primary styling');
                     
-                    // Update badge (optional - might be missing in filtered views)
-                    if (badge && badge.classList) {
-                        badge.textContent = 'Connected';
-                        badge.classList.remove('bg-light', 'text-dark');
-                        badge.classList.add('bg-success');
-                        console.log('✅ Updated badge to connected state');
-                    } else {
-                        console.log('⚠️ Badge element missing (filtered view?) - continuing without badge');
-                    }
-                    
-                    // Hide disabled message
-                    if (disabledMsg) {
-                        disabledMsg.style.display = 'none';
-                        console.log('✅ Hidden disabled message');
-                    }
+                    // Badge is now handled inline in the button text above
+                    console.log('✅ Badge included inline in button text');
                     
                     // Enable state management (critical - must work even without badge)
                     stateManagementEnabled = true;
@@ -1133,17 +1211,29 @@
             tryUpdate();
         }
         
-        // Check if token is available from session (from previous Fabric write)
-        const sessionToken = '{{ stored_token or "" }}';
-        const statesLoaded = '{{ states_already_loaded|lower }}' === 'true';
+        // Check state management initialization
+        const sessionToken = '{{ stored_token or "" }}';  // Bearer token for lakehouse writes
+        const statesLoaded = '{{ states_already_loaded|lower }}' === 'true';  // Based on Fabric SQL connection
+        const fabricSqlConnected = '{{ fabric_sql_connected|lower }}' === 'true';  // Explicit SQL connection state
         
-        console.log('Session check:', {sessionToken: sessionToken ? 'Present' : 'None', statesLoaded});
+        console.log('State management check:', {
+            sessionToken: sessionToken ? 'Present' : 'None', 
+            statesLoaded: statesLoaded,
+            fabricSqlConnected: fabricSqlConnected
+        });
         
-        // Auto-enable state management if token is available from session
-        if (sessionToken && sessionToken.trim() !== '') {
-            console.log('🔑 Enabling state management from session token');
-            bearerToken = sessionToken;
+        // Auto-enable state management if Fabric SQL is connected (not based on bearer token)
+        if (fabricSqlConnected || statesLoaded) {
+            console.log('� Enabling state management from Fabric SQL connection');
+            fabricConnected = true;
             stateManagementEnabled = true;
+            window.fabricConnected = true;
+            window.stateManagementEnabled = true;
+            
+            // Update UI to reflect connected state
+            if (document.body && document.body.classList) {
+                document.body.classList.remove('state-management-disabled');
+            }
             
             // Hide token banner since it's already provided
             const tokenBanner = document.getElementById('tokenBanner');
@@ -1177,27 +1267,25 @@
                 }, 3000);
             }
         } else {
-            console.log('🔑 No session token found - checking localStorage for Fabric connection');
+            console.log('🔑 No session token found - state management disabled');
             
-            // Check if Fabric was previously connected
-            const savedConnected = localStorage.getItem('fabricConnected');
-            const savedDataSynced = localStorage.getItem('fabricDataSynced');
+            // No session token means no Fabric connection
+            fabricConnected = false;
+            stateManagementEnabled = false;
             
-            if (savedConnected === 'true' && savedDataSynced === 'true') {
-                console.log('🔗 Restoring Fabric connection state from localStorage');
-                fabricConnected = true;
-                stateManagementEnabled = true;
-                
-                // Enable state management UI
-                if (document.body && document.body.classList) {
-                    document.body.classList.remove('state-management-disabled');
-                }
-            } else {
-                console.log('🔑 No Fabric connection found - state management disabled');
-                stateManagementEnabled = false;
-                if (document.body && document.body.classList) {
-                    document.body.classList.add('state-management-disabled');
-                }
+            // Disable state management UI
+            if (document.body && document.body.classList) {
+                document.body.classList.add('state-management-disabled');
+            }
+            
+            // Clear any stale localStorage connection flags
+            localStorage.removeItem('fabricConnected');
+            localStorage.removeItem('stateManagementEnabled');
+            localStorage.removeItem('fabricDataSynced');
+            
+            // Update status display
+            if (typeof updateFeedbackStatusDisplay === 'function') {
+                updateFeedbackStatusDisplay();
             }
         }
         
@@ -1268,6 +1356,7 @@
         // Update domain display from cache
         function updateDomainDisplayFromCache(feedbackId, domain) {
             const domainNames = {
+                'GETTING_STARTED': 'Getting Started',
                 'GOVERNANCE': 'Governance',
                 'USER_EXPERIENCE': 'User Experience',
                 'AUTHENTICATION': 'Authentication & Security',
@@ -1450,20 +1539,6 @@
         // Load cached changes from localStorage
         function loadCachedChanges() {
             const cached = localStorage.getItem('feedbackStateChanges');
-            if (cached) {
-                try {
-                    cachedStateChanges = JSON.parse(cached);
-                    hasUnsavedChanges = Object.keys(cachedStateChanges).length > 0;
-                    updateSyncButton();
-                } catch (e) {
-                    console.error('Error loading cached changes:', e);
-                    localStorage.removeItem('feedbackStateChanges');
-                }
-            }
-        }
-        
-        // Save state change to cache
-        function cacheStateChange(feedbackId, changeData) {
             if (!cachedStateChanges[feedbackId]) {
                 cachedStateChanges[feedbackId] = {};
             }
@@ -1584,6 +1659,7 @@
                     // Store state data globally
                     fabricStateData = data.state_data;
                     fabricConnected = true;
+                    window.fabricConnected = true;
                     
                     // Save connection state to localStorage
                     saveFabricConnectionState();
@@ -1594,25 +1670,26 @@
                     // Enable state management
                     enableStateManagementSQL();
                     
-                    // Update button
+                    // Update status display
+                    if (typeof updateFeedbackStatusDisplay === 'function') {
+                        updateFeedbackStatusDisplay();
+                    }
+                    
+                    // Update button - ensure btn-primary styling for consistency
                     if (syncBtn) {
                         syncBtn.disabled = false;
-                        syncBtn.innerHTML = '<i class="bi bi-database me-1"></i>Connected to Fabric';
-                        syncBtn.classList.remove('btn-primary');
-                        syncBtn.classList.add('btn-success');
+                        syncBtn.className = 'btn btn-primary ms-2'; // Force btn-primary styling
+                        syncBtn.innerHTML = '<i class="bi bi-database me-1"></i>Sync with Fabric <span class="badge bg-success ms-1">Connected</span>';
                     }
                     
-                    if (badge) {
-                        badge.textContent = 'Connected';
-                        badge.classList.remove('bg-light', 'text-dark');
-                        badge.classList.add('bg-success');
+                    // Show domain sync button after successful fabric sync
+                    const domainSyncBtn = document.getElementById('domainSyncBtn');
+                    if (domainSyncBtn) {
+                        domainSyncBtn.style.display = 'inline-block';
+                        console.log('✅ Domain sync button enabled');
                     }
                     
-                    // Hide disabled message
-                    const disabledMsg = document.getElementById('state-management-disabled');
-                    if (disabledMsg) {
-                        disabledMsg.style.display = 'none';
-                    }
+                    // Badge is now handled inline in the button text above
                     
                     // Show comprehensive success message with smart sync details
                     const syncResult = data.sync_result || {};
@@ -1654,6 +1731,12 @@
         function updateFeedbackWithSQLData(stateData) {
             console.log('🔄 Updating feedback cards with SQL state data...', stateData);
             console.log(`📊 State data contains ${Object.keys(stateData).length} records`);
+            
+            // Clean up any duplicate domain-display elements that might exist
+            document.querySelectorAll('.domain-display').forEach(element => {
+                console.log('🧹 Removing duplicate domain-display element');
+                element.remove();
+            });
             
             // First, let's see all feedback IDs on the page
             const allFeedbackElements = document.querySelectorAll('[data-feedback-id]');
@@ -1737,19 +1820,17 @@
                         console.log(`✅ Updated notes for "${feedbackId}": ${state.notes}`);
                     }
                     
-                    // Update domain display
+                    // Update domain display - use existing domain-badge only
                     if (state.domain) {
-                        let domainDisplay = card.querySelector('.domain-display');
-                        if (!domainDisplay) {
-                            domainDisplay = document.createElement('div');
-                            domainDisplay.className = 'domain-display badge bg-secondary mt-1';
-                            const cardBody = card.querySelector('.card-body');
-                            if (cardBody) {
-                                cardBody.appendChild(domainDisplay);
-                            }
+                        // Find existing domain-badge and update it
+                        let domainBadge = card.querySelector('.domain-badge');
+                        if (domainBadge) {
+                            // Update existing domain badge
+                            domainBadge.textContent = state.domain;
+                            console.log(`✅ Updated existing domain badge for "${feedbackId}": ${state.domain}`);
+                        } else {
+                            console.log(`⚠️ No domain badge found for "${feedbackId}" - domain: ${state.domain}`);
                         }
-                        domainDisplay.textContent = `Domain: ${state.domain}`;
-                        console.log(`✅ Updated domain for "${feedbackId}": ${state.domain}`);
                     }
                     
                     updatedCount++;
@@ -1782,6 +1863,8 @@
         function enableStateManagementSQL() {
             stateManagementEnabled = true;
             fabricConnected = true;
+            window.fabricConnected = true;
+            window.stateManagementEnabled = true;  // Add this global variable
             
             // Save connection state to localStorage with timestamp
             localStorage.setItem('fabricConnected', 'true');
@@ -1798,7 +1881,19 @@
                 }
             });
             
+            // Remove the state-management-disabled class from the feedback section
+            const feedbackSection = document.getElementById('feedbackSection');
+            if (feedbackSection && feedbackSection.classList.contains('state-management-disabled')) {
+                feedbackSection.classList.remove('state-management-disabled');
+                console.log('🔓 Removed state-management-disabled class from feedback section');
+            }
+            
             console.log('✅ State management enabled with SQL backend - connection timestamp saved');
+            
+            // Update the status display to show Connected state
+            if (typeof updateFeedbackStatusDisplay === 'function') {
+                updateFeedbackStatusDisplay();
+            }
         }
         
         // Test function to manually verify state loading
@@ -2041,53 +2136,51 @@
             }
             
             // Check if state management should be enabled immediately
-            const sessionToken = '{{ stored_token or "" }}';
+            const sessionToken = '{{ stored_token or "" }}';  // Bearer token for lakehouse writes only
+            const fabricConnectedParam = {% if fabric_connected_param %}true{% else %}false{% endif %};
+            // Use the fabricSqlConnected variable from above instead of redeclaring
             const savedConnected = localStorage.getItem('fabricConnected');
             const savedDataSynced = localStorage.getItem('fabricDataSynced');
             const lastConnectionTime = localStorage.getItem('fabricConnectionTime');
             
-            // Check if we have a valid session token
-            if (sessionToken && sessionToken.trim() !== '' && sessionToken !== 'None') {
-                console.log('🔑 Valid session token found - enabling state management immediately');
+            // Check if we have Fabric SQL connection OR fabric_connected URL parameter
+            if (fabricSqlConnected) {
+                console.log('� Fabric SQL connection active - enabling state management from session');
                 stateManagementEnabled = true;
                 fabricConnected = true;
+                window.fabricConnected = true;
+                window.stateManagementEnabled = true;
                 // Update localStorage with current connection
                 localStorage.setItem('fabricConnected', 'true');
                 localStorage.setItem('fabricConnectionTime', Date.now().toString());
                 if (document.body && document.body.classList) {
                     document.body.classList.remove('state-management-disabled');
                 }
-            }
-            // Check if we have recent localStorage connection (within last 30 minutes)
-            else if (savedConnected === 'true' && savedDataSynced === 'true' && lastConnectionTime) {
-                const connectionAge = Date.now() - parseInt(lastConnectionTime);
-                const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
-                
-                if (connectionAge < thirtyMinutes) {
-                    console.log('🔗 Recent Fabric connection found - enabling state management from localStorage');
-                    stateManagementEnabled = true;
-                    fabricConnected = true;
-                    if (document.body && document.body.classList) {
-                        document.body.classList.remove('state-management-disabled');
-                    }
-                } else {
-                    console.log('🔒 Stale connection found - clearing and disabling state management');
-                    // Clear stale connection state
-                    localStorage.removeItem('fabricConnected');
-                    localStorage.removeItem('fabricStateEnabled');
-                    localStorage.removeItem('fabricDataSynced');
-                    localStorage.removeItem('fabricConnectionTime');
-                    
-                    stateManagementEnabled = false;
-                    fabricConnected = false;
-                    if (document.body && document.body.classList) {
-                        document.body.classList.add('state-management-disabled');
-                    }
+            } else if (fabricConnectedParam) {
+                console.log('🔗 Fabric connected URL parameter found - enabling state management from URL');
+                stateManagementEnabled = true;
+                fabricConnected = true;
+                window.fabricConnected = true;
+                window.stateManagementEnabled = true;
+                // Update localStorage with current connection
+                localStorage.setItem('fabricConnected', 'true');
+                localStorage.setItem('fabricConnectionTime', Date.now().toString());
+                if (document.body && document.body.classList) {
+                    document.body.classList.remove('state-management-disabled');
                 }
             } else {
-                console.log('🔒 No connection found - state management disabled');
+                console.log('🔒 No Fabric SQL connection - state management disabled');
                 stateManagementEnabled = false;
                 fabricConnected = false;
+                window.fabricConnected = false;
+                window.stateManagementEnabled = false;
+                
+                // Clear any stale connection state
+                localStorage.removeItem('fabricConnected');
+                localStorage.removeItem('fabricStateEnabled');
+                localStorage.removeItem('fabricDataSynced');
+                localStorage.removeItem('fabricConnectionTime');
+                
                 if (document.body && document.body.classList) {
                     document.body.classList.add('state-management-disabled');
                 }
@@ -2238,14 +2331,11 @@
         
         // Single dropdown toggle function
         function toggleStateDropdown(element, event) {
-            // Check if state management is enabled
+            // Check if state management is enabled - ONLY based on backend session, not localStorage
             const sessionToken = '{{ stored_token or "" }}';
-            const savedConnected = localStorage.getItem('fabricConnected');
-            const savedDataSynced = localStorage.getItem('fabricDataSynced');
             
             const isEnabled = stateManagementEnabled ||
-                             (sessionToken && sessionToken.trim() !== '') ||
-                             (savedConnected === 'true' && savedDataSynced === 'true');
+                             (sessionToken && sessionToken.trim() !== '' && sessionToken !== 'None');
             
             if (!isEnabled) {
                 alert('Please provide your Fabric Bearer Token first to enable state management.');
@@ -2462,8 +2552,9 @@
         
         // Show domain selection modal
         function showDomainSelectionModal(feedbackId, currentDomain) {
-            const domains = ['GOVERNANCE', 'USER_EXPERIENCE', 'AUTHENTICATION', 'PERFORMANCE', 'INTEGRATION', 'ANALYTICS'];
+            const domains = ['GETTING_STARTED', 'GOVERNANCE', 'USER_EXPERIENCE', 'AUTHENTICATION', 'PERFORMANCE', 'INTEGRATION', 'ANALYTICS'];
             const domainNames = {
+                'GETTING_STARTED': 'Getting Started',
                 'GOVERNANCE': 'Governance',
                 'USER_EXPERIENCE': 'User Experience',
                 'AUTHENTICATION': 'Authentication & Security',
@@ -2510,6 +2601,7 @@
         function saveDomainChange(feedbackId) {
             const selectedDomain = document.getElementById('domainSelect').value;
             const domainNames = {
+                'GETTING_STARTED': 'Getting Started',
                 'GOVERNANCE': 'Governance',
                 'USER_EXPERIENCE': 'User Experience',
                 'AUTHENTICATION': 'Authentication & Security',
@@ -2572,36 +2664,57 @@
             }
         });
         
-        // Multi-select filter functions
+        // Multi-select filter functions - make them globally accessible
         function toggleFilterAll(filterType) {
             const allCheckbox = document.getElementById(filterType + '_all');
             const filterCheckboxes = document.querySelectorAll(`input[data-filter="${filterType}"]`);
             
-            if (allCheckbox.checked) {
+            if (allCheckbox && allCheckbox.checked) {
                 // Uncheck all specific filters when "All" is selected
                 filterCheckboxes.forEach(cb => cb.checked = false);
+            } else if (!allCheckbox) {
+                // If no "All" checkbox exists, this function is not applicable
+                console.log(`🔧 No "All" checkbox found for filter type: ${filterType}`);
             }
         }
         
         function applyMultiSelectFilters() {
-            const params = new URLSearchParams();
+            console.log('🔧 MULTI-SELECT FILTER: Applying filters using AJAX system');
             
-            // Get current non-filter parameters
-            const currentParams = new URLSearchParams(window.location.search);
-            if (currentParams.get('sort')) params.set('sort', currentParams.get('sort'));
-            if (currentParams.get('show_repeating') === 'true') params.set('show_repeating', 'true');
-            if (currentParams.get('show_only_stored') === 'true') params.set('show_only_stored', 'true');
-            
-            // Remove the fabric_connected parameter logic to prevent false connection state
-            // Connection state should only be determined by server-side session token presence
-            
-            // Collect selected filters
-            const filterTypes = ['audience', 'priority', 'state', 'source', 'domain', 'sentiment', 'enhanced_category'];
-            
-            filterTypes.forEach(filterType => {
-                const allCheckbox = document.getElementById(filterType + '_all');
+            // Always use the modern filter system instead of page reload
+            if (window.modernFilterSystem) {
+                // Check if system is currently loading to prevent race conditions
+                if (window.modernFilterSystem.isLoading) {
+                    console.log('🔧 MULTI-SELECT FILTER: System is loading, skipping duplicate request');
+                    return;
+                }
                 
-                if (!allCheckbox || !allCheckbox.checked) {
+                // Read current UI state and apply filters via AJAX
+                console.log('🔧 Using modern filter system for filter application');
+                window.modernFilterSystem.readFiltersFromUI();
+                window.modernFilterSystem.currentPage = 1;
+                window.modernFilterSystem.fetchFilteredData();
+            } else {
+                console.warn('🔧 Modern filter system not available, falling back to page reload');
+                // Fallback to old method if modern system isn't available
+                const params = new URLSearchParams();
+                
+                // Get current non-filter parameters
+                const currentParams = new URLSearchParams(window.location.search);
+                if (currentParams.get('sort')) params.set('sort', currentParams.get('sort'));
+                if (currentParams.get('show_repeating') === 'true') params.set('show_repeating', 'true');
+                if (currentParams.get('show_only_stored') === 'true') params.set('show_only_stored', 'true');
+                
+                // Preserve Fabric connection state to prevent state management loss after filtering
+                if (fabricConnected || stateManagementEnabled) {
+                    params.set('fabric_connected', 'true');
+                    console.log('🔧 MULTI-SELECT FILTER: Preserving Fabric connection state in URL');
+                }
+                
+                // Collect selected filters (without checking for "All" checkboxes)
+                const filterTypes = ['audience', 'priority', 'state', 'source', 'domain', 'sentiment', 'enhanced_category'];
+                
+                filterTypes.forEach(filterType => {
                     const selected = [];
                     const checkboxes = document.querySelectorAll(`input[data-filter="${filterType}"]:checked`);
                     checkboxes.forEach(cb => selected.push(cb.value));
@@ -2609,13 +2722,17 @@
                     if (selected.length > 0) {
                         params.set(filterType, selected.join(','));
                     }
-                }
-            });
-            
-            // Navigate to filtered URL
-            const newUrl = window.location.pathname + '?' + params.toString();
-            window.location.href = newUrl;
+                });
+                
+                // Navigate to filtered URL
+                const newUrl = window.location.pathname + '?' + params.toString();
+                window.location.href = newUrl;
+            }
         }
+        
+        // Make functions globally accessible
+        window.toggleFilterAll = toggleFilterAll;
+        window.applyMultiSelectFilters = applyMultiSelectFilters;
         
         // Update dropdown button text when checkboxes change
         document.addEventListener('change', function(event) {
@@ -2854,16 +2971,46 @@
             history.pushState = function() {
                 originalPushState.apply(history, arguments);
                 console.log('🔧 FEEDBACK: URL changed (pushState) - refreshing all state...');
+                
+                // CRITICAL: Preserve state management status during filtering
+                const wasStateManagementEnabled = stateManagementEnabled;
+                const wasFabricConnected = fabricConnected;
+                const hadStateData = window.fabricStateData && Object.keys(window.fabricStateData).length > 0;
+                
+                console.log('🔧 FEEDBACK: Preserving state before badge refresh:', {
+                    stateManagementEnabled: wasStateManagementEnabled,
+                    fabricConnected: wasFabricConnected,
+                    hasStateData: hadStateData
+                });
+                
                 setTimeout(() => {
                     if (window.badgeStateManager) {
                         window.badgeStateManager.forceRefresh();
                     }
+                    
+                    // CRITICAL: Restore state management status after badge refresh
+                    if (wasStateManagementEnabled || wasFabricConnected || hadStateData) {
+                        console.log('🔧 FEEDBACK: Restoring state management after filtering');
+                        stateManagementEnabled = true;
+                        fabricConnected = true;
+                        
+                        // Restore UI state
+                        document.body.classList.remove('state-management-disabled');
+                        
+                        // Update sync button to show connected state with consistent styling
+                        const syncBtn = document.getElementById('fabricSyncBtn');
+                        if (syncBtn) {
+                            syncBtn.className = 'btn btn-primary ms-2'; // Force btn-primary styling
+                            syncBtn.innerHTML = '<i class="bi bi-database me-1"></i>Sync with Fabric <span class="badge bg-success ms-1">Connected</span>';
+                        }
+                    }
+                    
                     // CRITICAL: Reapply cached changes after filtering
                     console.log('🔧 FEEDBACK: Reapplying cached changes after filter...');
                     applyCachedChangesToUI();
                     
                     // Re-enable sync button after filtering if state management is enabled
-                    if (stateManagementEnabled) {
+                    if (stateManagementEnabled && hasUnsavedChanges) {
                         updateSyncButton();
                     }
                 }, 200); // Increased delay to ensure DOM is updated
@@ -2872,10 +3019,40 @@
             history.replaceState = function() {
                 originalReplaceState.apply(history, arguments);
                 console.log('🔧 FEEDBACK: URL changed (replaceState) - refreshing all state...');
+                
+                // CRITICAL: Preserve state management status during filtering
+                const wasStateManagementEnabled = stateManagementEnabled;
+                const wasFabricConnected = fabricConnected;
+                const hadStateData = window.fabricStateData && Object.keys(window.fabricStateData).length > 0;
+                
+                console.log('🔧 FEEDBACK: Preserving state before badge refresh (replaceState):', {
+                    stateManagementEnabled: wasStateManagementEnabled,
+                    fabricConnected: wasFabricConnected,
+                    hasStateData: hadStateData
+                });
+                
                 setTimeout(() => {
                     if (window.badgeStateManager) {
                         window.badgeStateManager.forceRefresh();
                     }
+                    
+                    // CRITICAL: Restore state management status after badge refresh
+                    if (wasStateManagementEnabled || wasFabricConnected || hadStateData) {
+                        console.log('🔧 FEEDBACK: Restoring state management after filtering (replaceState)');
+                        stateManagementEnabled = true;
+                        fabricConnected = true;
+                        
+                        // Restore UI state
+                        document.body.classList.remove('state-management-disabled');
+                        
+                        // Update sync button to show connected state with consistent styling
+                        const syncBtn = document.getElementById('fabricSyncBtn');
+                        if (syncBtn) {
+                            syncBtn.className = 'btn btn-primary ms-2'; // Force btn-primary styling
+                            syncBtn.innerHTML = '<i class="bi bi-database me-1"></i>Sync with Fabric <span class="badge bg-success ms-1">Connected</span>';
+                        }
+                    }
+                    
                     // CRITICAL: Reapply cached changes after filtering
                     console.log('🔧 FEEDBACK: Reapplying cached changes after filter...');
                     applyCachedChangesToUI();
@@ -3171,7 +3348,13 @@
                     // Enable state management in the feedback viewer
                     bearerToken = token;
                     stateManagementEnabled = true;
+                    fabricConnected = true;  // Also set fabricConnected flag
                     document.body.classList.remove('state-management-disabled');
+                    
+                    // Update global connection status
+                    console.log('🔧 FABRIC AUTH: State management enabled after token validation');
+                    console.log('🔧 FABRIC AUTH: fabricConnected =', fabricConnected);
+                    console.log('🔧 FABRIC AUTH: stateManagementEnabled =', stateManagementEnabled);
                     
                 } else {
                     updateFabricAuthUI('error', data.message || 'Token validation failed');
@@ -3221,9 +3404,15 @@
                     // Disable state management
                     bearerToken = null;
                     stateManagementEnabled = false;
+                    fabricConnected = false;  // Also clear fabricConnected flag
                     if (document.body) {
                         document.body.classList.add('state-management-disabled');
                     }
+                    
+                    // Log state changes
+                    console.log('🔧 FABRIC AUTH: State management disabled after token clear');
+                    console.log('🔧 FABRIC AUTH: fabricConnected =', fabricConnected);
+                    console.log('🔧 FABRIC AUTH: stateManagementEnabled =', stateManagementEnabled);
                     
                 } else {
                     addFabricLog('❌ Error clearing token: ' + (data.message || 'Unknown error'));
@@ -3559,11 +3748,39 @@
             } else {
                 url.searchParams.set(filterType, filterValue);
             }
+            
+            // Preserve Fabric connection state in URL to prevent state loss
+            if (fabricConnected || stateManagementEnabled) {
+                url.searchParams.set('fabric_connected', 'true');
+                console.log('🔧 CLIENT FILTER: Preserving Fabric connection state in URL');
+            }
+            
+            // Store current state management status before URL change
+            const currentStateManagement = stateManagementEnabled;
+            const currentFabricConnection = fabricConnected;
+            const currentStateData = window.fabricStateData;
+            
             window.history.pushState({}, '', url);
+            
+            // Immediately restore state management status after URL change
+            stateManagementEnabled = currentStateManagement;
+            fabricConnected = currentFabricConnection;
+            window.fabricStateData = currentStateData;
+            
+            console.log('🔧 CLIENT FILTER: State preserved after URL update:', {
+                stateManagementEnabled,
+                fabricConnected,
+                hasStateData: !!(currentStateData && Object.keys(currentStateData).length > 0)
+            });
             
             // Ensure cached changes are preserved and sync button is maintained
             if (stateManagementEnabled && hasUnsavedChanges) {
                 updateSyncButton();
+            }
+            
+            // Preserve Fabric connection UI state after filtering
+            if (fabricConnected) {
+                preserveFabricConnectionUI();
             }
             
             console.log(`✅ CLIENT FILTER: Showing ${visibleCount} cards for ${filterType} = ${filterValue}`);
@@ -3640,6 +3857,7 @@
             globalDomainDropdown.className = 'global-domain-dropdown';
             globalDomainDropdown.innerHTML = `
                 <div class="dropdown-header">Select Domain:</div>
+                <div class="dropdown-item" data-domain="GETTING_STARTED">🚀 Getting Started</div>
                 <div class="dropdown-item" data-domain="GOVERNANCE">🏛️ Governance</div>
                 <div class="dropdown-item" data-domain="USER_EXPERIENCE">👤 User Experience</div>
                 <div class="dropdown-item" data-domain="AUTHENTICATION">🔐 Authentication & Security</div>
@@ -3729,12 +3947,24 @@
             
             // Map internal domain codes to display names
             const domainNames = {
+                'GETTING_STARTED': 'Getting Started',
                 'GOVERNANCE': 'Governance',
                 'USER_EXPERIENCE': 'User Experience',
                 'AUTHENTICATION': 'Authentication & Security',
                 'PERFORMANCE': 'Performance & Scalability',
                 'INTEGRATION': 'Integration & APIs',
                 'ANALYTICS': 'Analytics & Reporting'
+            };
+            
+            // Map domain codes to colors
+            const domainColors = {
+                'GETTING_STARTED': '#20c997',
+                'GOVERNANCE': '#6f42c1',
+                'USER_EXPERIENCE': '#28a745',
+                'AUTHENTICATION': '#dc3545',
+                'PERFORMANCE': '#fd7e14',
+                'INTEGRATION': '#17a2b8',
+                'ANALYTICS': '#ffc107'
             };
             
             // Send to server
@@ -3760,6 +3990,7 @@
                     const domainBadge = document.querySelector(`[data-feedback-id="${feedbackId}"]`).closest('.card').querySelector('.domain-badge');
                     if (domainBadge) {
                         domainBadge.textContent = domainNames[newDomain] || newDomain;
+                        domainBadge.style.backgroundColor = domainColors[newDomain] || '#6c757d';
                     }
                     
                     // Show success message
@@ -3842,14 +4073,15 @@
                 hasStateData: !!hasStateData,
                 urlIndicatesConnection,
                 fabricConnected,
-                storedStateEnabled: localStorage.getItem('stateManagementEnabled') === 'true',
-                storedFabricConnected: localStorage.getItem('fabricConnected') === 'true'
+                sessionToken: '{{ stored_token or "" }}' ? 'present' : 'absent'
             });
             
-            // Allow if ANY connection indicator is present
-            if (!stateManagementEnabled && !hasStateData && !urlIndicatesConnection && !fabricConnected &&
-                localStorage.getItem('stateManagementEnabled') !== 'true' &&
-                localStorage.getItem('fabricConnected') !== 'true') {
+            // Check session token instead of localStorage for connection validation
+            const sessionToken = '{{ stored_token or "" }}';
+            const hasValidSession = sessionToken && sessionToken.trim() !== '' && sessionToken !== 'None';
+            
+            // Allow if ANY valid connection indicator is present
+            if (!stateManagementEnabled && !hasStateData && !urlIndicatesConnection && !fabricConnected && !hasValidSession) {
                 console.log('❌ FINAL OVERRIDE - No connection indicators found - showing alert');
                 alert('Please click "Sync with Fabric" first to connect to the SQL database and enable state management.');
                 // Restore scroll position after alert
@@ -3928,10 +4160,10 @@
             const urlParams = new URLSearchParams(window.location.search);
             const hasStateData = window.fabricStateData && Object.keys(window.fabricStateData).length > 0;
             const urlIndicatesConnection = urlParams.get('fabric_connected') === 'true';
+            const sessionToken = '{{ stored_token or "" }}';
+            const hasValidSession = sessionToken && sessionToken.trim() !== '' && sessionToken !== 'None';
             
-            if (!stateManagementEnabled && !hasStateData && !urlIndicatesConnection && !fabricConnected &&
-                localStorage.getItem('stateManagementEnabled') !== 'true' &&
-                localStorage.getItem('fabricConnected') !== 'true') {
+            if (!stateManagementEnabled && !hasStateData && !urlIndicatesConnection && !fabricConnected && !hasValidSession) {
                 alert('Please click "Sync with Fabric" first to connect to the SQL database and enable state management.');
                 return;
             }
@@ -4130,6 +4362,76 @@
             </div>
         </div>
     </div>
+
+    <script>
+        // Domain sync function for the domain sync button
+        async function syncDomainsFromState() {
+            const domainSyncBtn = document.getElementById('domainSyncBtn');
+            const originalContent = domainSyncBtn.innerHTML;
+            
+            try {
+                // Show loading state
+                domainSyncBtn.innerHTML = '<i class="bi bi-arrow-repeat me-1 spin"></i>Syncing...';
+                domainSyncBtn.disabled = true;
+                
+                console.log('🔄 Starting domain sync from FeedbackState to Feedback table...');
+                
+                const response = await fetch('/api/fabric/domains/sync', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    console.log('✅ Domain sync completed successfully:', result);
+                    
+                    // Show success message
+                    const successMsg = document.createElement('div');
+                    successMsg.className = 'alert alert-success alert-dismissible fade show';
+                    successMsg.innerHTML = `
+                        ✅ <strong>Domain Sync Complete!</strong> ${result.message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.container-custom').insertBefore(successMsg, document.querySelector('.filter-section'));
+                    setTimeout(() => successMsg.remove(), 8000);
+                    
+                    // Refresh the page to show updated domains
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                    
+                } else {
+                    console.error('❌ Domain sync failed:', result);
+                    alert('Domain sync failed: ' + result.message);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error during domain sync:', error);
+                alert('Error during domain sync: ' + error.message);
+            } finally {
+                // Restore button state
+                domainSyncBtn.innerHTML = originalContent;
+                domainSyncBtn.disabled = false;
+            }
+        }
+        
+        // CSS for spinning animation
+        const style = document.createElement('style');
+        style.textContent = `
+            .spin {
+                animation: spin 1s linear infinite;
+            }
+            
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
 
 </body>
 </html>

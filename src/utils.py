@@ -46,7 +46,15 @@ def download_nltk_resources():
 
 # Call download_nltk_resources when the module is loaded
 # This ensures that the resources are checked/downloaded once.
-download_nltk_resources()
+# Made lazy-loaded to avoid hanging during import
+_nltk_resources_downloaded = False
+
+def ensure_nltk_resources():
+    """Ensure NLTK resources are downloaded (lazy loading)"""
+    global _nltk_resources_downloaded
+    if not _nltk_resources_downloaded:
+        download_nltk_resources()
+        _nltk_resources_downloaded = True
 
 def clean_feedback_text(text: str) -> str:
     """
@@ -73,6 +81,12 @@ def clean_feedback_text(text: str) -> str:
     text = re.sub(r'\.MsoChpDefault[^}]*}?', '', text)
     text = re.sub(r'div\.WordSection\d+[^}]*}?', '', text)
     
+    # Remove the specific problematic pattern from ADO: "a: p.xxmsonormal, li.xxmsonormal, div.xxmsonormal {"
+    text = re.sub(r'[a-zA-Z]+:\s*p\.[a-zA-Z]+,?\s*li\.[a-zA-Z]+,?\s*div\.[a-zA-Z]+\s*\{?', '', text, flags=re.IGNORECASE)
+    
+    # Remove CSS selector lists (handles comma-separated selectors)
+    text = re.sub(r'[a-zA-Z]+\.[a-zA-Z]+(?:\s*,\s*[a-zA-Z]+\.[a-zA-Z]+)*\s*\{?', '', text, flags=re.IGNORECASE)
+    
     # Remove any remaining CSS-like patterns
     text = re.sub(r'[a-zA-Z\-]+:[^;]{1,50};', '', text)  # CSS properties
     text = re.sub(r'margin:[^;]+;?', '', text)
@@ -96,6 +110,11 @@ def clean_feedback_text(text: str) -> str:
     text = re.sub(r'font-size:[^;]+;', '', text)
     text = re.sub(r'margin:[^;]+;', '', text)
     text = re.sub(r'color:[^;]+;', '', text)
+    
+    # Remove orphaned CSS fragments and malformed patterns
+    text = re.sub(r'[a-zA-Z]+:\s*[^;{}\s]+[;{}\s]*', '', text)  # CSS properties without context
+    text = re.sub(r'\{[^}]*\}', '', text)  # Any remaining CSS blocks
+    text = re.sub(r'[a-zA-Z]+\.[a-zA-Z]+[,\s]*', '', text)  # Leftover CSS class references
     
     # Remove common CSS properties
     text = re.sub(r'[a-zA-Z-]+:\s*[^;]+;', '', text)
@@ -711,6 +730,9 @@ def analyze_sentiment(text: str) -> dict:
         }
     
     try:
+        # Ensure NLTK resources are downloaded before using TextBlob
+        ensure_nltk_resources()
+        
         blob = TextBlob(text)
         polarity = blob.sentiment.polarity  # Range: -1 (negative) to 1 (positive)
         subjectivity = blob.sentiment.subjectivity  # Range: 0 (objective) to 1 (subjective)

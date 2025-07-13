@@ -197,11 +197,19 @@ def get_all_feedback_states() -> Dict[str, Dict[str, Any]]:
         cursor = conn.cursor()
         
         # Query to get all state data from FeedbackState table with correct column names
+        # Use COALESCE to fallback to Feedback.Primary_Domain if FeedbackState.Primary_Domain is NULL
         query = """
-            SELECT Feedback_ID, State, Primary_Domain, Feedback_Notes, Last_Updated, Updated_By
-            FROM FeedbackState
-            WHERE Feedback_ID IS NOT NULL AND Feedback_ID != ''
-            ORDER BY Last_Updated DESC
+            SELECT 
+                fs.Feedback_ID, 
+                fs.State, 
+                COALESCE(fs.Primary_Domain, f.Primary_Domain) as Primary_Domain,
+                fs.Feedback_Notes, 
+                fs.Last_Updated, 
+                fs.Updated_By
+            FROM FeedbackState fs
+            LEFT JOIN Feedback f ON fs.Feedback_ID = f.Feedback_ID
+            WHERE fs.Feedback_ID IS NOT NULL AND fs.Feedback_ID != ''
+            ORDER BY fs.Last_Updated DESC
         """
         
         cursor.execute(query)
@@ -265,13 +273,35 @@ def update_feedback_field_in_sql(feedback_id: str, field_name: str, new_value: s
         # Update the specific field in the appropriate table
         now = datetime.now().isoformat()
         
-        # Domain fields go to main Feedback table (no Last_Updated column), state fields go to FeedbackState table
-        if field_name in ['Primary_Domain', 'Audience']:
-            # Update main Feedback table for domain/audience (no audit fields in main table)
+        # For Primary_Domain, we need to update BOTH tables:
+        # 1. Feedback table (for data integrity and original categorization)
+        # 2. FeedbackState table (for UI display and audit trail)
+        if field_name == 'Primary_Domain':
+            # Update main Feedback table
+            feedback_query = f"UPDATE Feedback SET {field_name} = ? WHERE Feedback_ID = ?"
+            cursor.execute(feedback_query, [new_value, feedback_id])
+            feedback_rows_updated = cursor.rowcount
+            
+            # Update or insert into FeedbackState table for audit trail and UI
+            state_update_query = f"UPDATE FeedbackState SET {field_name} = ?, Last_Updated = ?, Updated_By = ? WHERE Feedback_ID = ?"
+            cursor.execute(state_update_query, [new_value, now, 'user', feedback_id])
+            
+            # If no rows were affected in FeedbackState, insert a new record
+            if cursor.rowcount == 0:
+                state_insert_query = f"""
+                    INSERT INTO FeedbackState (Feedback_ID, {field_name}, Last_Updated, Updated_By)
+                    VALUES (?, ?, ?, ?)
+                """
+                cursor.execute(state_insert_query, [feedback_id, new_value, now, 'user'])
+                
+            logger.info(f"✅ Updated Primary_Domain in both Feedback table ({feedback_rows_updated} rows) and FeedbackState table")
+            
+        elif field_name == 'Audience':
+            # Audience only goes to main Feedback table (no audit trail needed)
             query = f"UPDATE Feedback SET {field_name} = ? WHERE Feedback_ID = ?"
             cursor.execute(query, [new_value, feedback_id])
         else:
-            # Update FeedbackState table for state management fields (has audit fields)
+            # State management fields (State, Feedback_Notes) go to FeedbackState table only
             update_query = f"UPDATE FeedbackState SET {field_name} = ?, Last_Updated = ?, Updated_By = ? WHERE Feedback_ID = ?"
             cursor.execute(update_query, [new_value, now, 'user', feedback_id])
             

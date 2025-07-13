@@ -58,10 +58,6 @@
                     <i class="bi bi-activity me-1"></i>Collection Progress
                     <span class="badge bg-secondary ms-1" id="progressBadge">Ready</span>
                 </button>
-                <button class="btn btn-outline-success ms-2" id="fabricAuthBtn" onclick="toggleFabricAuth()">
-                    <i class="bi bi-shield-check me-1"></i>Fabric Auth
-                    <span class="badge bg-secondary ms-1" id="fabricAuthBadge">Not Connected</span>
-                </button>
             </div>
         </div>
         <hr>
@@ -74,38 +70,6 @@
                 src="{{ powerbi_embed_base_url }}?reportId={{ powerbi_report_id }}&autoAuth=true&ctid={{ powerbi_tenant_id }}"
                 allowFullScreen="true">
             </iframe>
-        </div>
-        
-        <!-- Manual Token Entry Section - Moved to bottom -->
-        <div class="manual-token-section mt-4">
-            <h5><i class="bi bi-key me-2"></i>Bearer Token Entry for Fabric API Access</h5>
-            <p class="text-muted mb-3">
-                Enter your authentication token here. It will be saved and available on the <a href="/" class="text-decoration-none">Home page</a> for writing feedback data to Fabric Lakehouse:
-            </p>
-            <details class="mb-3">
-                <summary class="text-primary" style="cursor: pointer;">📋 Click here for token capture instructions</summary>
-                <ol class="mt-2 mb-0">
-                    <li>Open browser Developer Tools (F12)</li>
-                    <li>Go to Network tab and refresh this page</li>
-                    <li>Look for requests to <code>fabric.microsoft.com</code> or <code>analysis.windows.net</code></li>
-                    <li>Find the Authorization header in any request</li>
-                    <li>Copy the Bearer token value and paste below</li>
-                </ol>
-            </details>
-            <div class="mb-3">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <label for="manualToken" class="form-label mb-0">Bearer Token</label>
-                    <span id="tokenStatus" class="badge bg-secondary">Ready for manual entry</span>
-                </div>
-                <div class="input-group">
-                    <input type="text" id="manualToken" class="form-control"
-                           placeholder="Paste your Bearer token here (with or without 'Bearer ' prefix)..." />
-                    <button class="btn btn-primary" onclick="useManualToken()">Use Token</button>
-                </div>
-            </div>
-            <small class="text-muted mt-2 d-block">
-                The token should be a long string starting with "eyJ". Example: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIs...
-            </small>
         </div>
     </div>
 
@@ -419,7 +383,7 @@
         const cleanToken = manualToken.startsWith('Bearer ') ? manualToken.substring(7) : manualToken;
         
         if (cleanToken.length < 50) {
-            alert('Token seems too short. Please verify you copied the complete token.');
+            alert('Token seems to short. Please verify you copied the complete token.');
             return;
         }
 
