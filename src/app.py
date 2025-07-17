@@ -958,7 +958,7 @@ def feedback_viewer():
     if show_repeating and feedback_to_display:
         from utils import analyze_repeating_requests
         repeating_analysis = analyze_repeating_requests(feedback_to_display)
-        logger.info(f"Repeating requests analysis: {repeating_analysis.get('cluster_count', 0)} clusters found")
+        logger.info(f"Repeating requests analysis: {repeating_analysis.get('cluster_count', 0)} clusters found from {len(feedback_to_display)} filtered items")
 
     # Generate category statistics
     category_stats = None
@@ -1433,9 +1433,9 @@ def get_filtered_feedback():
         if show_repeating and feedback_to_display:
             from utils import analyze_repeating_requests
             repeating_analysis = analyze_repeating_requests(feedback_to_display)
-            logger.info(f"AJAX Repeating requests analysis: {repeating_analysis.get('cluster_count', 0)} clusters found")
+            logger.info(f"AJAX Repeating requests analysis: {repeating_analysis.get('cluster_count', 0)} clusters found from {len(feedback_to_display)} filtered items")
         
-        # Get filter options for UI updates
+        # Get filter options for UI updates (use full dataset for filter options)
         filter_options = extract_filter_options(last_collected_feedback)
         
         # Get current Fabric state data if available

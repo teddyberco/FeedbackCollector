@@ -977,6 +977,7 @@ def analyze_repeating_requests(feedback_items: list) -> dict:
     # Group similar feedback by clustering
     clusters = []
     processed = set()
+    total_clustered_items = 0  # Track total items that are part of any cluster
     
     logger.info(f"Starting repeating request analysis with {len(feedback_items)} items")
     
@@ -988,33 +989,35 @@ def analyze_repeating_requests(feedback_items: list) -> dict:
         if not item_text:
             continue
         
-        # Find similar items with a lower threshold for clustering
-        similar_items = find_similar_feedback(item_text, feedback_items, similarity_threshold=0.3, exclude_self=False)
+        # Find similar items with a balanced threshold for clustering
+        similar_items = find_similar_feedback(item_text, feedback_items, similarity_threshold=0.4, exclude_self=False)
         
         # Filter out the current item from similar items to avoid self-inclusion
         similar_items = [si for si in similar_items if si['feedback_item'] != item]
         
+        # Only create a cluster if there are actually similar items (i.e., repetitions)
         if similar_items:
+            cluster_items = [item] + [si['feedback_item'] for si in similar_items]
             cluster = {
                 'primary_item': item,
                 'similar_items': similar_items,
-                'count': len(similar_items) + 1,
+                'count': len(cluster_items),  # Total items in this cluster
                 'keywords': extract_keywords(item_text),
-                'sources': list(set([item.get('Sources', 'Unknown')] + 
-                                  [si['feedback_item'].get('Sources', 'Unknown') for si in similar_items])),
-                'audiences': list(set([item.get('Audience', 'Unknown')] + 
-                                    [si['feedback_item'].get('Audience', 'Unknown') for si in similar_items])),
-                'priorities': list(set([item.get('Priority', 'medium')] + 
-                                     [si['feedback_item'].get('Priority', 'medium') for si in similar_items]))
+                'sources': list(set([ci.get('Sources', 'Unknown') for ci in cluster_items])),
+                'audiences': list(set([ci.get('Audience', 'Unknown') for ci in cluster_items])),
+                'priorities': list(set([ci.get('Priority', 'medium') for ci in cluster_items]))
             }
             clusters.append(cluster)
             
+            # Mark all items in this cluster as processed
             processed.add(i)
-            # Mark similar items as processed
+            total_clustered_items += 1  # Count the primary item
+            
             for similar in similar_items:
                 for j, check_item in enumerate(feedback_items):
-                    if check_item == similar['feedback_item']:
+                    if check_item == similar['feedback_item'] and j not in processed:
                         processed.add(j)
+                        total_clustered_items += 1  # Count each similar item
                         break
     
     # Sort clusters by count (most frequent first)
@@ -1031,17 +1034,21 @@ def analyze_repeating_requests(feedback_items: list) -> dict:
     # Get top keywords
     top_keywords = sorted(keyword_freq.items(), key=lambda x: x[1], reverse=True)[:20]
     
-    # Calculate metrics safely
+    # Calculate metrics correctly
     total_items = len(feedback_items)
-    total_similar_items = sum(len(c['similar_items']) for c in clusters)
-    unique_requests = total_items - total_similar_items
-    repetition_rate = round(total_similar_items / total_items * 100, 1) if total_items > 0 else 0.0
+    unique_requests = total_items - total_clustered_items  # Items not part of any cluster are unique
+    
+    # Repetition rate = percentage of items that are part of clusters (i.e., have duplicates)
+    repetition_rate = round(total_clustered_items / total_items * 100, 1) if total_items > 0 else 0.0
+    
+    # Only count clusters with more than 1 item (actual repetitions)
+    actual_repeating_clusters = [c for c in clusters if c['count'] > 1]
     
     analysis = {
         'total_items': total_items,
         'unique_requests': unique_requests,
-        'repeating_clusters': clusters[:10],  # Top 10 most frequent clusters
-        'cluster_count': len(clusters),
+        'repeating_clusters': actual_repeating_clusters[:10],  # Top 10 most frequent clusters
+        'cluster_count': len(actual_repeating_clusters),
         'repetition_rate': repetition_rate,
         'top_keywords': top_keywords,
         'top_repeating_requests': [
@@ -1052,10 +1059,10 @@ def analyze_repeating_requests(feedback_items: list) -> dict:
                 'audiences': cluster['audiences'],
                 'keywords': cluster['keywords'][:5]
             }
-            for cluster in clusters[:5]
+            for cluster in actual_repeating_clusters[:5]
         ]
     }
     
-    logger.info(f"Repeating request analysis complete: {len(clusters)} clusters found, {repetition_rate}% repetition rate")
+    logger.info(f"Repeating request analysis complete: {len(actual_repeating_clusters)} clusters found, {repetition_rate}% repetition rate, {unique_requests} unique requests")
     
     return analysis
