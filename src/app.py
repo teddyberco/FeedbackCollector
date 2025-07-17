@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 import pandas as pd
 import os
 import logging
+import time
 from datetime import datetime
 from typing import List, Dict, Any, Tuple
 import json
@@ -108,13 +109,14 @@ def restore_default_keywords_route():
 
 @app.route('/api/collect', methods=['POST'])
 def collect_feedback_route():
-    """Main collection route using only real data collectors"""
+    """Enhanced collection route with source configuration support"""
     global last_collected_feedback, last_collection_summary, collection_status
     last_collected_feedback = []
     
     logger.info("🚀 COLLECTION STARTED: Beginning feedback collection process")
     
-    # Update collection status to running
+    # Completely reset collection status to running (clears all old values)
+    collection_status.clear()
     collection_status.update({
         'status': 'running',
         'message': 'Collection in progress...',
@@ -123,11 +125,22 @@ def collect_feedback_route():
         'total_items': 0,
         'current_source': 'Initializing',
         'sources_completed': [],
-        'error_message': None
+        'error_message': None,
+        'progress': 0,
+        'source_counts': {}
     })
     
     try:
-        logger.info("Starting feedback collection process via API.")
+        logger.info("Starting enhanced feedback collection process via API.")
+        
+        # Get configuration from request
+        config = {}
+        if request.is_json:
+            config = request.get_json() or {}
+        
+        # Extract source configurations
+        source_configs = config.get('sources', {})
+        settings = config.get('settings', {})
         
         # Check if we're in online mode (connected to Fabric)
         from flask import session
@@ -135,100 +148,202 @@ def collect_feedback_route():
         is_online_mode = stored_token and stored_token.strip() and stored_token != 'None'
         
         logger.info(f"🔍 COLLECTION MODE CHECK: {'ONLINE' if is_online_mode else 'OFFLINE'} - Token: {'Present' if stored_token else 'None'}")
+        # Count enabled sources for progress tracking
+        enabled_sources = [k for k, v in source_configs.items() if v.get('enabled', False)]
+        total_sources = len(enabled_sources)
         
-        # Get optional ADO work item ID from request
-        ado_work_item_id = None
-        if request.is_json:
-            data = request.get_json()
-            ado_work_item_id = data.get('ado_work_item_id') if data else None
-        
-        # Collect from all sources using proper collectors
-        reddit_collector = RedditCollector()
-        fabric_collector = FabricCommunityCollector()
-        github_collector = GitHubDiscussionsCollector()
-        
-        # Collect from Reddit
-        collection_status['current_source'] = 'Reddit'
-        reddit_feedback = reddit_collector.collect()
-        logger.info(f"Reddit collector found {len(reddit_feedback)} items.")
-        collection_status['sources_completed'].append('Reddit')
-        
-        # Collect from Fabric Community
-        collection_status['current_source'] = 'Fabric Community'
-        fabric_feedback = fabric_collector.collect()
-        logger.info(f"Fabric Community collector found {len(fabric_feedback)} items.")
-        collection_status['sources_completed'].append('Fabric Community')
-        
-        # Collect from GitHub
-        collection_status['current_source'] = 'GitHub Discussions'
-        github_feedback = github_collector.collect()
-        logger.info(f"GitHub Discussions collector found {len(github_feedback)} items.")
-        collection_status['sources_completed'].append('GitHub Discussions')
-        
-        # Use working ADO client to get children of parent work item
-        logger.info("🔗 WORKING ADO CLIENT: Collecting children work items from Azure DevOps")
-        
-        # Get work items using the working client (children of parent work item from past year)
-        ado_workitems = get_working_ado_items(parent_work_item_id=ado_work_item_id, top=200)
-        logger.info(f"📊 Working client found {len(ado_workitems)} children work items")
-        
-        # Convert work items to feedback format with descriptions and proper categorization
-        ado_feedback = []
-        for item in ado_workitems:
-            work_item_id = item.get('id')
-            title = item.get('title', '')
-            description = item.get('description', '')
-            ado_url = item.get('url')  # Already formatted in working client
-            
-            # Clean the text to remove HTML/CSS formatting (like the updated collector)
-            cleaned_title = utils.clean_feedback_text(title)
-            cleaned_description = utils.clean_feedback_text(description) if description and description != 'No description available' else ""
-            
-            # Use cleaned description + title for content
-            full_content = cleaned_title
-            if cleaned_description:
-                full_content += f"\n\n{cleaned_description}"
-            
-            # Enhanced categorization (like the updated collector)
-            enhanced_cat = utils.enhanced_categorize_feedback(
-                full_content,
-                source='Azure DevOps',
-                scenario='Internal',
-                organization='ADO/WorkingClient'
-            )
-            
-            # Analyze sentiment of the cleaned content
-            sentiment_analysis = utils.analyze_sentiment(cleaned_description if cleaned_description else cleaned_title)
-            
-            ado_feedback.append({
-                'Title': f"[ADO-{work_item_id}] {cleaned_title}",
-                'Feedback_Gist': utils.generate_feedback_gist(full_content),  # For card title
-                'Feedback': full_content,  # This is what shows in the card content (now cleaned!)
-                'Content': full_content,  # Backup field
-                'Author': item.get('createdBy', ''),
-                'Created': item.get('createdDate', ''),
-                'Url': ado_url,  # Proper field name for "View Source" button
-                'URL': ado_url,  # Backup field
-                'Sources': 'Azure DevOps',
-                'Category': enhanced_cat['legacy_category'],  # Backward compatibility
-                'Enhanced_Category': enhanced_cat['primary_category'],  # Enhanced categorization
-                'Subcategory': enhanced_cat['subcategory'],
-                'Audience': enhanced_cat['audience'],  # This should now be "Developer"!
-                'Priority': enhanced_cat['priority'],
-                'Feature_Area': enhanced_cat['feature_area'],
-                'Categorization_Confidence': enhanced_cat['confidence'],
-                'Domains': enhanced_cat.get('domains', []),
-                'Primary_Domain': enhanced_cat.get('primary_domain', None),
-                'Sentiment': sentiment_analysis['label'],
-                'Sentiment_Score': sentiment_analysis['polarity'],
-                'Sentiment_Confidence': sentiment_analysis['confidence'],
-                'ADO_ID': work_item_id,
-                'ADO_Type': item.get('type', ''),
-                'ADO_State': item.get('state', ''),
-                'ADO_AssignedTo': item.get('assignedTo', '')
+        # Prevent division by zero
+        if total_sources == 0:
+            logger.warning("No sources enabled for collection")
+            collection_status.update({
+                'status': 'error',
+                'message': 'No sources enabled for collection',
+                'end_time': datetime.now().isoformat(),
+                'error_message': 'Please enable at least one data source'
             })
+            return jsonify({"error": "No sources enabled for collection"}), 400
         
-        logger.info(f"🔗 Working ADO client found {len(ado_feedback)} children work items from parent {ado_work_item_id}.")
+        logger.info(f"📋 COLLECTION CONFIG: {total_sources} sources enabled: {enabled_sources}")
+        
+        all_feedback = []
+        results = {}
+        
+        # Initialize all feedback variables to empty lists
+        reddit_feedback = []
+        fabric_feedback = []
+        github_feedback = []
+        ado_feedback = []
+        
+        # Collect from Reddit if enabled
+        if source_configs.get('reddit', {}).get('enabled', False):
+            collection_status['current_source'] = 'Reddit'
+            collection_status['message'] = 'Collecting from Reddit...'
+            reddit_config = source_configs['reddit']
+            logger.info(f"🔴 REDDIT: Collecting from r/{reddit_config.get('subreddit', 'MicrosoftFabric')}")
+            
+            reddit_collector = RedditCollector()
+            
+            # Pass configuration to collector if it supports it
+            if hasattr(reddit_collector, 'configure'):
+                reddit_collector.configure({
+                    'subreddit': reddit_config.get('subreddit', 'MicrosoftFabric'),
+                    'sort': reddit_config.get('sort', 'new'),
+                    'time_filter': reddit_config.get('timeFilter', 'month'),
+                    'max_items': reddit_config.get('maxItems', 200)
+                })
+            
+            reddit_feedback = reddit_collector.collect()
+            logger.info(f"Reddit collector found {len(reddit_feedback)} items.")
+            collection_status['sources_completed'].append('Reddit')
+            if total_sources > 0:
+                collection_status['progress'] = (len(collection_status['sources_completed']) / total_sources) * 100
+            # Add source counts for real-time updates
+            collection_status['source_counts'] = collection_status.get('source_counts', {})
+            collection_status['source_counts']['reddit'] = len(reddit_feedback)
+            all_feedback.extend(reddit_feedback)
+            results['reddit'] = {'count': len(reddit_feedback), 'completed': True}
+        
+        # Collect from Fabric Community if enabled
+        if source_configs.get('fabricCommunity', {}).get('enabled', False):
+            collection_status['current_source'] = 'Fabric Community'
+            collection_status['message'] = 'Collecting from Fabric Community...'
+            fabric_config = source_configs['fabricCommunity']
+            logger.info(f"🔷 FABRIC COMMUNITY: Collecting feedback")
+            
+            fabric_collector = FabricCommunityCollector()
+            
+            # Pass configuration to collector if it supports it
+            if hasattr(fabric_collector, 'configure'):
+                fabric_collector.configure({
+                    'max_items': fabric_config.get('maxItems', 200)
+                })
+            
+            fabric_feedback = fabric_collector.collect()
+            logger.info(f"Fabric Community collector found {len(fabric_feedback)} items.")
+            collection_status['sources_completed'].append('Fabric Community')
+            if total_sources > 0:
+                collection_status['progress'] = (len(collection_status['sources_completed']) / total_sources) * 100
+            # Add source counts for real-time updates
+            collection_status['source_counts'] = collection_status.get('source_counts', {})
+            collection_status['source_counts']['fabricCommunity'] = len(fabric_feedback)
+            all_feedback.extend(fabric_feedback)
+            results['fabricCommunity'] = {'count': len(fabric_feedback), 'completed': True}
+        
+        # Collect from GitHub if enabled
+        if source_configs.get('github', {}).get('enabled', False):
+            collection_status['current_source'] = 'GitHub Discussions'
+            collection_status['message'] = 'Collecting from GitHub Discussions...'
+            github_config = source_configs['github']
+            logger.info(f"🐙 GITHUB: Collecting from {github_config.get('owner', 'microsoft')}/{github_config.get('repo', 'Microsoft-Fabric-workload-development-sample')}")
+            
+            github_collector = GitHubDiscussionsCollector()
+            
+            # Pass configuration to collector if it supports it
+            if hasattr(github_collector, 'configure'):
+                github_collector.configure({
+                    'owner': github_config.get('owner', 'microsoft'),
+                    'repo': github_config.get('repo', 'Microsoft-Fabric-workload-development-sample'),
+                    'state': github_config.get('state', 'all'),
+                    'max_items': github_config.get('maxItems', 200)
+                })
+            
+            github_feedback = github_collector.collect()
+            logger.info(f"GitHub Discussions collector found {len(github_feedback)} items.")
+            collection_status['sources_completed'].append('GitHub Discussions')
+            if total_sources > 0:
+                collection_status['progress'] = (len(collection_status['sources_completed']) / total_sources) * 100
+            # Add source counts for real-time updates
+            collection_status['source_counts'] = collection_status.get('source_counts', {})
+            collection_status['source_counts']['github'] = len(github_feedback)
+            all_feedback.extend(github_feedback)
+            results['github'] = {'count': len(github_feedback), 'completed': True}
+        
+        # Collect from Azure DevOps if enabled
+        if source_configs.get('ado', {}).get('enabled', False):
+            collection_status['current_source'] = 'Azure DevOps'
+            collection_status['message'] = 'Collecting from Azure DevOps...'
+            ado_config = source_configs['ado']
+            parent_work_item_id = ado_config.get('parentWorkItem', config.get('ado_work_item_id', '1319103'))
+            logger.info(f"🔗 AZURE DEVOPS: Collecting children of work item {parent_work_item_id}")
+            
+            # Get work items using the working client
+            ado_workitems = get_working_ado_items(
+                parent_work_item_id=parent_work_item_id, 
+                top=ado_config.get('maxItems', 200)
+            )
+            logger.info(f"📊 Working client found {len(ado_workitems)} children work items")
+            
+            # Convert work items to feedback format
+            ado_feedback = []
+            for item in ado_workitems:
+                work_item_id = item.get('id')
+                title = item.get('title', '')
+                description = item.get('description', '')
+                ado_url = item.get('url')
+                
+                # Clean and handle None/NaN values
+                def safe_get(obj, key, default=''):
+                    import math
+                    value = obj.get(key, default)
+                    if value is None or (isinstance(value, float) and math.isnan(value)):
+                        return default
+                    return str(value) if value != default else default                # Clean the text to remove HTML/CSS formatting
+                cleaned_title = utils.clean_feedback_text(title)
+                cleaned_description = utils.clean_feedback_text(description) if description and description != 'No description available' else ""
+                
+                # Use cleaned description + title for content
+                full_content = cleaned_title
+                if cleaned_description:
+                    full_content += f"\n\n{cleaned_description}"
+                
+                # Enhanced categorization
+                enhanced_cat = utils.enhanced_categorize_feedback(
+                    full_content,
+                    source='Azure DevOps',
+                    scenario='Internal',
+                    organization='ADO/WorkingClient'
+                )
+                
+                # Analyze sentiment of the cleaned content
+                sentiment_analysis = utils.analyze_sentiment(cleaned_description if cleaned_description else cleaned_title)
+                
+                ado_feedback.append({
+                    'Title': f"[ADO-{work_item_id}] {cleaned_title}",
+                    'Feedback_Gist': utils.generate_feedback_gist(full_content),
+                    'Feedback': full_content,
+                    'Content': full_content,
+                    'Author': item.get('createdBy', ''),
+                    'Created': item.get('createdDate', ''),
+                    'Url': ado_url,
+                    'URL': ado_url,
+                    'Sources': 'Azure DevOps',
+                    'Category': enhanced_cat['legacy_category'],
+                    'Enhanced_Category': enhanced_cat['primary_category'],
+                    'Subcategory': enhanced_cat['subcategory'],
+                    'Audience': enhanced_cat['audience'],
+                    'Priority': enhanced_cat['priority'],
+                    'Feature_Area': enhanced_cat['feature_area'],
+                    'Categorization_Confidence': enhanced_cat['confidence'],
+                    'Domains': enhanced_cat.get('domains', []),
+                    'Primary_Domain': enhanced_cat.get('primary_domain', None),
+                    'Sentiment': sentiment_analysis['label'],
+                    'Sentiment_Score': sentiment_analysis['polarity'],
+                    'Sentiment_Confidence': sentiment_analysis['confidence'],
+                    'ADO_ID': work_item_id,
+                    'ADO_Type': safe_get(item, 'type', ''),
+                    'ADO_State': safe_get(item, 'state', ''),
+                    'ADO_AssignedTo': safe_get(item, 'assignedTo', '')
+                })
+            
+            logger.info(f"🔗 Working ADO client found {len(ado_feedback)} children work items from parent {parent_work_item_id}.")
+            collection_status['sources_completed'].append('Azure DevOps')
+            if total_sources > 0:
+                collection_status['progress'] = (len(collection_status['sources_completed']) / total_sources) * 100
+            # Add source counts for real-time updates
+            collection_status['source_counts'] = collection_status.get('source_counts', {})
+            collection_status['source_counts']['ado'] = len(ado_feedback)
+            all_feedback.extend(ado_feedback)
+            results['ado'] = {'count': len(ado_feedback), 'completed': True}
         
         # Log sample work items
         if ado_feedback:
@@ -256,8 +371,9 @@ def collect_feedback_route():
         fabric_feedback = add_sentiment_to_feedback(fabric_feedback, "Fabric Community")
         github_feedback = add_sentiment_to_feedback(github_feedback, "GitHub")
         
-        # Combine all feedback
-        all_feedback = reddit_feedback + fabric_feedback + github_feedback + ado_feedback
+        # Note: all_feedback was already built by extending with each source
+        # No need to combine again as it would lose the items
+        logger.info(f"Final feedback counts: Reddit={len(reddit_feedback)}, Fabric={len(fabric_feedback)}, GitHub={len(github_feedback)}, ADO={len(ado_feedback)}, Total={len(all_feedback)}")
         
         # Generate deterministic IDs for all feedback items BEFORE state initialization
         from id_generator import FeedbackIDGenerator
@@ -321,10 +437,10 @@ def collect_feedback_route():
         
         last_collected_feedback = all_feedback
         last_collection_summary = {
-            "reddit": len(reddit_feedback),
-            "fabric": len(fabric_feedback),
-            "github": len(github_feedback),
-            "ado": len(ado_feedback),
+            "reddit": {"count": len(reddit_feedback), "completed": True},
+            "fabric": {"count": len(fabric_feedback), "completed": True},
+            "github": {"count": len(github_feedback), "completed": True},
+            "ado": {"count": len(ado_feedback), "completed": True},
             "total": len(all_feedback)
         }
         logger.info(f"Total feedback items collected: {len(all_feedback)}")
@@ -354,7 +470,10 @@ def collect_feedback_route():
             df.to_csv(filepath, index=False, encoding='utf-8-sig') 
             logger.info(f"Feedback saved to {filepath}")
             
-            current_app.config['LAST_CSV_FILE'] = filename 
+            current_app.config['LAST_CSV_FILE'] = filename
+            
+            # Add filename to summary for download link
+            last_collection_summary['csv_filename'] = filename
             
         except Exception as e:
             logger.error(f"Error processing or saving feedback to CSV: {e}", exc_info=True)
@@ -373,7 +492,9 @@ def collect_feedback_route():
             'message': f'Collection completed successfully - {len(all_feedback)} items collected',
             'end_time': datetime.now().isoformat(),
             'total_items': len(all_feedback),
-            'current_source': 'Completed'
+            'current_source': 'Completed',
+            'progress': 100,
+            'results': results  # Include results for client display
         })
             
         return jsonify(last_collection_summary)
@@ -430,7 +551,8 @@ def feedback_viewer():
     stored_token = session.get('fabric_bearer_token')  # Bearer token for lakehouse writes only
     
     # Check Fabric SQL connection state (for state management and UI features)
-    fabric_sql_connected = session.get('states_loaded', False) and session.get('sql_data_applied', False)
+    # Use OR logic - if either flag is set, we consider SQL connected
+    fabric_sql_connected = session.get('states_loaded', False) or session.get('sql_data_applied', False)
     
     # If fabric_connected parameter is present, it indicates a Fabric SQL connection was made
     if fabric_connected_param:
@@ -442,6 +564,15 @@ def feedback_viewer():
     
     logger.info(f"Bearer Token Mode: {'ONLINE' if is_online_mode else 'OFFLINE'} - Token: {'Present' if stored_token else 'None'}")
     logger.info(f"Fabric SQL Connected: {fabric_sql_connected} - Session states_loaded: {session.get('states_loaded', False)}, sql_data_applied: {session.get('sql_data_applied', False)}")
+    
+    # CRITICAL FIX: For normal collection viewing (without Fabric connection), we're in OFFLINE mode
+    # Only set online mode if we actually have a bearer token AND are connected to Fabric
+    if not is_online_mode:
+        fabric_sql_connected = False
+        # Clear potentially stale session flags when in offline mode
+        session.pop('states_loaded', None)
+        session.pop('sql_data_applied', None)
+        logger.info("🔒 OFFLINE MODE: Forcing fabric_sql_connected to False and clearing session flags")
     
     # If no feedback in memory, try loading from CSV (OFFLINE MODE)
     if not last_collected_feedback:
@@ -1203,6 +1334,22 @@ def cancel_fabric_write(operation_id):
 
 # Modern Filter API Endpoints
 
+def clean_nan_values(data):
+    """Clean NaN values from data for JSON serialization"""
+    import math
+    
+    if isinstance(data, dict):
+        cleaned = {}
+        for key, value in data.items():
+            cleaned[key] = clean_nan_values(value)
+        return cleaned
+    elif isinstance(data, list):
+        return [clean_nan_values(item) for item in data]
+    elif isinstance(data, float) and math.isnan(data):
+        return None  # Convert NaN to None (null in JSON)
+    else:
+        return data
+
 @app.route('/api/feedback/filtered', methods=['GET'])
 def get_filtered_feedback():
     """AJAX endpoint for filtered feedback data without page reload"""
@@ -1277,6 +1424,9 @@ def get_filtered_feedback():
         start_idx = (page - 1) * per_page
         end_idx = start_idx + per_page
         paginated_feedback = feedback_to_display[start_idx:end_idx]
+        
+        # Clean NaN values before JSON serialization
+        paginated_feedback = clean_nan_values(paginated_feedback)
         
         # Get filter options for UI updates
         filter_options = extract_filter_options(last_collected_feedback)
@@ -1720,6 +1870,21 @@ def clear_fabric_token():
         logger.error(f"Error clearing token: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/api/collection-progress')
+def collection_progress():
+    """Server-Sent Events endpoint for real-time collection progress"""
+    def generate():
+        while True:
+            yield f"data: {json.dumps(collection_status)}\n\n"
+            
+            # Stop streaming AFTER sending the final status
+            if collection_status.get('status') in ['completed', 'error']:
+                break
+                
+            time.sleep(1)
+    
+    return app.response_class(generate(), mimetype='text/event-stream')
+
 @app.route('/api/collection_status', methods=['GET'])
 def get_collection_status():
     """Get current collection operation status for badge synchronization"""
@@ -1735,7 +1900,9 @@ def get_collection_status():
             'total_items': collection_status['total_items'],
             'current_source': collection_status['current_source'],
             'sources_completed': collection_status['sources_completed'],
-            'error_message': collection_status['error_message']
+            'error_message': collection_status['error_message'],
+            'source_counts': collection_status.get('source_counts', {}),
+            'progress': collection_status.get('progress', 0)
         })
         
     except Exception as e:
@@ -2424,3 +2591,31 @@ def sync_domains_from_state():
     except Exception as e:
         logger.error(f"Error syncing domains from state: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/data/<filename>')
+def download_csv(filename):
+    """Serve CSV files from the data directory"""
+    try:
+        # Validate filename to prevent directory traversal attacks
+        if not filename.startswith('feedback_') or not filename.endswith('.csv'):
+            return jsonify({'error': 'Invalid filename'}), 400
+        
+        # Construct the full path to the CSV file
+        filepath = os.path.join(DATA_DIR, filename)
+        
+        # Check if file exists
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'File not found'}), 404
+        
+        # Send the file with proper headers
+        return send_from_directory(
+            DATA_DIR,
+            filename,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='text/csv'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error serving CSV file {filename}: {e}")
+        return jsonify({'error': 'Error serving file'}), 500

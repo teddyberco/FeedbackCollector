@@ -165,13 +165,17 @@ class BadgeStateManager {
             
             if (data.status === 'running') {
                 status = 'running';
-                badge = 'Running';
+                badge = 'Collecting...';
             } else if (data.status === 'completed') {
                 status = 'completed';
                 badge = 'Completed';
             } else if (data.status === 'error') {
                 status = 'error';
                 badge = 'Error';
+            } else {
+                // Default to ready state
+                status = 'ready';
+                badge = 'Ready';
             }
             
             this.states.collectionProgress = {

@@ -34,6 +34,15 @@ A comprehensive, enterprise-grade web-based tool that intelligently collects, pr
 - **Bearer Token Authentication**: Secure API access management with user context
 - **Power BI Integration**: Ready-to-use analytics dashboard
 
+### **🆕 Recent Enhancements (v4.1)**
+- **Fixed Progress Bar Reset Issues**: Progress bars now properly reset to 0 when starting new collections
+- **Resolved Spinner State Management**: Collection completion properly stops all progress indicators
+- **Enhanced Stale Data Guards**: Improved detection and filtering of outdated progress data
+- **Fixed Mode Detection**: Offline/Online mode detection now works correctly on feedback page
+- **Resolved JSON Parsing Errors**: NaN values are properly handled in data serialization
+- **Improved Session State Management**: Better handling of Fabric connection states
+- **Enhanced Error Handling**: More robust error handling for data collection and UI updates
+
 ## 🛠️ Prerequisites
 
 - **Python 3.8+**
@@ -412,6 +421,9 @@ The Fabric SQL Database stores feedback state information:
 - ✅ **Confidence Thresholds**: Flags low-confidence classifications
 - ✅ **SQL Connection Retry**: Automatic retry with multiple ODBC drivers
 - ✅ **State Synchronization**: Ensures consistency between local and remote state
+- ✅ **Progress Bar Reset**: Fixed issues with progress bars not resetting between collections
+- ✅ **Spinner State Management**: Resolved issues with spinners continuing after completion
+- ✅ **NaN Value Handling**: Robust handling of NaN values in JSON serialization
 
 ### **Data Quality & Reliability**
 - ✅ **Duplicate Detection**: Prevents redundant entries
@@ -420,12 +432,16 @@ The Fabric SQL Database stores feedback state information:
 - ✅ **Encoding Handling**: Manages various text encodings
 - ✅ **Transaction Safety**: All state changes are atomic and reversible
 - ✅ **Concurrent Access**: Handles multiple users safely
+- ✅ **Stale Data Guards**: Enhanced detection and filtering of outdated progress data
+- ✅ **Session State Management**: Improved handling of Fabric connection states
 
 ### **Database Resilience**
 - ✅ **Multiple Driver Support**: Tries multiple ODBC drivers in order of preference
 - ✅ **Interactive Auth Fallback**: Falls back to different authentication methods
 - ✅ **Connection Pooling**: Efficient database connection management
 - ✅ **Error Recovery**: Graceful handling of database connectivity issues
+- ✅ **Mode Detection**: Fixed offline/online mode detection issues
+- ✅ **Clean Data Serialization**: Proper handling of NaN and null values
 
 ## 🚀 API Endpoints
 
@@ -484,22 +500,33 @@ This project is proprietary and confidential. Unauthorized copying, distribution
   - Verify Bearer token has SQL Database permissions
   - Check state_manager.py for proper user extraction
   - Ensure SQL tables exist and are accessible
+- **Progress Bar Issues** (✅ Fixed in v4.1):
+  - Progress bars now properly reset to 0 when starting new collections
+  - Stale data guards prevent old progress data from interfering
+- **Collection UI Issues** (✅ Fixed in v4.1):
+  - Spinners now stop correctly when collection completes
+  - Mode detection (Online/Offline) works correctly on feedback page
+  - Fixed "Failed to load filtered data" errors caused by NaN values
 - **ADO Text Issues**: Verify text cleaning is working in utils.py
 - **Categorization Errors**: Check keywords.json for domain mappings
 - **Token Errors**: Verify Bearer token validity and permissions
 - **Collection Failures**: Check API credentials and network connectivity
+- **JSON Parsing Errors** (✅ Fixed in v4.1): NaN values are now properly cleaned before serialization
 
 ### **Database Troubleshooting**
 - **Driver Issues**: Run test_fabric_sql_connection.py to verify connectivity
 - **Authentication Problems**: Check Azure AD permissions and token validity
 - **Table Access**: Verify table permissions and schema matches expectations
 - **Concurrent Access**: Check for locking issues in state management
+- **Session State Issues** (✅ Fixed in v4.1): Improved session flag management for Fabric connections
 
 ### **Testing & Validation**
 - **SQL Connection**: Use `test_fabric_sql_connection.py` to verify database connectivity
 - **State Management**: Use `test_state_management.py` to test state operations
 - **API Endpoints**: Test all endpoints with proper authentication
 - **User Context**: Verify user extraction from Bearer tokens is working
+- **Progress System**: Test collection progress updates and completion handling
+- **Mode Detection**: Verify offline/online mode detection on feedback page
 
 ### **Getting Help**
 - Check the progress drawer logs for detailed error information
@@ -508,7 +535,17 @@ This project is proprietary and confidential. Unauthorized copying, distribution
 - Review SQL connection logs for authentication and permission issues
 - Test database connectivity before running the full application
 
-**Last Updated**: July 2025 | **Version**: 4.0
+**Last Updated**: July 2025 | **Version**: 4.1
+
+### **Key Enhancements in v4.1**
+- **Fixed Progress Bar Reset Issues**: Progress bars now properly reset to 0 when starting new collections
+- **Resolved Spinner State Management**: Collection completion properly stops all progress indicators  
+- **Enhanced Stale Data Guards**: Improved detection and filtering of outdated progress data during collection
+- **Fixed Mode Detection**: Offline/Online mode detection now works correctly on feedback page without false positives
+- **Resolved JSON Parsing Errors**: NaN values are properly handled and cleaned before JSON serialization
+- **Improved Session State Management**: Better handling of Fabric connection states and session flags
+- **Enhanced Error Handling**: More robust error handling for data collection, UI updates, and ADO data processing
+- **Collection Status Synchronization**: Fixed issues where progress elements would jump to final values immediately
 
 ### **Key Enhancements in v4.0**
 - **Fabric SQL Database Integration**: Direct SQL database connectivity for state management

@@ -109,6 +109,8 @@ def get_working_ado_items(parent_work_item_id: str = None, top: int = 20) -> Lis
         
         # Step 2: Get detailed work item information including description
         # Limit to first 'top' items and batch requests to avoid 500 errors
+        # Ensure top is an integer
+        top = int(top) if top is not None else 20
         limited_refs = work_item_refs[:top]
         ids = [str(item['id']) for item in limited_refs]
         
