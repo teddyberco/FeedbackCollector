@@ -399,12 +399,18 @@ class ModernFilterSystem {
                 this.updateUrl();
                 this.updateActiveFiltersDisplay();
                 
+                // Handle repeating analysis rendering
+                this.renderRepeatingAnalysis(data.repeating_analysis);
+                
                 // CRITICAL: Preserve state management after AJAX load
                 this.preserveStateManagement();
                 
                 console.log(`✅ Loaded ${data.feedback.length} items (${data.total_count} total)`);
                 if (data.fabric_state_data && Object.keys(data.fabric_state_data).length > 0) {
                     console.log(`🎯 Included ${Object.keys(data.fabric_state_data).length} state records`);
+                }
+                if (data.repeating_analysis) {
+                    console.log(`🔄 Repeating analysis: ${data.repeating_analysis.cluster_count} clusters found`);
                 }
             } else {
                 this.showError(data.message || 'Failed to load filtered data');
@@ -734,7 +740,7 @@ class ModernFilterSystem {
         const url = new URL(window.location);
         
         // Clear existing filter params
-        const filterParams = ['source', 'audience', 'priority', 'state', 'domain', 'sentiment', 'enhanced_category', 'search', 'sort'];
+        const filterParams = ['source', 'audience', 'priority', 'state', 'domain', 'sentiment', 'enhanced_category', 'search', 'sort', 'show_repeating'];
         filterParams.forEach(param => url.searchParams.delete(param));
         
         // Add active filters
@@ -746,6 +752,21 @@ class ModernFilterSystem {
             }
         });
         
+        // Add sort option
+        if (this.currentSort) {
+            url.searchParams.set('sort', this.currentSort);
+        }
+        
+        // Add show_repeating option
+        if (this.showRepeating !== undefined) {
+            url.searchParams.set('show_repeating', this.showRepeating.toString());
+        }
+        
+        // Add search query
+        if (this.searchQuery) {
+            url.searchParams.set('search', this.searchQuery);
+        }
+        
         // Preserve Fabric connection
         if (window.fabricConnected || window.stateManagementEnabled) {
             url.searchParams.set('fabric_connected', 'true');
@@ -753,6 +774,9 @@ class ModernFilterSystem {
         
         // Update URL without reload
         const filterState = Object.fromEntries(this.activeFilters);
+        filterState.sort = this.currentSort;
+        filterState.show_repeating = this.showRepeating;
+        filterState.search = this.searchQuery;
         window.history.pushState({ filters: filterState }, '', url);
     }
     
@@ -1192,16 +1216,97 @@ class ModernFilterSystem {
         this.currentPage = 1; // Reset pagination
         this.fetchFilteredData();
         
-        // Update button states
+        // Update button states - fix the button classes properly
         document.querySelectorAll('[onclick*="updateRepeating"]').forEach(btn => {
-            if (showRepeating) {
-                btn.classList.toggle('btn-info', btn.textContent.includes('Analyze'));
-                btn.classList.toggle('btn-outline-info', btn.textContent.includes('Hide'));
-            } else {
-                btn.classList.toggle('btn-outline-info', btn.textContent.includes('Analyze'));
-                btn.classList.toggle('btn-info', btn.textContent.includes('Hide'));
+            if (btn.textContent.includes('Analyze')) {
+                // This is the "Analyze Repeating Requests" button
+                if (showRepeating) {
+                    btn.classList.remove('btn-outline-info');
+                    btn.classList.add('btn-info');
+                } else {
+                    btn.classList.remove('btn-info');
+                    btn.classList.add('btn-outline-info');
+                }
+            } else if (btn.textContent.includes('Hide')) {
+                // This is the "Hide Analysis" button
+                if (showRepeating) {
+                    btn.classList.remove('btn-info');
+                    btn.classList.add('btn-outline-info');
+                } else {
+                    btn.classList.remove('btn-outline-info');
+                    btn.classList.add('btn-info');
+                }
             }
         });
+    }
+    
+    renderRepeatingAnalysis(analysisData) {
+        // Find or create the repeating analysis section
+        let analysisSection = document.querySelector('.repeating-analysis');
+        
+        if (!this.showRepeating || !analysisData) {
+            // Hide the analysis section if not showing repeating requests or no data
+            if (analysisSection) {
+                analysisSection.style.display = 'none';
+            }
+            return;
+        }
+        
+        if (!analysisSection) {
+            // Create the analysis section if it doesn't exist
+            const container = document.getElementById(this.config.containerId);
+            if (container) {
+                const analysisHtml = `
+                    <div class="repeating-analysis" style="margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px;">
+                        <h5>🔄 Repeating Requests Analysis</h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Summary:</strong></p>
+                                <ul id="analysis-summary">
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Top Repeating Requests:</strong></p>
+                                <div id="top-requests">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('afterbegin', analysisHtml);
+                analysisSection = document.querySelector('.repeating-analysis');
+            }
+        }
+        
+        if (analysisSection) {
+            // Update the analysis content
+            analysisSection.style.display = 'block';
+            
+            // Update summary
+            const summaryList = analysisSection.querySelector('#analysis-summary');
+            if (summaryList) {
+                summaryList.innerHTML = `
+                    <li>Total feedback items: ${analysisData.total_items || 0}</li>
+                    <li>Unique requests: ${analysisData.unique_requests || 0}</li>
+                    <li>Repeating clusters: ${analysisData.cluster_count || 0}</li>
+                    <li>Repetition rate: ${analysisData.repetition_rate || 0}%</li>
+                `;
+            }
+            
+            // Update top requests
+            const topRequestsDiv = analysisSection.querySelector('#top-requests');
+            if (topRequestsDiv && analysisData.top_repeating_requests) {
+                const topRequestsHtml = analysisData.top_repeating_requests.slice(0, 3).map(req => `
+                    <div class="mb-2">
+                        <strong>${req.count}x:</strong> ${req.summary}
+                        <br><small class="text-muted">Audiences: ${req.audiences ? req.audiences.join(', ') : 'N/A'} | Sources: ${req.sources ? req.sources.join(', ') : 'N/A'}</small>
+                    </div>
+                `).join('');
+                topRequestsDiv.innerHTML = topRequestsHtml;
+            }
+            
+            console.log('🔄 Rendered repeating analysis:', analysisData);
+        }
     }
 }
 

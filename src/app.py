@@ -1428,6 +1428,13 @@ def get_filtered_feedback():
         # Clean NaN values before JSON serialization
         paginated_feedback = clean_nan_values(paginated_feedback)
         
+        # Analyze repeating requests if requested
+        repeating_analysis = None
+        if show_repeating and feedback_to_display:
+            from utils import analyze_repeating_requests
+            repeating_analysis = analyze_repeating_requests(feedback_to_display)
+            logger.info(f"AJAX Repeating requests analysis: {repeating_analysis.get('cluster_count', 0)} clusters found")
+        
         # Get filter options for UI updates
         filter_options = extract_filter_options(last_collected_feedback)
         
@@ -1455,6 +1462,7 @@ def get_filtered_feedback():
             'fabric_connected': fabric_connected or is_online_mode,
             'fabric_state_data': fabric_state_data,  # Include state data for proper rendering
             'filter_options': filter_options,
+            'repeating_analysis': repeating_analysis,  # Include repeating analysis for AJAX requests
             'applied_filters': {
                 'source': source_filters,
                 'audience': audience_filters,
