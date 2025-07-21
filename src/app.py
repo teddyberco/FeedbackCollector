@@ -287,7 +287,9 @@ def collect_feedback_route():
                     value = obj.get(key, default)
                     if value is None or (isinstance(value, float) and math.isnan(value)):
                         return default
-                    return str(value) if value != default else default                # Clean the text to remove HTML/CSS formatting
+                    return str(value) if value != default else default
+                
+                # Clean the text to remove HTML/CSS formatting
                 cleaned_title = utils.clean_feedback_text(title)
                 cleaned_description = utils.clean_feedback_text(description) if description and description != 'No description available' else ""
                 
@@ -550,6 +552,21 @@ def feedback_viewer():
     from flask import session
     stored_token = session.get('fabric_bearer_token')  # Bearer token for lakehouse writes only
     
+    # CRITICAL FIX: Reset session state on fresh page load without valid indicators
+    # Check if this is a fresh page load without any connection parameters
+    is_fresh_load = not any([
+        stored_token and stored_token.strip() and stored_token != 'None',
+        fabric_connected_param,
+        request.args.get('fabric_connected') == 'true',
+        request.args.get('states_loaded') == 'true'
+    ])
+    
+    # If it's a fresh load without connection indicators, clear stale session flags
+    if is_fresh_load:
+        logger.info("🧹 FRESH LOAD: Clearing potentially stale session flags")
+        session.pop('states_loaded', None)
+        session.pop('sql_data_applied', None)
+    
     # Check Fabric SQL connection state (for state management and UI features)
     # Use OR logic - if either flag is set, we consider SQL connected
     fabric_sql_connected = session.get('states_loaded', False) or session.get('sql_data_applied', False)
@@ -558,21 +575,24 @@ def feedback_viewer():
     if fabric_connected_param:
         logger.info("🔗 FABRIC CONNECTED parameter detected - Fabric SQL connection active")
         fabric_sql_connected = True
+        # Ensure session flags are set for persistence
+        session['states_loaded'] = True
+        session['sql_data_applied'] = True
         
     # Online mode for lakehouse writes (bearer token based)
     is_online_mode = stored_token and stored_token.strip() and stored_token != 'None'
     
     logger.info(f"Bearer Token Mode: {'ONLINE' if is_online_mode else 'OFFLINE'} - Token: {'Present' if stored_token else 'None'}")
     logger.info(f"Fabric SQL Connected: {fabric_sql_connected} - Session states_loaded: {session.get('states_loaded', False)}, sql_data_applied: {session.get('sql_data_applied', False)}")
+    logger.info(f"Fresh Load: {is_fresh_load}, Fabric Connected Param: {fabric_connected_param}")
     
-    # CRITICAL FIX: For normal collection viewing (without Fabric connection), we're in OFFLINE mode
-    # Only set online mode if we actually have a bearer token AND are connected to Fabric
-    if not is_online_mode:
-        fabric_sql_connected = False
-        # Clear potentially stale session flags when in offline mode
-        session.pop('states_loaded', None)
-        session.pop('sql_data_applied', None)
-        logger.info("🔒 OFFLINE MODE: Forcing fabric_sql_connected to False and clearing session flags")
+    # IMPROVED FIX: Maintain fabric_sql_connected state independently from bearer token
+    # This allows state management even when bearer token expires but SQL connection was established
+    if fabric_sql_connected:
+        logger.info("🔄 FABRIC SQL MODE: State management enabled via SQL connection")
+    elif not is_online_mode:
+        # Only clear session flags if we have no connection indicators at all
+        logger.info("🔒 OFFLINE MODE: No connection indicators found")
     
     # If no feedback in memory, try loading from CSV (OFFLINE MODE)
     if not last_collected_feedback:
@@ -1041,6 +1061,37 @@ def feedback_viewer():
                            selected_sentiments=sentiment_filters,
                            selected_states=state_filters
                            )
+
+@app.route('/api/session_state', methods=['GET'])
+def get_session_state():
+    """Get current session state for frontend"""
+    from flask import session
+    stored_token = session.get('fabric_bearer_token')
+    fabric_sql_connected = session.get('states_loaded', False) or session.get('sql_data_applied', False)
+    
+    return jsonify({
+        'has_bearer_token': bool(stored_token and stored_token.strip() and stored_token != 'None'),
+        'fabric_sql_connected': fabric_sql_connected,
+        'states_loaded': session.get('states_loaded', False),
+        'sql_data_applied': session.get('sql_data_applied', False)
+    })
+
+@app.route('/api/clear_session', methods=['POST'])
+def clear_session_state():
+    """Clear session state to reset connection status"""
+    from flask import session
+    
+    # Clear all Fabric-related session flags
+    session.pop('fabric_bearer_token', None)
+    session.pop('states_loaded', None)
+    session.pop('sql_data_applied', None)
+    
+    logger.info("🧹 SESSION CLEARED: All Fabric session flags cleared")
+    
+    return jsonify({
+        'status': 'success',
+        'message': 'Session state cleared successfully'
+    })
 
 @app.route('/api/write_to_fabric', methods=['POST'])
 def write_to_fabric_route():
@@ -2210,14 +2261,6 @@ def update_feedback_state_sql():
 def update_feedback_domain():
     """Update the primary domain of a feedback item"""
     try:
-        # Get bearer token for user identification
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({'status': 'error', 'message': 'Authorization header required'}), 401
-        
-        # Extract user from token
-        user = state_manager.extract_user_from_token(auth_header)
-        
         # Get request data
         data = request.get_json()
         if not data:
@@ -2229,24 +2272,47 @@ def update_feedback_domain():
         if not feedback_id or not new_domain:
             return jsonify({'status': 'error', 'message': 'feedback_id and domain are required'}), 400
         
-        # Create domain update
-        update_data = state_manager.update_feedback_domain(feedback_id, new_domain, user)
+        logger.info(f"🔄 Updating domain for feedback {feedback_id}: {new_domain}")
         
-        # For now, update in memory (in production, this would update Fabric table)
-        global last_collected_feedback
-        for item in last_collected_feedback:
-            if item.get('Feedback_ID') == feedback_id:
-                item.update(update_data)
-                break
+        # Import SQL writer and update immediately
+        import fabric_sql_writer
         
-        logger.info(f"Updated feedback {feedback_id} domain to {new_domain} by {user}")
+        # Create state change record for domain update
+        state_change = {
+            'feedback_id': feedback_id,
+            'domain': new_domain,
+            'updated_by': 'user'  # TODO: Get from session or context
+        }
         
-        return jsonify({
-            'status': 'success',
-            'message': f'Feedback domain updated to {new_domain}',
-            'data': update_data
-        })
+        logger.info(f"🔄 Updating domain for feedback {feedback_id}: {state_change}")
         
+        # Write to SQL database immediately
+        writer = fabric_sql_writer.FabricSQLWriter()
+        success = writer.update_feedback_states([state_change], use_token=False)
+        
+        if success:
+            logger.info(f"✅ Successfully updated domain for feedback {feedback_id} in SQL database")
+            
+            # Update in-memory cache
+            global last_collected_feedback
+            for item in last_collected_feedback:
+                if item.get('Feedback_ID') == feedback_id:
+                    item['Primary_Domain'] = new_domain
+                    item['Last_Updated'] = datetime.now().isoformat()
+                    break
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'Feedback domain updated to {new_domain}',
+                'feedback_id': feedback_id,
+                'domain': new_domain
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to update domain in SQL database'
+            }), 500
+            
     except Exception as e:
         logger.error(f"Error updating feedback domain: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
@@ -2255,14 +2321,6 @@ def update_feedback_domain():
 def update_feedback_notes():
     """Update the notes of a feedback item"""
     try:
-        # Get bearer token for user identification
-        auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            return jsonify({'status': 'error', 'message': 'Authorization header required'}), 401
-        
-        # Extract user from token
-        user = state_manager.extract_user_from_token(auth_header)
-        
         # Get request data
         data = request.get_json()
         if not data:
@@ -2274,29 +2332,50 @@ def update_feedback_notes():
         if not feedback_id:
             return jsonify({'status': 'error', 'message': 'feedback_id is required'}), 400
         
-        # Create notes update
-        now = datetime.now().isoformat()
-        update_data = {
-            'Feedback_ID': feedback_id,
-            'Feedback_Notes': notes,
-            'Last_Updated': now,
-            'Updated_By': user
+        logger.info(f"🔄 Updating notes for feedback {feedback_id}: {notes[:50]}...")
+        
+        # Import SQL writer and update immediately
+        import fabric_sql_writer
+        
+        # Create state change record for notes update
+        state_change = {
+            'feedback_id': feedback_id,
+            'notes': notes,
+            'updated_by': 'user'  # TODO: Get from session or context
         }
         
-        # For now, update in memory (in production, this would update Fabric table)
-        global last_collected_feedback
-        for item in last_collected_feedback:
-            if item.get('Feedback_ID') == feedback_id:
-                item.update(update_data)
-                break
+        logger.info(f"🔄 Updating notes for feedback {feedback_id}: {state_change}")
         
-        logger.info(f"Updated feedback {feedback_id} notes by {user}")
+        # Write to SQL database immediately
+        writer = fabric_sql_writer.FabricSQLWriter()
+        success = writer.update_feedback_states([state_change], use_token=False)
         
-        return jsonify({
-            'status': 'success',
-            'message': 'Feedback notes updated',
-            'data': update_data
-        })
+        if success:
+            logger.info(f"✅ Successfully updated notes for feedback {feedback_id} in SQL database")
+            
+            # Update in-memory cache
+            global last_collected_feedback
+            for item in last_collected_feedback:
+                if item.get('Feedback_ID') == feedback_id:
+                    item['Feedback_Notes'] = notes
+                    item['Last_Updated'] = datetime.now().isoformat()
+                    break
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Notes updated successfully',
+                'feedback_id': feedback_id,
+                'notes': notes
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to update notes in SQL database'
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"Error updating feedback notes: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
         
     except Exception as e:
         logger.error(f"Error updating feedback notes: {e}")

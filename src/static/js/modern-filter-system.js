@@ -383,7 +383,8 @@ class ModernFilterSystem {
                 console.log('🔧 AJAX: Preserving Fabric connection state');
             }
             
-            console.log('🔄 Fetching filtered data:', params.toString());
+            console.log('🔄 Fetching filtered data with activeFilters:', Array.from(this.activeFilters.entries()));
+            console.log('🔄 Fetching filtered data with params:', params.toString());
             
             const response = await fetch(`${this.config.apiEndpoint}?${params.toString()}`);
             const data = await response.json();
@@ -1212,8 +1213,13 @@ class ModernFilterSystem {
     
     updateRepeating(showRepeating) {
         console.log('🔄 Updating repeating requests to:', showRepeating);
+        console.log('🔍 DEBUG: Current activeFilters before toggle:', Array.from(this.activeFilters.entries()));
+        console.log('🔍 DEBUG: Current URL before toggle:', window.location.search);
+        
         this.showRepeating = showRepeating;
         this.currentPage = 1; // Reset pagination
+        
+        console.log('🔍 DEBUG: About to call fetchFilteredData with activeFilters:', Array.from(this.activeFilters.entries()));
         this.fetchFilteredData();
         
         // Update button states - fix the button classes properly
