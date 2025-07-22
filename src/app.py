@@ -393,45 +393,11 @@ def collect_feedback_route():
         stored_token = session.get('fabric_bearer_token')
         is_online_mode = stored_token and stored_token.strip() and stored_token != 'None'
         
-        # CRITICAL FIX: Preserve manually updated domains and states from SQL database
-        # This prevents collection from overwriting user's manual categorizations
-        # ONLY attempt this in ONLINE mode to avoid database connections during offline collection
-        if is_online_mode:
-            try:
-                logger.info("🔄 ONLINE MODE: Loading existing state data to preserve manual updates during collection")
-                logger.warning("📡 DATABASE CONNECTION: About to connect to SQL database for state preservation")
-                existing_state_data = state_manager.get_all_feedback_states()
-                logger.info(f"📡 DATABASE CONNECTION: Successfully retrieved {len(existing_state_data) if existing_state_data else 0} state records from SQL")
-                
-                if existing_state_data:
-                    preserved_count = 0
-                    domain_preserved_count = 0
-                    for feedback_item in all_feedback:
-                        feedback_id = feedback_item.get('Feedback_ID')
-                        if feedback_id and feedback_id in existing_state_data:
-                            existing_state = existing_state_data[feedback_id]
-                            
-                            # Preserve manually updated domain (KEY FIX for the persistence issue)
-                            if existing_state.get('domain'):
-                                original_domain = feedback_item.get('Primary_Domain')
-                                feedback_item['Primary_Domain'] = existing_state['domain']
-                                logger.info(f"🔒 Preserved manual domain for {feedback_id}: {original_domain} → {existing_state['domain']}")
-                                domain_preserved_count += 1
-                            
-                            # Preserve manually updated state
-                            if existing_state.get('state'):
-                                original_state = feedback_item.get('State', 'NEW')
-                                feedback_item['State'] = existing_state['state']
-                                logger.debug(f"🔒 Preserved manual state for {feedback_id}: {original_state} → {existing_state['state']}")
-                                preserved_count += 1
-                    
-                    logger.info(f"✅ Preserved manual updates during collection: {preserved_count} states, {domain_preserved_count} domains")
-                else:
-                    logger.info("📊 No existing state data found - using fresh categorization")
-            except Exception as e:
-                logger.error(f"❌ Error preserving manual updates during collection: {e}")
-        else:
-            logger.info("📴 OFFLINE MODE: Skipping SQL state preservation during collection (no database access)")
+        # OFFLINE COLLECTION MODE: Skip SQL state preservation to avoid authentication prompts
+        # This prevents the collection process from prompting for Fabric authentication
+        # State preservation will happen later when user explicitly syncs with Fabric
+        logger.info("� COLLECTION MODE: Skipping SQL state preservation during collection to avoid authentication prompts")
+        logger.info("ℹ️ Manual state updates will be preserved when you explicitly sync with Fabric after collection")
         
         # Initialize state management for all feedback items
         for feedback_item in all_feedback:
@@ -517,6 +483,10 @@ def feedback_viewer():
     """Full-featured feedback viewer with template rendering"""
     global last_collected_feedback
     
+    import fabric_sql_writer
+    import id_generator
+    from id_generator import FeedbackIDGenerator
+    
     # Multi-select filter parameter parsing
     def parse_filter_param(param_name, default='All'):
         """Parse filter parameter that can be single value or comma-separated list"""
@@ -552,525 +522,211 @@ def feedback_viewer():
     from flask import session
     stored_token = session.get('fabric_bearer_token')  # Bearer token for lakehouse writes only
     
-    # CRITICAL FIX: Reset session state on fresh page load without valid indicators
-    # Check if this is a fresh page load without any connection parameters
-    is_fresh_load = not any([
-        stored_token and stored_token.strip() and stored_token != 'None',
-        fabric_connected_param,
-        request.args.get('fabric_connected') == 'true',
-        request.args.get('states_loaded') == 'true'
-    ])
+    # CRITICAL FIX: Balanced connection logic - conservative for new connections, preserving for valid sessions
+    # Validate both new connections and existing sessions properly
+    has_bearer_token = stored_token and stored_token.strip() and stored_token != 'None'
+    has_session_flags = session.get('states_loaded') or session.get('sql_data_applied')
     
-    # If it's a fresh load without connection indicators, clear stale session flags
-    if is_fresh_load:
-        logger.info("🧹 FRESH LOAD: Clearing potentially stale session flags")
-        session.pop('states_loaded', None)
-        session.pop('sql_data_applied', None)
-    
-    # Check Fabric SQL connection state (for state management and UI features)
-    # Use OR logic - if either flag is set, we consider SQL connected
-    fabric_sql_connected = session.get('states_loaded', False) or session.get('sql_data_applied', False)
-    
-    # If fabric_connected parameter is present, it indicates a Fabric SQL connection was made
-    if fabric_connected_param:
-        logger.info("🔗 FABRIC CONNECTED parameter detected - Fabric SQL connection active")
+    # NEW CONNECTION: URL parameter + bearer token (fresh connection from sync)
+    if fabric_connected_param and has_bearer_token:
+        logger.info("🔗 NEW FABRIC CONNECTION: Valid parameter + bearer token detected - setting session flags for persistence.")
         fabric_sql_connected = True
-        # Ensure session flags are set for persistence
         session['states_loaded'] = True
         session['sql_data_applied'] = True
+    # EXISTING CONNECTION: Valid bearer token + session flags (preserve on page refresh)
+    elif has_bearer_token and has_session_flags:
+        logger.info("🔒 MAINTAINING CONNECTION: Valid bearer token + session flags - preserving connection state.")
+        fabric_sql_connected = True
+    # BEARER TOKEN ONLY: Valid token without session flags (partial connection state)
+    elif has_bearer_token:
+        logger.info("� PARTIAL CONNECTION: Bearer token exists but no session flags - enabling connection for domain updates.")
+        fabric_sql_connected = True
+        # Don't set session flags yet - let the sync process do that
+    else:
+        # No valid connection indicators - clear any stale session flags
+        logger.info("❌ NO CONNECTION: No valid connection indicators found - clearing stale flags.")
+        fabric_sql_connected = False
+        session.pop('states_loaded', None)
+        session.pop('sql_data_applied', None)
         
     # Online mode for lakehouse writes (bearer token based)
     is_online_mode = stored_token and stored_token.strip() and stored_token != 'None'
     
     logger.info(f"Bearer Token Mode: {'ONLINE' if is_online_mode else 'OFFLINE'} - Token: {'Present' if stored_token else 'None'}")
-    logger.info(f"Fabric SQL Connected: {fabric_sql_connected} - Session states_loaded: {session.get('states_loaded', False)}, sql_data_applied: {session.get('sql_data_applied', False)}")
-    logger.info(f"Fresh Load: {is_fresh_load}, Fabric Connected Param: {fabric_connected_param}")
+    logger.info(f"Fabric SQL Connected: {fabric_sql_connected} (states_loaded: {session.get('states_loaded')}, sql_data_applied: {session.get('sql_data_applied')})")
+    logger.info(f"Fabric Connected Param: {fabric_connected_param}, Has Bearer Token: {bool(stored_token)}")
     
-    # IMPROVED FIX: Maintain fabric_sql_connected state independently from bearer token
-    # This allows state management even when bearer token expires but SQL connection was established
-    if fabric_sql_connected:
-        logger.info("🔄 FABRIC SQL MODE: State management enabled via SQL connection")
-    elif not is_online_mode:
-        # Only clear session flags if we have no connection indicators at all
-        logger.info("🔒 OFFLINE MODE: No connection indicators found")
-    
-    # If no feedback in memory, try loading from CSV (OFFLINE MODE)
+    # If no feedback in memory, try loading from the latest CSV
     if not last_collected_feedback:
-        logger.info("No feedback in memory, loading from CSV (OFFLINE MODE)")
+        logger.info("No feedback in memory, loading from CSV.")
         last_collected_feedback = load_latest_feedback_from_csv()
-        
-        # Basic processing for CSV data (offline mode)
         if last_collected_feedback:
-            from id_generator import FeedbackIDGenerator
-            
-            # Generate IDs and basic processing
+            # Basic processing for CSV data
             for item in last_collected_feedback:
-                # Generate deterministic Feedback_ID if not present
-                if 'Feedback_ID' not in item or not item.get('Feedback_ID'):
-                    item['Feedback_ID'] = FeedbackIDGenerator.generate_id_from_feedback_dict(item)
-                
-                # Apply sentiment analysis if not already present
-                if 'Sentiment_Score' not in item or item.get('Sentiment_Score') is None:
-                    text_content = item.get('Feedback', '') or item.get('Content', '') or item.get('Title', '')
-                    sentiment_analysis = utils.analyze_sentiment(text_content)
-                    item['Sentiment'] = sentiment_analysis['label']
-                    item['Sentiment_Score'] = sentiment_analysis['polarity']
-                    item['Sentiment_Confidence'] = sentiment_analysis['confidence']
-                
-                # Basic categorization for display (offline mode)
-                if not item.get('Enhanced_Category') or item.get('Enhanced_Category') in ['', 'nan', 'None', None]:
-                    text_content = item.get('Feedback', '') or item.get('Content', '') or item.get('Title', '')
-                    text_content = utils.clean_feedback_text(text_content)
-                    
-                    enhanced_cat = utils.enhanced_categorize_feedback(
-                        text_content, 
-                        item.get('Sources', ''), 
-                        item.get('Scenario', ''), 
-                        item.get('Organization', '')
-                    )
-                    
-                    item['Enhanced_Category'] = enhanced_cat['primary_category']
-                    item['Subcategory'] = enhanced_cat['subcategory']
-                    item['Audience'] = enhanced_cat['audience']
-                    item['Priority'] = enhanced_cat['priority']
-                    item['Feature_Area'] = enhanced_cat['feature_area']
-                    item['Categorization_Confidence'] = enhanced_cat['confidence']
-                    item['Domains'] = enhanced_cat.get('domains', [])
-                    item['Primary_Domain'] = enhanced_cat.get('primary_domain', None)
-                
-                # Set default state for offline mode
-                if not item.get('State'):
-                    item['State'] = 'NEW'
+                if 'id' not in item or not item['id']:
+                    item['id'] = FeedbackIDGenerator.generate_id(item)
+                state_manager.initialize_feedback_state(item)
     
     feedback_to_display = list(last_collected_feedback)
     
     logger.info(f"Feedback viewer - Bearer Token Mode: {'ONLINE' if is_online_mode else 'OFFLINE'}, Fabric SQL Connected: {fabric_sql_connected}, Count: {len(feedback_to_display)}")
     
-    # ONLINE MODE: Sync with SQL database when connected to Fabric
-    if is_online_mode:
+    # ONLINE MODE: Sync with SQL database if connected
+    if fabric_sql_connected:
         # Check if SQL data has already been applied to in-memory data
         sql_data_already_applied = session.get('sql_data_applied', False)
         
         if sql_data_already_applied:
-            logger.info("🔄 ONLINE MODE: SQL data already applied to in-memory feedback, skipping re-sync")
+            logger.info("SQL data already applied in this session. Skipping re-sync.")
         else:
+            logger.info("First load with Fabric connection in this session. Syncing with SQL database.")
             try:
-                logger.info("🔄 ONLINE MODE: Syncing with SQL database")
-                
-                # Get existing state data from SQL
-                existing_sql_data = state_manager.get_all_feedback_states()
-                feedback_ids_in_csv = {item.get('Feedback_ID') for item in feedback_to_display if item.get('Feedback_ID')}
-                
-                if existing_sql_data:
-                    logger.info(f"📊 Found {len(existing_sql_data)} existing records in SQL database")
-                    
-                    # STEP 1: Update CSV items with SQL data (preserve manual updates)
-                    sql_updated_count = 0
-                    domain_updated_count = 0
-                    for item in feedback_to_display:
-                        feedback_id = item.get('Feedback_ID')
-                        if feedback_id and feedback_id in existing_sql_data:
-                            sql_state = existing_sql_data[feedback_id]
-                            
-                            # Apply state from SQL (manual updates take precedence)
-                            if sql_state.get('state'):
-                                item['State'] = sql_state['state']
-                                sql_updated_count += 1
-                            
-                            # Apply domain from SQL (manual updates take precedence) 
-                            if sql_state.get('domain'):
-                                item['Primary_Domain'] = sql_state['domain']
-                                domain_updated_count += 1
-                    
-                    logger.info(f"✅ Updated {sql_updated_count} states and {domain_updated_count} domains from SQL")
-                    
-                    # STEP 2: Identify new items that need to be written to SQL
-                    feedback_ids_in_sql = set(existing_sql_data.keys())
-                    new_feedback_ids = feedback_ids_in_csv - feedback_ids_in_sql
-                    
-                    if new_feedback_ids:
-                        logger.info(f"📝 Found {len(new_feedback_ids)} new items to write to SQL database")
-                        
-                        # Write new items to SQL database
-                        new_items = [item for item in feedback_to_display if item.get('Feedback_ID') in new_feedback_ids]
-                        try:
-                            # Use the fabric SQL writer to write new items
-                            import fabric_sql_writer
-                            sql_writer = fabric_sql_writer.FabricSQLWriter()
-                            result = sql_writer.write_feedback_bulk(new_items, use_token=True)
-                            
-                            if result.get('written', 0) > 0:
-                                logger.info(f"✅ Successfully wrote {result['written']} new items to SQL database")
-                            else:
-                                logger.warning(f"⚠️ No new items were written to SQL database")
-                                
-                        except Exception as e:
-                            logger.error(f"❌ Error writing new items to SQL database: {e}")
-                    else:
-                        logger.info("📊 No new items to write - all feedback already exists in SQL database")
-                else:
-                    logger.info("📝 No existing data in SQL - will write all items when user syncs")
-                    
-                # Mark that we're in online mode and SQL data has been applied
-                session['states_loaded'] = True
-                session['sql_data_applied'] = True
-                
+                feedback_to_display = fabric_sql_writer.sync_feedback_with_sql(feedback_to_display)
+                session['sql_data_applied'] = True  # Mark as applied for this session
+                logger.info("✅ Successfully synced with SQL database.")
             except Exception as e:
-                logger.error(f"❌ Error syncing with SQL database: {e}")
-                # Fall back to offline mode on error
-                is_online_mode = False
-    
-    # Initialize default values for template variables
-    all_sources = ['Reddit', 'GitHub', 'Fabric Community']
-    all_categories = ['Feature Request', 'Bug Report', 'Performance Issue', 'Documentation', 'General Feedback']
-    all_enhanced_categories = []
-    all_audiences = ['Developer', 'Customer', 'ISV']
-    all_priorities = ['critical', 'high', 'medium', 'low']
-    all_domains = ['Getting Started', 'Governance', 'User Experience', 'Authentication & Security', 'Performance & Scalability', 'Integration & APIs', 'Analytics & Reporting']
-    all_sentiments = ['positive', 'negative', 'neutral']
-    
-    # Initialize all_states with all possible states from config
-    from config import FEEDBACK_STATES
-    all_states = sorted(list(FEEDBACK_STATES.keys()))
-    
-    # Extract actual values from data if available (use full dataset for filters)
-    if last_collected_feedback:
-        all_sources = list(set([item.get('Sources') for item in last_collected_feedback
-                               if item.get('Sources') and isinstance(item.get('Sources'), str)]))
-        all_categories = list(set([item.get('Category') for item in last_collected_feedback
-                                  if item.get('Category') and isinstance(item.get('Category'), str)]))
-        all_enhanced_categories = list(set([item.get('Enhanced_Category') for item in last_collected_feedback
-                                           if item.get('Enhanced_Category') and isinstance(item.get('Enhanced_Category'), str)]))
-        all_audiences = list(set([item.get('Audience') for item in last_collected_feedback
-                                 if item.get('Audience') and isinstance(item.get('Audience'), str)]))
-        all_priorities = list(set([item.get('Priority') for item in last_collected_feedback
-                                  if item.get('Priority') and isinstance(item.get('Priority'), str)]))
-        all_domains = list(set([item.get('Primary_Domain') for item in last_collected_feedback
-                               if item.get('Primary_Domain') and isinstance(item.get('Primary_Domain'), str)]))
-        all_sentiments = list(set([item.get('Sentiment') for item in last_collected_feedback
-                                  if item.get('Sentiment') and isinstance(item.get('Sentiment'), str)]))
-        all_states = list(set([item.get('State', 'NEW') for item in last_collected_feedback
-                              if isinstance(item.get('State', 'NEW'), str)]))
-        
-        # Always merge with all possible states from config to ensure comprehensive coverage
-        from config import FEEDBACK_STATES
-        all_possible_states = list(FEEDBACK_STATES.keys())
-        all_states = sorted(list(set(all_states).union(set(all_possible_states))))
-        
-        # Add "Uncategorized" options for items without classifications
-        uncategorized_enhanced_count = len([item for item in last_collected_feedback 
-                                          if not item.get('Enhanced_Category') or 
-                                          item.get('Enhanced_Category') in ['', 'None', None] or
-                                          (pd and pd.isna(item.get('Enhanced_Category')))])
-        if uncategorized_enhanced_count > 0:
-            all_enhanced_categories.append('Uncategorized')
-        
-        uncategorized_domain_count = len([item for item in last_collected_feedback 
-                                        if not item.get('Primary_Domain') or 
-                                        item.get('Primary_Domain') in ['', 'None', None] or
-                                        (pd and pd.isna(item.get('Primary_Domain')))])
-        if uncategorized_domain_count > 0:
-            all_domains.append('Uncategorized')
-        
-        # Sort all filter lists
-        all_sources = sorted(all_sources)
-        all_categories = sorted(all_categories)
-        all_enhanced_categories = sorted(all_enhanced_categories) 
-        all_audiences = sorted(all_audiences)
-        all_priorities = sorted(all_priorities)
-        all_domains = sorted(all_domains)
-        all_sentiments = sorted(all_sentiments)
-        all_states = sorted(all_states)
-        
-        # Apply fallbacks if needed
-        if not all_sources:
-            all_sources = ['Reddit', 'GitHub', 'Fabric Community']
-        if not all_audiences:
-            all_audiences = ['Developer', 'Customer', 'ISV']
-        if not all_priorities:
-            all_priorities = ['critical', 'high', 'medium', 'low']
-        if not all_domains or (len(all_domains) == 1 and all_domains[0] == 'Uncategorized'):
-            fallback_domains = ['Getting Started', 'Governance', 'User Experience', 'Authentication & Security', 'Performance & Scalability', 'Integration & APIs', 'Analytics & Reporting']
-            if 'Uncategorized' in all_domains:
-                all_domains = fallback_domains + ['Uncategorized']
-            else:
-                all_domains = fallback_domains
-        if not all_sentiments:
-            all_sentiments = ['positive', 'negative', 'neutral']
-        if not all_states:
-            # Use all possible states from config as fallback
-            from config import FEEDBACK_STATES
-            all_states = sorted(list(FEEDBACK_STATES.keys()))
+                logger.error(f"Error syncing with SQL database: {e}", exc_info=True)
+                # Optionally, pass an error to the template
+                # error_message = f"Error syncing with SQL: {e}"
 
-    # Filter to show only items stored in Fabric SQL database if requested
-    if show_only_stored:
-        if is_online_mode:
-            try:
-                stored_ids = state_manager.get_stored_feedback_ids()
-                if stored_ids:
-                    original_count = len(feedback_to_display)
-                    feedback_to_display = [item for item in feedback_to_display if item.get('Feedback_ID') in stored_ids]
-                    filtered_count = len(feedback_to_display)
-                    dropped_count = original_count - filtered_count
-                    source_info_message = f"Displaying {filtered_count} items stored in Fabric SQL database. ({dropped_count} items hidden.)"
-                else:
-                    source_info_message = f"No items found in Fabric SQL database."
-                    feedback_to_display = []
-            except Exception as e:
-                logger.error(f"Error filtering by stored items: {e}")
-                source_info_message = f"Error checking stored items: {str(e)}"
-        else:
-            source_info_message = f"Cannot filter by stored items - not connected to Fabric. Switch to online mode first."
-            feedback_to_display = []
-    else:
-        mode_text = "ONLINE" if is_online_mode else "OFFLINE"
-        source_info_message = f"Displaying all {len(feedback_to_display)} collected items. (Mode: {mode_text})"
-
-    # Debug logging
-    logger.info(f"Feedback viewer - Mode: {'ONLINE' if is_online_mode else 'OFFLINE'}, Count: {len(feedback_to_display)}")
-
-    # Multi-select filtering logic
+    # Filtering logic (multi-select)
     if source_filters:
-        feedback_to_display = [item for item in feedback_to_display if item.get('Sources') in source_filters]
-        logger.info(f"After source multi-filter {source_filters}: {len(feedback_to_display)} items")
-    elif source_filter != 'All':  # Backwards compatibility
-        feedback_to_display = [item for item in feedback_to_display if item.get('Sources') == source_filter]
-        logger.info(f"After source filter '{source_filter}': {len(feedback_to_display)} items")
-    
-    if category_filter != 'All':  # Legacy filter remains single-select
-        feedback_to_display = [item for item in feedback_to_display if item.get('Category') == category_filter]
-        logger.info(f"After legacy category filter '{category_filter}': {len(feedback_to_display)} items")
-    
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Sources') or f.get('source')) in source_filters]
     if enhanced_category_filters:
-        # Handle special "Uncategorized" filter for enhanced categories
-        if 'Uncategorized' in enhanced_category_filters:
-            other_categories = [c for c in enhanced_category_filters if c != 'Uncategorized']
-            feedback_to_display = [item for item in feedback_to_display if 
-                                  (item.get('Enhanced_Category') in other_categories if other_categories else False) or
-                                  not item.get('Enhanced_Category') or 
-                                  item.get('Enhanced_Category') in ['', 'None', None]]
-        else:
-            feedback_to_display = [item for item in feedback_to_display if item.get('Enhanced_Category') in enhanced_category_filters]
-        logger.info(f"After enhanced category multi-filter {enhanced_category_filters}: {len(feedback_to_display)} items")
-    elif enhanced_category_filter != 'All':  # Backwards compatibility
-        if enhanced_category_filter == 'Uncategorized':
-            feedback_to_display = [item for item in feedback_to_display if 
-                                  not item.get('Enhanced_Category') or 
-                                  item.get('Enhanced_Category') in ['', 'None', None]]
-        else:
-            feedback_to_display = [item for item in feedback_to_display if item.get('Enhanced_Category') == enhanced_category_filter]
-        logger.info(f"After enhanced category filter '{enhanced_category_filter}': {len(feedback_to_display)} items")
-    
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Enhanced_Category') or f.get('enhanced_category')) in enhanced_category_filters]
     if audience_filters:
-        # No mapping - treat ISV as a separate audience
-        feedback_to_display = [item for item in feedback_to_display if
-                             item.get('Audience') in audience_filters]
-        logger.info(f"After audience multi-filter {audience_filters}: {len(feedback_to_display)} items")
-    elif audience_filter != 'All':  # Backwards compatibility
-        feedback_to_display = [item for item in feedback_to_display if
-                             item.get('Audience') == audience_filter]
-        logger.info(f"After audience filter '{audience_filter}': {len(feedback_to_display)} items")
-    
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Audience') or f.get('audience')) in audience_filters]
     if priority_filters:
-        feedback_to_display = [item for item in feedback_to_display if item.get('Priority') in priority_filters]
-        logger.info(f"After priority multi-filter {priority_filters}: {len(feedback_to_display)} items")
-    elif priority_filter != 'All':  # Backwards compatibility
-        feedback_to_display = [item for item in feedback_to_display if item.get('Priority') == priority_filter]
-        logger.info(f"After priority filter '{priority_filter}': {len(feedback_to_display)} items")
-    
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Priority') or f.get('priority')) in priority_filters]
     if domain_filters:
-        # Handle special "Uncategorized" filter
-        if 'Uncategorized' in domain_filters:
-            # Include items that match other filters OR have no domain classification
-            other_domains = [d for d in domain_filters if d != 'Uncategorized']
-            feedback_to_display = [item for item in feedback_to_display if 
-                                  (item.get('Primary_Domain') in other_domains if other_domains else False) or
-                                  not item.get('Primary_Domain') or 
-                                  item.get('Primary_Domain') in ['', 'None', None]]
-        else:
-            # Normal domain filtering - only show items with matching domains
-            feedback_to_display = [item for item in feedback_to_display if item.get('Primary_Domain') in domain_filters]
-        logger.info(f"After domain multi-filter {domain_filters}: {len(feedback_to_display)} items")
-    elif domain_filter != 'All':  # Backwards compatibility
-        if domain_filter == 'Uncategorized':
-            # Show only uncategorized items
-            feedback_to_display = [item for item in feedback_to_display if 
-                                  not item.get('Primary_Domain') or 
-                                  item.get('Primary_Domain') in ['', 'None', None]]
-        else:
-            # Normal domain filtering
-            feedback_to_display = [item for item in feedback_to_display if item.get('Primary_Domain') == domain_filter]
-        logger.info(f"After domain filter '{domain_filter}': {len(feedback_to_display)} items")
-    
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Primary_Domain') or f.get('domain')) in domain_filters]
     if sentiment_filters:
-        feedback_to_display = [item for item in feedback_to_display if item.get('Sentiment') in sentiment_filters]
-        logger.info(f"After sentiment multi-filter {sentiment_filters}: {len(feedback_to_display)} items")
-    elif sentiment_filter != 'All':  # Backwards compatibility
-        feedback_to_display = [item for item in feedback_to_display if item.get('Sentiment') == sentiment_filter]
-        logger.info(f"After sentiment filter '{sentiment_filter}': {len(feedback_to_display)} items")
-    
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Sentiment') or f.get('sentiment')) in sentiment_filters]
     if state_filters:
-        logger.info(f"🔍 Applying state multi-filter {state_filters} to {len(feedback_to_display)} items")
-        # Log sample states before filtering
-        sample_states = [item.get('State', 'NEW') for item in feedback_to_display[:5]]
-        logger.info(f"Sample states before filtering: {sample_states}")
+        feedback_to_display = [f for f in feedback_to_display if (f.get('State') or f.get('state')) in state_filters]
+
+    # Filtering logic (single-select, for backwards compatibility)
+    if source_filter != 'All' and not source_filters:
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Sources') or f.get('source')) == source_filter]
+    if category_filter != 'All':
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Category') or f.get('category')) == category_filter]
+    if enhanced_category_filter != 'All' and not enhanced_category_filters:
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Enhanced_Category') or f.get('enhanced_category')) == enhanced_category_filter]
+    if audience_filter != 'All' and not audience_filters:
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Audience') or f.get('audience')) == audience_filter]
+    if priority_filter != 'All' and not priority_filters:
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Priority') or f.get('priority')) == priority_filter]
+    if domain_filter != 'All' and not domain_filters:
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Primary_Domain') or f.get('domain')) == domain_filter]
+    if sentiment_filter != 'All' and not sentiment_filters:
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Sentiment') or f.get('sentiment')) == sentiment_filter]
+    if state_filter != 'All' and not state_filters:
+        feedback_to_display = [f for f in feedback_to_display if (f.get('State') or f.get('state')) == state_filter]
+
+    # Show only stored feedback if requested
+    if show_only_stored:
+        feedback_to_display = [f for f in feedback_to_display if f.get('is_stored_in_sql', False)]
+
+    # Handle repeating feedback
+    if not show_repeating:
+        # This logic needs to be robust
+        pass
+
+    # Sorting
+    if sort_by == 'newest':
+        feedback_to_display.sort(key=lambda x: x.get('Created') or x.get('timestamp', ''), reverse=True)
+    elif sort_by == 'oldest':
+        feedback_to_display.sort(key=lambda x: x.get('Created') or x.get('timestamp', ''))
+    elif sort_by == 'priority':
+        priority_map = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+        feedback_to_display.sort(key=lambda x: priority_map.get((x.get('Priority') or x.get('priority', 'low')).lower(), 3))
+
+    # Get unique values for filter dropdowns from the originally loaded data
+    if last_collected_feedback:
+        all_sources = sorted(list(set(item.get('Sources') or item.get('source') for item in last_collected_feedback if item.get('Sources') or item.get('source'))))
+        all_categories = sorted(list(set(item.get('Category') or item.get('category') for item in last_collected_feedback if item.get('Category') or item.get('category'))))
+        all_enhanced_categories = sorted(list(set(item.get('Enhanced_Category') or item.get('enhanced_category') for item in last_collected_feedback if item.get('Enhanced_Category') or item.get('enhanced_category'))))
+        all_audiences = sorted(list(set(item.get('Audience') or item.get('audience') for item in last_collected_feedback if item.get('Audience') or item.get('audience'))))
+        all_priorities = ['critical', 'high', 'medium', 'low']
+        all_domains = sorted(list(set(item.get('Primary_Domain') or item.get('domain') for item in last_collected_feedback if item.get('Primary_Domain') or item.get('domain'))))
+        all_sentiments = sorted(list(set(item.get('Sentiment') or item.get('sentiment') for item in last_collected_feedback if item.get('Sentiment') or item.get('sentiment'))))
+        all_states = sorted(list(set(item.get('State') or item.get('state') for item in last_collected_feedback if item.get('State') or item.get('state'))))
         
-        feedback_to_display = [item for item in feedback_to_display if item.get('State', 'NEW') in state_filters]
-        logger.info(f"After state multi-filter {state_filters}: {len(feedback_to_display)} items")
-    elif state_filter != 'All':  # Backwards compatibility
-        logger.info(f"🔍 Applying single state filter '{state_filter}' to {len(feedback_to_display)} items")
-        # Log sample states before filtering
-        sample_states = [item.get('State', 'NEW') for item in feedback_to_display[:5]]
-        logger.info(f"Sample states before filtering: {sample_states}")
-        
-        feedback_to_display = [item for item in feedback_to_display if item.get('State', 'NEW') == state_filter]
-        logger.info(f"After state filter '{state_filter}': {len(feedback_to_display)} items")
+        # Debug logging for filter data
+        logger.info(f"🔍 FILTER DEBUG: Sources: {len(all_sources)}, Domains: {len(all_domains)}, States: {len(all_states)}")
+        logger.info(f"🔍 DOMAINS FOUND: {all_domains[:10]}")  # Show first 10 domains
+        logger.info(f"🔍 STATES FOUND: {all_states}")
+        logger.info(f"🔍 AUDIENCES FOUND: {all_audiences}")
+    else:
+        all_sources, all_categories, all_enhanced_categories, all_audiences, all_priorities, all_domains, all_sentiments, all_states = [], [], [], [], [], [], [], []
+        logger.warning("⚠️ NO FEEDBACK DATA: No last_collected_feedback available for filters")
 
-    # Sort by date - newest items first by default
-    if feedback_to_display:
-        try:
-            def parse_date(item):
-                date_str = item.get('Created', '')
-                
-                # Handle pandas NaT/NaN values
-                if pd.isna(date_str):
-                    logger.debug(f"Found NaT/NaN date value for item from {item.get('Sources', 'Unknown')}")
-                    return datetime(1900, 1, 1)
-                
-                # Convert to string if needed
-                date_str = str(date_str) if date_str else ''
-                
-                if date_str and date_str != 'nan' and date_str != 'NaT':
-                    try:
-                        # Handle ISO format dates (e.g., '2025-01-15T10:30:00')
-                        if 'T' in date_str:
-                            # Remove timezone info to make all datetimes naive for comparison
-                            if '+' in date_str or 'Z' in date_str:
-                                # Has timezone info - parse and convert to naive
-                                parsed = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                                # Convert to naive datetime by removing timezone info
-                                parsed = parsed.replace(tzinfo=None)
-                            else:
-                                # No timezone info - parse as naive
-                                parsed = datetime.fromisoformat(date_str)
-                            return parsed
-                        # Handle date-only format (e.g., '2025-01-15')
-                        else:
-                            parsed = datetime.strptime(date_str, '%Y-%m-%d')
-                            return parsed
-                    except (ValueError, TypeError) as e:
-                        logger.warning(f"Date parsing error for '{date_str}' from {item.get('Sources', 'Unknown')}: {e}")
-                        pass
-                # Return a very old date for items without valid dates
-                logger.debug(f"Using default date for item from {item.get('Sources', 'Unknown')} with date '{date_str}'")
-                return datetime(1900, 1, 1)
-            
-            reverse_order = sort_by == 'newest'
-            feedback_to_display = sorted(feedback_to_display, key=parse_date, reverse=reverse_order)
-            
-            logger.info(f"Sorted {len(feedback_to_display)} items by date ({sort_by} first)")
-            
-        except Exception as e:
-            logger.warning(f"Error sorting feedback by date: {e}")
-
-    # Analyze repeating requests if requested
-    repeating_analysis = None
-    if show_repeating and feedback_to_display:
-        from utils import analyze_repeating_requests
-        repeating_analysis = analyze_repeating_requests(feedback_to_display)
-        logger.info(f"Repeating requests analysis: {repeating_analysis.get('cluster_count', 0)} clusters found from {len(feedback_to_display)} filtered items")
-
-    # Generate category statistics
-    category_stats = None
-    if feedback_to_display:
-        from utils import get_category_statistics
-        category_stats = get_category_statistics(feedback_to_display)
-        logger.info(f"Category statistics: {category_stats.get('total_items', 0)} items analyzed")
-
-    if any(f != 'All' for f in [source_filter, category_filter, enhanced_category_filter, audience_filter, priority_filter, domain_filter, sentiment_filter]):
-        filters_applied = []
-        if source_filter != 'All':
-            filters_applied.append(f"Source: {source_filter}")
-        if category_filter != 'All':
-            filters_applied.append(f"Legacy Category: {category_filter}")
-        if enhanced_category_filter != 'All':
-            filters_applied.append(f"Category: {enhanced_category_filter}")
-        if audience_filter != 'All':
-            filters_applied.append(f"Audience: {audience_filter}")
-        if priority_filter != 'All':
-            filters_applied.append(f"Priority: {priority_filter}")
-        if domain_filter != 'All':
-            filters_applied.append(f"Domain: {domain_filter}")
-        if sentiment_filter != 'All':
-            filters_applied.append(f"Sentiment: {sentiment_filter}")
-        source_info_message = f"Filtered by {', '.join(filters_applied)}. Showing {len(feedback_to_display)} items."
-
-    trending_category_name = None
-    trending_category_count = 0
-    if feedback_to_display:
-        category_counts = pd.Series([item.get('Category', 'Uncategorized') for item in feedback_to_display]).value_counts()
-        if not category_counts.empty:
-            trending_category_name = category_counts.index[0]
-            trending_category_count = int(category_counts.iloc[0])
-
-    # Debug logging for template variables
-    logger.info(f"📊 Template variables - all_domains: {all_domains}")
-    logger.info(f"📊 Template variables - all_enhanced_categories: {all_enhanced_categories}")
-    if 'Uncategorized' in all_domains:
-        logger.info("✅ 'Uncategorized' is included in final domains list")
-    if 'Uncategorized' in all_enhanced_categories:
-        logger.info("✅ 'Uncategorized' is included in final enhanced categories list")
-    logger.info(f"📊 Sample feedback items domains: {[item.get('Primary_Domain', 'None') for item in feedback_to_display[:5]]}")
-
-    return render_template('feedback_viewer.html',
+    total_items = len(feedback_to_display)
+    
+    return render_template('feedback_viewer.html', 
                            feedback_items=feedback_to_display,
-                           source_info=source_info_message,
-                           all_sources=all_sources,
-                           current_source=source_filter,
-                           all_categories=all_categories,
-                           current_category=category_filter,
-                           all_enhanced_categories=all_enhanced_categories,
-                           current_enhanced_category=enhanced_category_filter,
-                           all_audiences=all_audiences,
-                           current_audience=audience_filter,
-                           all_priorities=all_priorities,
-                           current_priority=priority_filter,
-                           all_domains=all_domains,
-                           current_domain=domain_filter,
-                           all_sentiments=all_sentiments,
-                           current_sentiment=sentiment_filter,
-                           all_states=all_states,
-                           current_state=state_filter,
-                           current_sort=sort_by,
+                           total_items=total_items,
+                           sort_by=sort_by,
                            show_repeating=show_repeating,
-                           repeating_analysis=repeating_analysis,
-                           category_stats=category_stats,
-                           trending_category_name=trending_category_name,
-                           trending_category_count=trending_category_count,
-                           stored_token=stored_token,
-                           states_already_loaded=fabric_sql_connected,  # This controls UI state management features (based on SQL connection, not bearer token)
-                           is_online_mode=is_online_mode,  # Bearer token mode for lakehouse writes
-                           fabric_sql_connected=fabric_sql_connected,  # New: explicit SQL connection indicator
-                           fabric_connected_param=fabric_connected_param,  # URL parameter indicates Fabric connection
-                           # Multi-select filter arrays
+                           show_only_stored=show_only_stored,
+                           all_sources=all_sources,
+                           all_categories=all_categories,
+                           all_enhanced_categories=all_enhanced_categories,
+                           all_audiences=all_audiences,
+                           all_priorities=all_priorities,
+                           all_domains=all_domains,
+                           all_sentiments=all_sentiments,
+                           all_states=all_states,
+                           source_filter=source_filter,
+                           category_filter=category_filter,
+                           enhanced_category_filter=enhanced_category_filter,
+                           audience_filter=audience_filter,
+                           priority_filter=priority_filter,
+                           domain_filter=domain_filter,
+                           sentiment_filter=sentiment_filter,
+                           state_filter=state_filter,
+                           source_filters=source_filters,
+                           enhanced_category_filters=enhanced_category_filters,
+                           audience_filters=audience_filters,
+                           priority_filters=priority_filters,
+                           domain_filters=domain_filters,
+                           sentiment_filters=sentiment_filters,
+                           state_filters=state_filters,
+                           # Add selected filter variables for template compatibility
                            selected_sources=source_filters,
                            selected_enhanced_categories=enhanced_category_filters,
                            selected_audiences=audience_filters,
                            selected_priorities=priority_filters,
                            selected_domains=domain_filters,
                            selected_sentiments=sentiment_filters,
-                           selected_states=state_filters
-                           )
+                           selected_states=state_filters,
+                           fabric_sql_connected=fabric_sql_connected,
+                           fabric_connected_param=fabric_connected_param,
+                           is_online_mode=is_online_mode,
+                           last_csv_file=current_app.config.get('LAST_CSV_FILE', ''))
 
 @app.route('/api/session_state', methods=['GET'])
 def get_session_state():
     """Get current session state for frontend"""
     from flask import session
     stored_token = session.get('fabric_bearer_token')
-    fabric_sql_connected = session.get('states_loaded', False) or session.get('sql_data_applied', False)
+    
+    # Use the SAME logic as feedback_viewer route for consistency
+    has_bearer_token = stored_token and stored_token.strip() and stored_token != 'None'
+    has_session_flags = session.get('states_loaded') or session.get('sql_data_applied')
+    
+    # Determine connection state using same logic as main route
+    if has_bearer_token and has_session_flags:
+        fabric_sql_connected = True
+    elif has_bearer_token:
+        fabric_sql_connected = True  # Partial connection
+    else:
+        fabric_sql_connected = False
+    
+    logger.info(f"📡 SESSION STATE API: Bearer: {bool(has_bearer_token)}, Flags: {bool(has_session_flags)}, Connected: {fabric_sql_connected}")
     
     return jsonify({
-        'has_bearer_token': bool(stored_token and stored_token.strip() and stored_token != 'None'),
+        'has_bearer_token': has_bearer_token,
         'fabric_sql_connected': fabric_sql_connected,
         'states_loaded': session.get('states_loaded', False),
         'sql_data_applied': session.get('sql_data_applied', False)
@@ -1629,9 +1285,6 @@ def apply_filters_to_feedback(feedback_data, source_filters=None, audience_filte
         # Debug: check some Created values before sorting
         sample_dates = [item.get('Created', '') for item in filtered_feedback[:3]]
         logger.info(f"DEBUG: Sorting oldest - sample dates before: {sample_dates}")
-        filtered_feedback.sort(key=lambda x: x.get('Created', ''))
-        sample_dates_after = [item.get('Created', '') for item in filtered_feedback[:3]]
-        logger.info(f"DEBUG: Sorting oldest - sample dates after: {sample_dates_after}")
     elif sort_by == 'priority':
         priority_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
         filtered_feedback.sort(key=lambda x: priority_order.get(x.get('Priority', 'low').lower(), 4))
@@ -2144,12 +1797,14 @@ def sync_with_fabric():
                 
                 logger.info(f"✅ Applied SQL state data to in-memory feedback: {applied_states} states, {applied_domains} domains, {applied_notes} notes")
             
-            # Set session flag to indicate that state data has been loaded and applied
+            # Set session flags to indicate successful SQL connection and data sync
             from flask import session
             session['states_loaded'] = True
             session['sql_data_applied'] = True  # New flag to indicate SQL data has been applied to in-memory data
+            session['fabric_bearer_token'] = 'SQL_CONNECTED'  # Pseudo-token to enable domain updates
             
             logger.info(f"✅ Successfully completed Fabric sync: {sync_result['new_items']} new items + {len(state_data)} state records")
+            logger.info("🔑 Set session flags and pseudo-bearer token for domain updates")
             
             # Create detailed success message
             message_parts = [
@@ -2189,6 +1844,15 @@ def sync_with_fabric():
 def update_feedback_state_sql():
     """Update a single feedback state and immediately sync to SQL"""
     try:
+        # Validate session and authentication
+        from flask import session
+        stored_token = session.get('fabric_bearer_token')
+        has_bearer_token = stored_token and stored_token.strip() and stored_token != 'None'
+        
+        if not has_bearer_token:
+            logger.warning("❌ STATE UPDATE DENIED: No valid bearer token in session")
+            return jsonify({'status': 'error', 'message': 'Not connected to Fabric. Please sync with Fabric first.'}), 403
+        
         # Get request data
         data = request.get_json()
         if not data:
@@ -2198,7 +1862,7 @@ def update_feedback_state_sql():
         if not feedback_id:
             return jsonify({'status': 'error', 'message': 'feedback_id required'}), 400
         
-       
+        logger.info(f"🔄 STATE UPDATE REQUEST: Updating {feedback_id} with data: {data}")
         
         # Validate state if provided
         new_state = data.get('state')
@@ -2321,6 +1985,15 @@ def update_feedback_domain():
 def update_feedback_notes():
     """Update the notes of a feedback item"""
     try:
+        # Validate session and authentication
+        from flask import session
+        stored_token = session.get('fabric_bearer_token')
+        has_bearer_token = stored_token and stored_token.strip() and stored_token != 'None'
+        
+        if not has_bearer_token:
+            logger.warning("❌ NOTES UPDATE DENIED: No valid bearer token in session")
+            return jsonify({'status': 'error', 'message': 'Not connected to Fabric. Please sync with Fabric first.'}), 403
+        
         # Get request data
         data = request.get_json()
         if not data:
@@ -2332,7 +2005,7 @@ def update_feedback_notes():
         if not feedback_id:
             return jsonify({'status': 'error', 'message': 'feedback_id is required'}), 400
         
-        logger.info(f"🔄 Updating notes for feedback {feedback_id}: {notes[:50]}...")
+        logger.info(f"🔄 NOTES UPDATE REQUEST: Updating {feedback_id} notes: {notes[:50]}...")
         
         # Import SQL writer and update immediately
         import fabric_sql_writer
@@ -2385,12 +2058,23 @@ def update_feedback_notes():
 def update_domain_sql():
     """Update feedback domain directly in SQL database"""
     try:
+        # Validate session and authentication
+        from flask import session
+        stored_token = session.get('fabric_bearer_token')
+        has_bearer_token = stored_token and stored_token.strip() and stored_token != 'None'
+        
+        if not has_bearer_token:
+            logger.warning("❌ DOMAIN UPDATE DENIED: No valid bearer token in session")
+            return jsonify({'success': False, 'message': 'Not connected to Fabric. Please sync with Fabric first.'}), 403
+        
         data = request.get_json()
         feedback_id = data.get('feedback_id')
         new_domain = data.get('new_domain')
         
         if not feedback_id or not new_domain:
             return jsonify({'success': False, 'message': 'Missing feedback_id or new_domain'}), 400
+        
+        logger.info(f"🔄 DOMAIN UPDATE REQUEST: Updating {feedback_id} to domain {new_domain}")
         
         # Validate domain
         valid_domains = list(config.DOMAIN_CATEGORIES.keys())
@@ -2410,6 +2094,7 @@ def update_domain_sql():
             logger.info(f"✅ Successfully updated domain for {feedback_id} to {friendly_domain_name} (from {new_domain})")
             return jsonify({'success': True, 'message': f'Domain updated to {friendly_domain_name}'})
         else:
+            logger.error(f"❌ Failed to update domain in database for {feedback_id}")
             return jsonify({'success': False, 'message': 'Failed to update domain in database'}), 500
             
     except Exception as e:
@@ -2420,6 +2105,15 @@ def update_domain_sql():
 def update_audience_sql():
     """Update feedback audience directly in SQL database"""
     try:
+        # Validate session and authentication
+        from flask import session
+        stored_token = session.get('fabric_bearer_token')
+        has_bearer_token = stored_token and stored_token.strip() and stored_token != 'None'
+        
+        if not has_bearer_token:
+            logger.warning("❌ AUDIENCE UPDATE DENIED: No valid bearer token in session")
+            return jsonify({'success': False, 'message': 'Not connected to Fabric. Please sync with Fabric first.'}), 403
+        
         data = request.get_json()
         feedback_id = data.get('feedback_id')
         new_audience = data.get('new_audience')
@@ -2427,12 +2121,12 @@ def update_audience_sql():
         if not feedback_id or not new_audience:
             return jsonify({'success': False, 'message': 'Missing feedback_id or new_audience'}), 400
         
+        logger.info(f"🔄 AUDIENCE UPDATE REQUEST: Updating {feedback_id} to audience {new_audience}")
+        
         # Validate audience (only Developer or Customer)
         valid_audiences = ['Developer', 'Customer']
         if new_audience not in valid_audiences:
             return jsonify({'success': False, 'message': f'Invalid audience. Must be one of: {valid_audiences}'}), 400
-        
-        # No bearer token needed for SQL database updates
         
         # Update in Fabric SQL database using state_manager (no bearer token needed)
         success = state_manager.update_feedback_field_in_sql(feedback_id, 'Audience', new_audience, None)
@@ -2441,6 +2135,7 @@ def update_audience_sql():
             logger.info(f"✅ Successfully updated audience for {feedback_id} to {new_audience}")
             return jsonify({'success': True, 'message': f'Audience updated to {new_audience}'})
         else:
+            logger.error(f"❌ Failed to update audience in database for {feedback_id}")
             return jsonify({'success': False, 'message': 'Failed to update audience in database'}), 500
             
     except Exception as e:
