@@ -209,6 +209,8 @@ class FabricSQLWriter:
                 Categorization_Confidence FLOAT,
                 Primary_Domain NVARCHAR(100),
                 Domains NTEXT, -- Store as JSON string
+                User_Modified_Categorization BIT DEFAULT 0, -- Flag to protect user changes from auto-recategorization
+                Auto_Recategorized_Date DATETIME2, -- Timestamp of last automatic recategorization
                 Collected_Date DATETIME2 DEFAULT GETDATE(),
                 CONSTRAINT UK_Feedback_ID UNIQUE (Feedback_ID)
             );
@@ -241,7 +243,9 @@ class FabricSQLWriter:
             "Feature_Area NVARCHAR(200)",
             "Categorization_Confidence FLOAT",
             "Primary_Domain NVARCHAR(100)",
-            "Domains NTEXT"
+            "Domains NTEXT",
+            "User_Modified_Categorization BIT DEFAULT 0",
+            "Auto_Recategorized_Date DATETIME2"
         ]
         
         for column_def in new_columns:
@@ -751,6 +755,122 @@ class FabricSQLWriter:
         except Exception as e:
             logger.error(f"Error getting feedback state from SQL database: {e}")
             return None
+    
+    def recategorize_all_feedback(self, use_token: bool = True) -> Dict[str, int]:
+        """
+        Recategorize all feedback items using current category and impact type configurations.
+        Only recategorizes items that have not been manually modified by users.
+        
+        Args:
+            use_token: Whether to use bearer token (True) or interactive auth (False)
+            
+        Returns:
+            dict: {'recategorized': X, 'skipped_user_modified': Y, 'total_processed': Z}
+        """
+        try:
+            from utils import enhanced_categorize_feedback
+            from datetime import datetime
+            
+            logger.info("🔄 Starting automatic recategorization of all feedback...")
+            
+            # Connect to database
+            conn = None
+            if use_token and self.bearer_token:
+                try:
+                    conn = self.connect_with_token(self.bearer_token)
+                except Exception as token_error:
+                    logger.warning(f"Bearer token authentication failed: {token_error}")
+                    logger.info("Falling back to interactive authentication...")
+                    conn = self.connect_interactive()
+            else:
+                conn = self.connect_interactive()
+            
+            if not conn:
+                logger.error("Failed to connect to database for recategorization")
+                return {'recategorized': 0, 'skipped_user_modified': 0, 'total_processed': 0}
+            
+            cursor = conn.cursor()
+            
+            # Get all feedback that hasn't been manually modified
+            cursor.execute("""
+                SELECT Feedback_ID, Content, Source, Scenario, Organization, 
+                       User_Modified_Categorization
+                FROM Feedback
+            """)
+            
+            feedback_items = cursor.fetchall()
+            total_items = len(feedback_items)
+            recategorized_count = 0
+            skipped_count = 0
+            
+            logger.info(f"📊 Found {total_items} feedback items to process")
+            
+            for row in feedback_items:
+                try:
+                    feedback_id = row[0]
+                    content = row[1] or ""
+                    source = row[2] or ""
+                    scenario = row[3] or ""
+                    organization = row[4] or ""
+                    user_modified = row[5] if len(row) > 5 else False
+                    
+                    # Skip if user has manually modified categorization
+                    if user_modified:
+                        skipped_count += 1
+                        logger.debug(f"⏭️  Skipped user-modified item: {feedback_id}")
+                        continue
+                    
+                    # Recategorize
+                    result = enhanced_categorize_feedback(content, source, scenario, organization)
+                    
+                    # Update the feedback with new categorization
+                    cursor.execute("""
+                        UPDATE Feedback
+                        SET Enhanced_Category = ?,
+                            Subcategory = ?,
+                            Feature_Area = ?,
+                            Audience = ?,
+                            Priority = ?,
+                            Impacttype = ?,
+                            Categorization_Confidence = ?,
+                            Auto_Recategorized_Date = ?
+                        WHERE Feedback_ID = ?
+                    """, [
+                        result.get('primary_category', 'Other'),
+                        result.get('subcategory', 'Uncategorized'),
+                        result.get('feature_area', 'General'),
+                        result.get('audience', 'Customer'),
+                        result.get('priority', 'medium'),
+                        result.get('impact_type', 'FEEDBACK'),
+                        result.get('confidence', 0.0),
+                        datetime.now(),
+                        feedback_id
+                    ])
+                    
+                    recategorized_count += 1
+                    
+                    if recategorized_count % 100 == 0:
+                        logger.info(f"Progress: {recategorized_count}/{total_items - skipped_count} items recategorized")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Error recategorizing item {feedback_id}: {e}")
+                    continue
+            
+            conn.commit()
+            conn.close()
+            
+            result = {
+                'recategorized': recategorized_count,
+                'skipped_user_modified': skipped_count,
+                'total_processed': total_items
+            }
+            
+            logger.info(f"✅ Recategorization complete: {recategorized_count} recategorized, {skipped_count} skipped (user-modified)")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Error in recategorize_all_feedback: {e}")
+            return {'recategorized': 0, 'skipped_user_modified': 0, 'total_processed': 0}
 
 def update_feedback_states_in_fabric_sql(bearer_token: str, state_changes: List[Dict[str, Any]]) -> bool:
     """

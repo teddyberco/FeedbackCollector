@@ -169,7 +169,7 @@ class ModernFilterSystem {
         this.activeFilters.clear();
         
         // Collect all active filters from UI
-        const filterTypes = ['source', 'audience', 'priority', 'state', 'domain', 'sentiment', 'enhanced_category'];
+        const filterTypes = ['source', 'audience', 'priority', 'state', 'domain', 'sentiment', 'enhanced_category', 'subcategory', 'impacttype'];
         
         filterTypes.forEach(filterType => {
             const allCheckbox = document.getElementById(filterType + '_all');
@@ -952,6 +952,8 @@ class ModernFilterSystem {
                     case 'priority': newText = 'Select priorities'; break;
                     case 'sentiment': newText = 'Select sentiments'; break;
                     case 'enhanced_category': newText = 'Select categories'; break;
+                    case 'subcategory': newText = 'Select subcategories'; break;
+                    case 'impacttype': newText = 'Select impact types'; break;
                     default: newText = `Select ${filterType}s`;
                 }
             }
@@ -974,7 +976,7 @@ class ModernFilterSystem {
      */
     updateAllFilterButtonTexts() {
         console.log('🔧 FILTER BUTTON: Updating all filter button texts');
-        ['domain', 'source', 'state', 'audience', 'priority', 'sentiment', 'enhanced_category'].forEach(filterType => {
+        ['domain', 'source', 'state', 'audience', 'priority', 'sentiment', 'enhanced_category', 'subcategory', 'impacttype'].forEach(filterType => {
             this.updateFilterButtonText(filterType);
         });
     }

@@ -133,14 +133,114 @@
         
         .filter-section {
             background-color: white;
-            border-radius: 8px;
-            padding: 15px;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: relative;
+            z-index: 100;
+        }
+        
+        /* Modern Card Layout */
+        .filters-container {
+            display: grid;
+            grid-template-columns: 280px 280px 580px;
+            gap: 16px;
+            margin-top: 24px;
+        }
+        
+        .filter-card.content-card {
+            grid-column: span 1;
+        }
+        
+        .filter-card.content-card .filter-groups-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            column-gap: 20px;
+            row-gap: 20px;
+            grid-auto-rows: 1fr;
+        }
+        
+        .filter-card.content-card .filter-groups-grid .filter-group {
+            margin-bottom: 0 !important;
+        }
+        
+        @media (max-width: 1200px) {
+            .filters-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .filter-card.content-card .filter-groups-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 600px) {
+            .filters-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .filter-card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 24px;
+            border: 2px solid #e3e8ef;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: visible;
+        }
+        
+        .filter-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px 16px 0 0;
+        }
+        
+        .filter-card:hover {
+            border-color: #c5d0e0;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            transform: translateY(-4px);
+        }
+        
+        .filter-card-header {
+            display: flex;
+            align-items: center;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding-bottom: 16px;
+            border-bottom: 2px solid #f0f3f7;
+        }
+        
+        .filter-card-icon {
+            font-size: 2rem;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .filter-card-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #2d3748;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         
         .filter-group {
-            margin-bottom: 10px;
+            margin-bottom: 20px;
         }
         
         .filter-group:last-child {
@@ -148,24 +248,104 @@
         }
         
         .filter-label {
-            font-weight: 600;
-            color: #495057;
-            margin-bottom: 5px;
+            font-weight: 700;
+            color: #4a5568;
+            margin-bottom: 8px;
             display: block;
-            font-size: 0.85rem;
+            font-size: 0.9rem;
+            letter-spacing: 0.3px;
         }
         
-        /* Horizontal filter layout */
-        .filters-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            align-items: flex-start;
+        .btn-outline-secondary {
+            border: 2px solid #e2e8f0;
+            font-weight: 600;
+            color: #4a5568;
+            background: #ffffff;
+            transition: all 0.2s ease;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-size: 0.9rem;
         }
         
-        .filter-col {
-            flex: 1;
-            min-width: 200px;
+        .btn-outline-secondary:hover {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #667eea;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            transform: translateY(-1px);
+        }
+        
+        .btn-outline-secondary:focus {
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+            border-color: #667eea;
+        }
+        
+        /* Dropdown menu styling */
+        .dropdown-menu {
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            padding: 12px;
+            z-index: 9999 !important;
+            margin-top: 4px !important;
+            position: absolute !important;
+            top: 100% !important;
+            transform: none !important;
+            will-change: auto !important;
+        }
+        
+        .dropdown-menu.show {
+            animation: dropdownFadeIn 0.15s ease-out;
+        }
+        
+        @keyframes dropdownFadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        
+        .form-check {
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: background-color 0.2s ease;
+        }
+        
+        .form-check:hover {
+            background-color: #f7fafc;
+        }
+        
+        .form-check-input:checked {
+            background-color: #667eea;
+            border-color: #667eea;
+        }
+        
+        .form-check-label {
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        /* Apply button styling */
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            border: none !important;
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            padding: 10px 20px !important;
+            border-radius: 8px !important;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3) !important;
+            transition: all 0.2s ease !important;
+        }
+        
+        .btn-primary:hover {
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4) !important;
+            transform: translateY(-2px) !important;
+        }
+        
+        .btn-primary:active {
+            transform: translateY(0) !important;
         }
         
         @media (max-width: 768px) {
@@ -463,310 +643,356 @@
 
         {% if feedback_items %}
         <div class="alert alert-light border" role="alert">
-            <h6 class="alert-heading">📊 Sentiment Overview</h6>
-            <div class="row text-center">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <h6 class="alert-heading mb-0">📊 Sentiment Overview</h6>
+                
+                <!-- Sort & Display Options -->
+                <div class="d-flex gap-2 align-items-center flex-wrap">
+                    <!-- Sort Options -->
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Date sort options">
+                        <button onclick="if(modernFilterSystem) modernFilterSystem.updateSort('newest')"
+                           class="btn {% if current_sort == 'newest' or not current_sort %}btn-success{% else %}btn-outline-success{% endif %}" style="font-size: 0.75rem;">📅 Newest</button>
+                        <button onclick="if(modernFilterSystem) modernFilterSystem.updateSort('oldest')"
+                           class="btn {% if current_sort == 'oldest' %}btn-success{% else %}btn-outline-success{% endif %}" style="font-size: 0.75rem;">📆 Oldest</button>
+                    </div>
+
+                    <!-- Repeating Requests Toggle -->
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Repeating requests toggle">
+                        <button onclick="if(modernFilterSystem) modernFilterSystem.updateRepeating(false)"
+                           class="btn {% if not show_repeating %}btn-outline-info{% else %}btn-info{% endif %}" style="font-size: 0.75rem;">Hide</button>
+                        <button onclick="if(modernFilterSystem) modernFilterSystem.updateRepeating(true)"
+                           class="btn {% if show_repeating %}btn-info{% else %}btn-outline-info{% endif %}" style="font-size: 0.75rem;">🔍 Analyze</button>
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
                 {% set positive_count = feedback_items | selectattr('Sentiment', 'equalto', 'Positive') | list | length %}
                 {% set negative_count = feedback_items | selectattr('Sentiment', 'equalto', 'Negative') | list | length %}
                 {% set neutral_count = feedback_items | selectattr('Sentiment', 'equalto', 'Neutral') | list | length %}
-                <div class="col-4">
-                    <span class="badge sentiment-positive">😊 {{ positive_count }} Positive</span>
-                </div>
-                <div class="col-4">
-                    <span class="badge sentiment-neutral">😐 {{ neutral_count }} Neutral</span>
-                </div>
-                <div class="col-4">
-                    <span class="badge sentiment-negative">😞 {{ negative_count }} Negative</span>
-                </div>
+                <span class="badge sentiment-positive">😊 {{ positive_count }} Positive</span>
+                <span class="badge sentiment-neutral">😐 {{ neutral_count }} Neutral</span>
+                <span class="badge sentiment-negative">😞 {{ negative_count }} Negative</span>
             </div>
         </div>
         {% endif %}
 
         <!-- Enhanced Filter Section -->
         <div class="filter-section">
-            <h5 class="mb-3">🔍 Enhanced Filters</h5>
+            <h5 class="mb-3"><i class="bi bi-funnel-fill"></i> Filters</h5>
             
-            <div class="filters-row">
-                <!-- State Filter - Multi-select -->
-                <div class="filter-col">
-                    <div class="filter-group">
-                <label class="filter-label" for="stateFilter">📝 Filter by State:</label>
-                <div class="dropdown">
-                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="stateFilter" data-bs-toggle="dropdown" aria-expanded="false">
-                        {% if selected_states %}
-                            {{ selected_states|length }} state(s) selected
-                        {% else %}
-                            Select states
-                        {% endif %}
-                    </button>
-                    <div class="dropdown-menu p-3" style="min-width: 250px;">
-                        {% for state in all_states %}
-                        <div class="form-check">
-                            <input class="form-check-input filter-checkbox" type="checkbox" data-filter="state"
-                                   value="{{ state }}" id="state_{{ state|lower }}"
-                                   {% if state in selected_states %}checked{% endif %}>
-                            <label class="form-check-label" for="state_{{ state|lower }}">
-                                {% if state == 'NEW' %}🆕 New
-                                {% elif state == 'TRIAGED' %}🔍 Triaged
-                                {% elif state == 'CLOSED' %}✅ Closed
-                                {% elif state == 'IRRELEVANT' %}❌ Irrelevant
-                                {% else %}{{ state }}{% endif %}
-                            </label>
+            <div class="filters-container">
+                <!-- Workflow Card -->
+                <div class="filter-card">
+                        <div class="filter-card-header">
+                            <span class="filter-card-icon">📋</span>
+                            <h6 class="filter-card-title">Workflow</h6>
                         </div>
-                        {% endfor %}
-                        <hr class="dropdown-divider">
-                        <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
-                    </div>
-                </div>
-                    </div>
-                </div>
-
-                <!-- Audience Filter - Multi-select -->
-                <div class="filter-col">
-                    <div class="filter-group">
-                <label class="filter-label" for="audienceFilter">👥 Filter by Audience:</label>
-                <div class="dropdown">
-                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="audienceFilter" data-bs-toggle="dropdown" aria-expanded="false">
-                        {% if selected_audiences %}
-                            {{ selected_audiences|length }} audience(s) selected
-                        {% else %}
-                            Select audiences
-                        {% endif %}
-                    </button>
-                    <div class="dropdown-menu p-3" style="min-width: 250px;">
-                        {% for audience in all_audiences %}
-                        <div class="form-check">
-                            <input class="form-check-input filter-checkbox" type="checkbox" data-filter="audience"
-                                   value="{{ audience }}" id="audience_{{ audience|lower }}"
-                                   {% if audience in selected_audiences %}checked{% endif %}>
-                            <label class="form-check-label" for="audience_{{ audience|lower }}">
-                                {% if audience == 'Developer' %}🛠️ Developer
-                                {% elif audience == 'Customer' %}👤 Customer
-                                {% elif audience == 'ISV' %}🏢 ISV
-                                {% else %}{{ audience }}{% endif %}
-                            </label>
+                        <!-- State Filter -->
+                        <div class="filter-group">
+                            <label class="filter-label" for="stateFilter">📝 State</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="stateFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if selected_states %}
+                                        {{ selected_states|length }} selected
+                                    {% else %}
+                                        All States
+                                    {% endif %}
+                                </button>
+                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                    {% for state in all_states %}
+                                    <div class="form-check">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" data-filter="state"
+                                               value="{{ state }}" id="state_{{ state|lower }}"
+                                               {% if state in selected_states %}checked{% endif %}>
+                                        <label class="form-check-label" for="state_{{ state|lower }}">
+                                            {% if state == 'NEW' %}🆕 New
+                                            {% elif state == 'TRIAGED' %}🔍 Triaged
+                                            {% elif state == 'CLOSED' %}✅ Closed
+                                            {% elif state == 'IRRELEVANT' %}❌ Irrelevant
+                                            {% else %}{{ state }}{% endif %}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    <hr class="dropdown-divider">
+                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                </div>
+                            </div>
                         </div>
-                        {% endfor %}
-                        <hr class="dropdown-divider">
-                        <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
-                    </div>
-                </div>
-                    </div>
-                </div>
 
-                <!-- Priority Filter - Multi-select -->
-                <div class="filter-col">
-                    <div class="filter-group">
-                <label class="filter-label" for="priorityFilter">⚡ Filter by Priority:</label>
-                <div class="dropdown">
-                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="priorityFilter" data-bs-toggle="dropdown" aria-expanded="false">
-                        {% if selected_priorities %}
-                            {{ selected_priorities|length }} priority(s) selected
-                        {% else %}
-                            Select priorities
-                        {% endif %}
-                    </button>
-                    <div class="dropdown-menu p-3" style="min-width: 250px;">
-                        {% for priority in all_priorities %}
-                        <div class="form-check">
-                            <input class="form-check-input filter-checkbox" type="checkbox" data-filter="priority"
-                                   value="{{ priority }}" id="priority_{{ priority|lower }}"
-                                   {% if priority in selected_priorities %}checked{% endif %}>
-                            <label class="form-check-label" for="priority_{{ priority|lower }}">
-                                {% if priority|lower == 'critical' %}🔴 Critical
-                                {% elif priority|lower == 'high' %}🟠 High
-                                {% elif priority|lower == 'medium' %}🟡 Medium
-                                {% elif priority|lower == 'low' %}⚪ Low
-                                {% else %}{{ priority|title }}{% endif %}
-                            </label>
+                        <!-- Audience Filter -->
+                        <div class="filter-group">
+                            <label class="filter-label" for="audienceFilter">👥 Audience</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="audienceFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if selected_audiences %}
+                                        {{ selected_audiences|length }} selected
+                                    {% else %}
+                                        All Audiences
+                                    {% endif %}
+                                </button>
+                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                    {% for audience in all_audiences %}
+                                    <div class="form-check">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" data-filter="audience"
+                                               value="{{ audience }}" id="audience_{{ audience|lower }}"
+                                               {% if audience in selected_audiences %}checked{% endif %}>
+                                        <label class="form-check-label" for="audience_{{ audience|lower }}">
+                                            {% if audience == 'Developer' %}🛠️ Developer
+                                            {% elif audience == 'Customer' %}👤 Customer
+                                            {% elif audience == 'ISV' %}🏢 ISV
+                                            {% else %}{{ audience }}{% endif %}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    <hr class="dropdown-divider">
+                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                </div>
+                            </div>
                         </div>
-                        {% endfor %}
-                        <hr class="dropdown-divider">
-                        <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
-                    </div>
-                </div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Second row of filters -->
-            <div class="filters-row">
-                <!-- Enhanced Category Filter - Multi-select -->
-                {% if all_enhanced_categories %}
-                <div class="filter-col">
-                    <div class="filter-group">
-                <label class="filter-label" for="enhanced_categoryFilter">📂 Filter by Enhanced Category:</label>
-                <div class="dropdown">
-                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="enhanced_categoryFilter" data-bs-toggle="dropdown" aria-expanded="false">
-                        {% if selected_enhanced_categories %}
-                            {{ selected_enhanced_categories|length }} category(s) selected
-                        {% else %}
-                            Select categories
-                        {% endif %}
-                    </button>
-                    <div class="dropdown-menu p-3" style="min-width: 350px; max-height: 400px; overflow-y: auto;">
-                        {% for cat in all_enhanced_categories %}
-                        <div class="form-check">
-                            <input class="form-check-input filter-checkbox" type="checkbox" data-filter="enhanced_category"
-                                   value="{{ cat }}" id="enhanced_category_{{ loop.index }}"
-                                   {% if cat in selected_enhanced_categories %}checked{% endif %}>
-                            <label class="form-check-label" for="enhanced_category_{{ loop.index }}">
-                                {% if cat == 'Uncategorized' %}❓ Uncategorized
-                                {% else %}{{ cat[:40] }}{% if cat|length > 40 %}...{% endif %}{% endif %}
-                            </label>
+                        <!-- Priority Filter -->
+                        <div class="filter-group">
+                            <label class="filter-label" for="priorityFilter">⚡ Priority</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="priorityFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if selected_priorities %}
+                                        {{ selected_priorities|length }} selected
+                                    {% else %}
+                                        All Priorities
+                                    {% endif %}
+                                </button>
+                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                    {% for priority in all_priorities %}
+                                    <div class="form-check">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" data-filter="priority"
+                                               value="{{ priority }}" id="priority_{{ priority|lower }}"
+                                               {% if priority in selected_priorities %}checked{% endif %}>
+                                        <label class="form-check-label" for="priority_{{ priority|lower }}">
+                                            {% if priority|lower == 'critical' %}🔴 Critical
+                                            {% elif priority|lower == 'high' %}🟠 High
+                                            {% elif priority|lower == 'medium' %}🟡 Medium
+                                            {% elif priority|lower == 'low' %}⚪ Low
+                                            {% else %}{{ priority|title }}{% endif %}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    <hr class="dropdown-divider">
+                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                </div>
+                            </div>
                         </div>
-                        {% endfor %}
-                        <hr class="dropdown-divider">
-                        <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
-                    </div>
                 </div>
-                    </div>
-                </div>
-                {% endif %}
 
-                <!-- Domain Filter - Multi-select -->
-                {% if all_domains %}
-                <div class="filter-col">
-                    <div class="filter-group">
-                <label class="filter-label" for="domainFilter">🎯 Filter by Domain:</label>
-                <div class="dropdown">
-                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="domainFilter" data-bs-toggle="dropdown" aria-expanded="false">
-                        {% if selected_domains %}
-                            {{ selected_domains|length }} domain(s) selected
-                        {% else %}
-                            Select domains
-                        {% endif %}
-                    </button>
-                    <div class="dropdown-menu p-3" style="min-width: 300px;">
-                        {% for domain in all_domains %}
-                        <div class="form-check">
-                            <input class="form-check-input filter-checkbox" type="checkbox" data-filter="domain"
-                                   value="{{ domain }}" id="domain_{{ domain|lower|replace('_', '') }}"
-                                   {% if domain in selected_domains %}checked{% endif %}>
-                            <label class="form-check-label" for="domain_{{ domain|lower|replace('_', '') }}">
-                                {% if domain == 'Getting Started' %}🚀 Getting Started
-                                {% elif domain == 'Governance' %}🏛️ Governance
-                                {% elif domain == 'User Experience' %}🎨 User Experience
-                                {% elif domain == 'Authentication & Security' %}🔐 Authentication & Security
-                                {% elif domain == 'Performance & Scalability' %}⚡ Performance & Scalability
-                                {% elif domain == 'Integration & APIs' %}🔗 Integration & APIs
-                                {% elif domain == 'Analytics & Reporting' %}📊 Analytics & Reporting
-                                {% elif domain == 'Uncategorized' %}❓ Uncategorized
-                                {% elif domain == 'GETTING_STARTED' %}🚀 Getting Started
-                                {% elif domain == 'GOVERNANCE' %}🏛️ Governance
-                                {% elif domain == 'USER_EXPERIENCE' %}🎨 User Experience
-                                {% elif domain == 'AUTHENTICATION' %}🔐 Authentication & Security
-                                {% elif domain == 'PERFORMANCE' %}⚡ Performance & Scalability
-                                {% elif domain == 'INTEGRATION' %}🔗 Integration & APIs
-                                {% elif domain == 'ANALYTICS' %}📊 Analytics & Reporting
-                                {% else %}{{ domain }}{% endif %}
-                            </label>
+                <!-- Classification Card -->
+                <div class="filter-card">
+                        <div class="filter-card-header">
+                            <span class="filter-card-icon">🎯</span>
+                            <h6 class="filter-card-title">Classification</h6>
                         </div>
-                        {% endfor %}
-                        <hr class="dropdown-divider">
-                        <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
-                    </div>
-                </div>
-                    </div>
-                </div>
-                {% endif %}
-
-                <!-- Source Filter - Multi-select -->
-                {% if all_sources %}
-                <div class="filter-col">
-                    <div class="filter-group">
-                <label class="filter-label" for="sourceFilter">📡 Filter by Source:</label>
-                <div class="dropdown">
-                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="sourceFilter" data-bs-toggle="dropdown" aria-expanded="false">
-                        {% if selected_sources %}
-                            {{ selected_sources|length }} source(s) selected
-                        {% else %}
-                            Select sources
-                        {% endif %}
-                    </button>
-                    <div class="dropdown-menu p-3" style="min-width: 250px;">
-                        {% for src in all_sources %}
-                        <div class="form-check">
-                            <input class="form-check-input filter-checkbox" type="checkbox" data-filter="source"
-                                   value="{{ src }}" id="source_{{ src|lower|replace(' ', '_') }}"
-                                   {% if src in selected_sources %}checked{% endif %}>
-                            <label class="form-check-label" for="source_{{ src|lower|replace(' ', '_') }}">
-                                {% if src == 'Reddit' %}📱 Reddit
-                                {% elif src == 'GitHub' %}💻 GitHub
-                                {% elif 'Fabric' in src %}🏢 {{ src }}
-                                {% else %}{{ src }}{% endif %}
-                            </label>
+                        
+                        <!-- Impact Type Filter -->
+                        {% if all_impact_types %}
+                        <div class="filter-group">
+                            <label class="filter-label" for="impactTypeFilter">⚠️ Impact Type</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="impactTypeFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                    All Types
+                                </button>
+                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                    {% for itype in all_impact_types %}
+                                    <div class="form-check">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" data-filter="impacttype"
+                                               value="{{ itype }}" id="impacttype_{{ loop.index }}">
+                                        <label class="form-check-label" for="impacttype_{{ loop.index }}">
+                                            {% if itype == 'BUG' %}🐛 Bug
+                                            {% elif itype == 'FEATURE_REQUEST' %}✨ Feature Request
+                                            {% elif itype == 'QUESTION' %}❓ Question
+                                            {% elif itype == 'PRAISE' %}👏 Praise
+                                            {% elif itype == 'COMPLAINT' %}😤 Complaint
+                                            {% else %}{{ itype }}{% endif %}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    <hr class="dropdown-divider">
+                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                </div>
+                            </div>
                         </div>
-                        {% endfor %}
-                        <hr class="dropdown-divider">
-                        <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
-                    </div>
-                </div>
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-
-            <!-- Third row of filters -->
-            <div class="filters-row">
-                <!-- Sentiment Filter - Multi-select -->
-                {% if all_sentiments %}
-                <div class="filter-col">
-                    <div class="filter-group">
-                <label class="filter-label" for="sentimentFilter">😊 Filter by Sentiment:</label>
-                <div class="dropdown">
-                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="sentimentFilter" data-bs-toggle="dropdown" aria-expanded="false">
-                        {% if selected_sentiments %}
-                            {{ selected_sentiments|length }} sentiment(s) selected
-                        {% else %}
-                            Select sentiments
                         {% endif %}
-                    </button>
-                    <div class="dropdown-menu p-3" style="min-width: 250px;">
-                        {% for sentiment in all_sentiments %}
-                        <div class="form-check">
-                            <input class="form-check-input filter-checkbox" type="checkbox" data-filter="sentiment"
-                                   value="{{ sentiment }}" id="sentiment_{{ sentiment|lower }}"
-                                   {% if sentiment in selected_sentiments %}checked{% endif %}>
-                            <label class="form-check-label" for="sentiment_{{ sentiment|lower }}">
-                                {% if sentiment|lower == 'positive' %}😊 Positive
-                                {% elif sentiment|lower == 'negative' %}😞 Negative
-                                {% elif sentiment|lower == 'neutral' %}😐 Neutral
-                                {% else %}{{ sentiment|title }}{% endif %}
-                            </label>
+
+                        <!-- Sentiment Filter -->
+                        {% if all_sentiments %}
+                        <div class="filter-group">
+                            <label class="filter-label" for="sentimentFilter">😊 Sentiment</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="sentimentFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if selected_sentiments %}
+                                        {{ selected_sentiments|length }} selected
+                                    {% else %}
+                                        All Sentiments
+                                    {% endif %}
+                                </button>
+                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                    {% for sentiment in all_sentiments %}
+                                    <div class="form-check">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" data-filter="sentiment"
+                                               value="{{ sentiment }}" id="sentiment_{{ sentiment|lower }}"
+                                               {% if sentiment in selected_sentiments %}checked{% endif %}>
+                                        <label class="form-check-label" for="sentiment_{{ sentiment|lower }}">
+                                            {% if sentiment|lower == 'positive' %}😊 Positive
+                                            {% elif sentiment|lower == 'negative' %}😞 Negative
+                                            {% elif sentiment|lower == 'neutral' %}😐 Neutral
+                                            {% else %}{{ sentiment|title }}{% endif %}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    <hr class="dropdown-divider">
+                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                </div>
+                            </div>
                         </div>
-                        {% endfor %}
-                        <hr class="dropdown-divider">
-                        <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply Filters</button>
-                    </div>
-                </div>
-                    </div>
-                </div>
-                {% endif %}
-
-                <!-- Sort Options -->
-                <div class="filter-col">
-                    <div class="filter-group">
-                        <span class="filter-label">📅 Sort by Date:</span>
-                        <div class="btn-group btn-group-sm" role="group" aria-label="Date sort options">
-                            <button onclick="if(modernFilterSystem) modernFilterSystem.updateSort('newest')"
-                               class="btn {% if current_sort == 'newest' or not current_sort %}btn-success{% else %}btn-outline-success{% endif %}">📅 Newest First</button>
-                            <button onclick="if(modernFilterSystem) modernFilterSystem.updateSort('oldest')"
-                               class="btn {% if current_sort == 'oldest' %}btn-success{% else %}btn-outline-success{% endif %}">📆 Oldest First</button>
-                       </div>
-                    </div>
+                        {% endif %}
                 </div>
 
-                <!-- Repeating Requests Toggle -->
-                <div class="filter-col">
-                    <div class="filter-group">
-                       <span class="filter-label">🔄 Repeating Requests Analysis:</span>
-                       <div class="btn-group btn-group-sm" role="group" aria-label="Repeating requests toggle">
-                           <button onclick="if(modernFilterSystem) modernFilterSystem.updateRepeating(false)"
-                              class="btn {% if not show_repeating %}btn-outline-info{% else %}btn-info{% endif %}">Hide Analysis</button>
-                           <button onclick="if(modernFilterSystem) modernFilterSystem.updateRepeating(true)"
-                              class="btn {% if show_repeating %}btn-info{% else %}btn-outline-info{% endif %}">🔍 Analyze Repeating Requests</button>
-                       </div>
-                    </div>
+                <!-- Content Card -->
+                <div class="filter-card content-card">
+                        <div class="filter-card-header">
+                            <span class="filter-card-icon">📌</span>
+                            <h6 class="filter-card-title">Content</h6>
+                        </div>
+                        
+                        <div class="filter-groups-grid">
+                        <!-- Category Filter -->
+                        {% if all_enhanced_categories %}
+                        <div class="filter-group">
+                            <label class="filter-label" for="enhanced_categoryFilter">📂 Category</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="enhanced_categoryFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if selected_enhanced_categories %}
+                                        {{ selected_enhanced_categories|length }} selected
+                                    {% else %}
+                                        All Categories
+                                    {% endif %}
+                                </button>
+                                <div class="dropdown-menu p-3" style="min-width: 350px; max-height: 400px; overflow-y: auto;">
+                                    {% for cat in all_enhanced_categories %}
+                                    <div class="form-check">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" data-filter="enhanced_category"
+                                               value="{{ cat }}" id="enhanced_category_{{ loop.index }}"
+                                               {% if cat in selected_enhanced_categories %}checked{% endif %}>
+                                        <label class="form-check-label" for="enhanced_category_{{ loop.index }}">
+                                            {% if cat == 'Uncategorized' %}❓ Uncategorized
+                                            {% else %}{{ cat[:40] }}{% if cat|length > 40 %}...{% endif %}{% endif %}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    <hr class="dropdown-divider">
+                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Subcategory Filter (Grouped by Feature Area) -->
+                        {% if all_subcategories %}
+                        <div class="filter-group">
+                            <label class="filter-label" for="subcategoryFilter">📋 Subcategory</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="subcategoryFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                    All Subcategories
+                                </button>
+                                <div class="dropdown-menu p-3" style="min-width: 350px; max-height: 400px; overflow-y: auto;">
+                                    {% for feature_area, subcats in subcategories_by_feature_area.items() %}
+                                    <div class="text-muted small fw-bold px-2 pt-2" style="font-size: 0.75rem;">{{ feature_area }}</div>
+                                    {% for subcat in subcats %}
+                                    <div class="form-check ms-2">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" data-filter="subcategory"
+                                               value="{{ subcat }}" id="subcategory_{{ subcat|replace(' ', '_')|replace('/', '_')|lower }}">
+                                        <label class="form-check-label" for="subcategory_{{ subcat|replace(' ', '_')|replace('/', '_')|lower }}">
+                                            {{ subcat[:40] }}{% if subcat|length > 40 %}...{% endif %}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    {% if not loop.last %}<hr class="dropdown-divider my-2">{% endif %}
+                                    {% endfor %}
+                                    <hr class="dropdown-divider">
+                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Domain Filter -->
+                        {% if all_domains %}
+                        <div class="filter-group">
+                            <label class="filter-label" for="domainFilter">🎯 Domain</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="domainFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if selected_domains %}
+                                        {{ selected_domains|length }} selected
+                                    {% else %}
+                                        All Domains
+                                    {% endif %}
+                                </button>
+                                <div class="dropdown-menu p-3" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
+                                    {% for domain in all_domains %}
+                                    <div class="form-check">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" data-filter="domain"
+                                               value="{{ domain }}" id="domain_{{ domain|lower|replace('_', '') }}"
+                                               {% if domain in selected_domains %}checked{% endif %}>
+                                        <label class="form-check-label" for="domain_{{ domain|lower|replace('_', '') }}">
+                                            {% if domain == 'Getting Started' %}🚀 Getting Started
+                                            {% elif domain == 'Governance' %}🏛️ Governance
+                                            {% elif domain == 'User Experience' %}🎨 User Experience
+                                            {% elif domain == 'Authentication & Security' %}🔐 Auth & Security
+                                            {% elif domain == 'Performance & Scalability' %}⚡ Performance
+                                            {% elif domain == 'Integration & APIs' %}🔗 Integration
+                                            {% elif domain == 'Analytics & Reporting' %}📊 Analytics
+                                            {% elif domain == 'Uncategorized' %}❓ Uncategorized
+                                            {% else %}{{ domain }}{% endif %}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    <hr class="dropdown-divider">
+                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Source Filter -->
+                        {% if all_sources %}
+                        <div class="filter-group">
+                            <label class="filter-label" for="sourceFilter">📡 Source</label>
+                            <div class="dropdown">
+                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="sourceFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if selected_sources %}
+                                        {{ selected_sources|length }} selected
+                                    {% else %}
+                                        All Sources
+                                    {% endif %}
+                                </button>
+                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                    {% for src in all_sources %}
+                                    <div class="form-check">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" data-filter="source"
+                                               value="{{ src }}" id="source_{{ src|lower|replace(' ', '_') }}"
+                                               {% if src in selected_sources %}checked{% endif %}>
+                                        <label class="form-check-label" for="source_{{ src|lower|replace(' ', '_') }}">
+                                            {% if src == 'Reddit' %}📱 Reddit
+                                            {% elif src == 'GitHub' %}💻 GitHub
+                                            {% elif 'Fabric' in src %}🏢 {{ src }}
+                                            {% else %}{{ src }}{% endif %}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    <hr class="dropdown-divider">
+                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        </div>
                 </div>
             </div>
         </div>
@@ -1853,25 +2079,11 @@
         
         // Update feedback cards with SQL state data
         function updateFeedbackWithSQLData(stateData) {
-            console.log('🔄 Updating feedback cards with SQL state data...', stateData);
-            console.log(`📊 State data contains ${Object.keys(stateData).length} records`);
+            console.log(`📊 Syncing ${Object.keys(stateData).length} state records with feedback cards...`);
             
             // Clean up any duplicate domain-display elements that might exist
             document.querySelectorAll('.domain-display').forEach(element => {
-                console.log('🧹 Removing duplicate domain-display element');
                 element.remove();
-            });
-            
-            // First, let's see all feedback IDs on the page
-            const allFeedbackElements = document.querySelectorAll('[data-feedback-id]');
-            console.log(`📋 Found ${allFeedbackElements.length} feedback elements on page:`);
-            allFeedbackElements.forEach(el => {
-                console.log(`  - Page ID: "${el.getAttribute('data-feedback-id')}"`);
-            });
-            
-            // Now check each state record
-            Object.keys(stateData).forEach(feedbackId => {
-                console.log(`🔍 Looking for SQL feedback ID: "${feedbackId}"`);
             });
             
             let updatedCount = 0;
@@ -1879,14 +2091,12 @@
             
             Object.keys(stateData).forEach(feedbackId => {
                 const state = stateData[feedbackId];
-                console.log(`🔄 Processing state for "${feedbackId}":`, state);
                 
                 // Find the state badge element specifically (not dropdown elements)
                 const stateBadge = document.querySelector(`[data-feedback-id="${feedbackId}"][data-current-state]`);
                 
                 if (!stateBadge) {
-                    console.error(`❌ NO STATE BADGE FOUND for feedback ID: "${feedbackId}"`);
-                    console.log(`Available feedback IDs on page:`, Array.from(document.querySelectorAll('[data-current-state]')).map(el => el.getAttribute('data-feedback-id')));
+                    // This is normal for paginated results - feedback not on current page
                     notFoundCount++;
                     return;
                 }
@@ -1898,14 +2108,9 @@
                     return;
                 }
                 
-                console.log(`✅ Found state badge and card for "${feedbackId}"`);
-                    
-                console.log(`🎯 Updating card for "${feedbackId}"`);
-                
                 // Update state badge
                 if (state.state) {
                     const stateBadgeInCard = card.querySelector('[data-current-state]');
-                    console.log(`🔍 Looking for state badge in card, found:`, stateBadgeInCard);
                     
                     if (stateBadgeInCard) {
                         const stateNames = {
@@ -1915,17 +2120,9 @@
                             'IRRELEVANT': '❌ Irrelevant'
                         };
                             
-                            const oldText = stateBadge.textContent;
-                            const oldClass = stateBadge.className;
-                            
                             stateBadge.textContent = stateNames[state.state] || state.state;
                             stateBadge.className = `state-badge state-${state.state.toLowerCase()}`;
                             stateBadge.setAttribute('data-current-state', state.state);
-                            
-                            console.log(`✅ Updated state badge for "${feedbackId}": "${oldText}" → "${stateBadge.textContent}"`);
-                            console.log(`✅ Updated state class: "${oldClass}" → "${stateBadge.className}"`);
-                        } else {
-                            console.error(`❌ No state badge found in card for "${feedbackId}"`);
                         }
                     }
                     
@@ -1941,7 +2138,6 @@
                             }
                         }
                         notesDisplay.innerHTML = `📝 <strong>Notes:</strong> ${state.notes}`;
-                        console.log(`✅ Updated notes for "${feedbackId}": ${state.notes}`);
                     }
                     
                     // Update domain display - use existing domain-badge only
@@ -1951,16 +2147,13 @@
                         if (domainBadge) {
                             // Update existing domain badge
                             domainBadge.textContent = state.domain;
-                            console.log(`✅ Updated existing domain badge for "${feedbackId}": ${state.domain}`);
-                        } else {
-                            console.log(`⚠️ No domain badge found for "${feedbackId}" - domain: ${state.domain}`);
                         }
                     }
                     
                     updatedCount++;
             });
             
-            console.log(`📊 FINAL RESULTS: Updated ${updatedCount} cards, ${notFoundCount} not found, from ${Object.keys(stateData).length} SQL records`);
+            console.log(`📊 State sync complete: Updated ${updatedCount} cards on current page (${notFoundCount} records not displayed due to pagination)`);
             
             // Store the state data globally for filtering
             window.fabricStateData = stateData;
@@ -4575,8 +4768,8 @@
         }
         
         // CSS for spinning animation
-        const style = document.createElement('style');
-        style.textContent = `
+        const spinStyle = document.createElement('style');
+        spinStyle.textContent = `
             .spin {
                 animation: spin 1s linear infinite;
             }
@@ -4586,7 +4779,7 @@
                 100% { transform: rotate(360deg); }
             }
         `;
-        document.head.appendChild(style);
+        document.head.appendChild(spinStyle);
     </script>
 
 </body>

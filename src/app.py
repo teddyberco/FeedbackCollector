@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Tuple
 import json
 
-from collectors import RedditCollector, FabricCommunityCollector, GitHubDiscussionsCollector
+from collectors import RedditCollector, FabricCommunityCollector, GitHubDiscussionsCollector, GitHubIssuesCollector
 from ado_client import get_working_ado_items
 import config
 import utils
@@ -20,7 +20,7 @@ app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = 'feedback_collector_secret_key_2025'  # For session management
 
 last_collected_feedback = []
-last_collection_summary = {"reddit": 0, "fabric": 0, "github": 0, "total": 0}
+last_collection_summary = {"reddit": 0, "fabric": 0, "github": 0, "github_issues": 0, "total": 0}
 
 # Collection progress tracking
 collection_status = {
@@ -107,6 +107,90 @@ def restore_default_keywords_route():
         logger.error(f"Error restoring default keywords: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': f'An internal error occurred: {str(e)}'}), 500
 
+@app.route('/api/categories', methods=['GET', 'POST'])
+def manage_categories_route():
+    """API endpoint for managing feedback categories."""
+    if request.method == 'GET':
+        categories = config.load_categories()
+        return jsonify({'status': 'success', 'categories': categories})
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            if data is None or not isinstance(data, dict):
+                return jsonify({'status': 'error', 'message': 'Invalid categories data. Expected a dictionary.'}), 400
+            
+            # Validate structure - each category must have required fields
+            for category_id, category_data in data.items():
+                if not isinstance(category_data, dict):
+                    return jsonify({'status': 'error', 'message': f'Invalid category data for {category_id}.'}), 400
+                if 'name' not in category_data or 'subcategories' not in category_data:
+                    return jsonify({'status': 'error', 'message': f'Category {category_id} missing required fields.'}), 400
+                if not isinstance(category_data['subcategories'], dict):
+                    return jsonify({'status': 'error', 'message': f'Subcategories for {category_id} must be a dictionary.'}), 400
+            
+            config.save_categories(data)
+            config.ENHANCED_FEEDBACK_CATEGORIES = data.copy()
+            logger.info(f"Categories updated and saved with {len(data)} categories")
+            return jsonify({'status': 'success', 'categories': data, 'message': 'Categories saved successfully.'})
+        except Exception as e:
+            logger.error(f"Error saving categories: {e}", exc_info=True)
+            return jsonify({'status': 'error', 'message': f'An internal error occurred: {str(e)}'}), 500
+
+@app.route('/api/categories/restore_default', methods=['POST'])
+def restore_default_categories_route():
+    """Restore default categories configuration."""
+    try:
+        default_categories = config.DEFAULT_ENHANCED_FEEDBACK_CATEGORIES
+        config.save_categories(default_categories)
+        config.ENHANCED_FEEDBACK_CATEGORIES = default_categories.copy()
+        logger.info(f"Default categories restored and saved")
+        return jsonify({'status': 'success', 'categories': default_categories, 'message': 'Default categories restored and saved.'})
+    except Exception as e:
+        logger.error(f"Error restoring default categories: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': f'An internal error occurred: {str(e)}'}), 500
+
+@app.route('/api/impact-types', methods=['GET', 'POST'])
+def manage_impact_types_route():
+    """API endpoint for managing impact types."""
+    if request.method == 'GET':
+        impact_types = config.load_impact_types()
+        return jsonify({'status': 'success', 'impact_types': impact_types})
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            if data is None or not isinstance(data, dict):
+                return jsonify({'status': 'error', 'message': 'Invalid impact types data. Expected a dictionary.'}), 400
+            
+            # Validate structure - each impact type must have required fields
+            for impact_id, impact_data in data.items():
+                if not isinstance(impact_data, dict):
+                    return jsonify({'status': 'error', 'message': f'Invalid impact type data for {impact_id}.'}), 400
+                if 'name' not in impact_data or 'keywords' not in impact_data:
+                    return jsonify({'status': 'error', 'message': f'Impact type {impact_id} missing required fields.'}), 400
+                if not isinstance(impact_data['keywords'], list):
+                    return jsonify({'status': 'error', 'message': f'Keywords for {impact_id} must be a list.'}), 400
+            
+            config.save_impact_types(data)
+            config.IMPACT_TYPES_CONFIG = data.copy()
+            logger.info(f"Impact types updated and saved with {len(data)} types")
+            return jsonify({'status': 'success', 'impact_types': data, 'message': 'Impact types saved successfully.'})
+        except Exception as e:
+            logger.error(f"Error saving impact types: {e}", exc_info=True)
+            return jsonify({'status': 'error', 'message': f'An internal error occurred: {str(e)}'}), 500
+
+@app.route('/api/impact-types/restore_default', methods=['POST'])
+def restore_default_impact_types_route():
+    """Restore default impact types configuration."""
+    try:
+        default_impact_types = config.IMPACT_TYPES
+        config.save_impact_types(default_impact_types)
+        config.IMPACT_TYPES_CONFIG = default_impact_types.copy()
+        logger.info(f"Default impact types restored and saved")
+        return jsonify({'status': 'success', 'impact_types': default_impact_types, 'message': 'Default impact types restored and saved.'})
+    except Exception as e:
+        logger.error(f"Error restoring default impact types: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': f'An internal error occurred: {str(e)}'}), 500
+
 @app.route('/api/collect', methods=['POST'])
 def collect_feedback_route():
     """Enhanced collection route with source configuration support"""
@@ -172,6 +256,7 @@ def collect_feedback_route():
         reddit_feedback = []
         fabric_feedback = []
         github_feedback = []
+        github_issues_feedback = []
         ado_feedback = []
         
         # Collect from Reddit if enabled
@@ -234,21 +319,48 @@ def collect_feedback_route():
             collection_status['current_source'] = 'GitHub Discussions'
             collection_status['message'] = 'Collecting from GitHub Discussions...'
             github_config = source_configs['github']
-            logger.info(f"🐙 GITHUB: Collecting from {github_config.get('owner', 'microsoft')}/{github_config.get('repo', 'Microsoft-Fabric-workload-development-sample')}")
             
-            github_collector = GitHubDiscussionsCollector()
-            
-            # Pass configuration to collector if it supports it
-            if hasattr(github_collector, 'configure'):
-                github_collector.configure({
+            # Get list of repositories to collect from
+            repositories = github_config.get('repositories', [])
+            if not repositories:
+                # Fallback to single repo config for backward compatibility
+                repositories = [{
                     'owner': github_config.get('owner', 'microsoft'),
                     'repo': github_config.get('repo', 'Microsoft-Fabric-workload-development-sample'),
-                    'state': github_config.get('state', 'all'),
-                    'max_items': github_config.get('maxItems', 200)
-                })
+                    'enabled': True
+                }]
             
-            github_feedback = github_collector.collect()
-            logger.info(f"GitHub Discussions collector found {len(github_feedback)} items.")
+            # Filter to only enabled repositories
+            enabled_repos = [r for r in repositories if r.get('enabled', True)]
+            logger.info(f"🐙 GITHUB DISCUSSIONS: Collecting from {len(enabled_repos)} repositories")
+            
+            github_feedback = []
+            for repo_config in enabled_repos:
+                repo_owner = repo_config.get('owner')
+                repo_name = repo_config.get('repo')
+                
+                if not repo_owner or not repo_name:
+                    logger.warning(f"Skipping invalid repository config: {repo_config}")
+                    continue
+                
+                logger.info(f"  💬 Collecting from {repo_owner}/{repo_name}")
+                
+                github_collector = GitHubDiscussionsCollector()
+                
+                # Configure collector with specific repo
+                if hasattr(github_collector, 'configure'):
+                    github_collector.configure({
+                        'owner': repo_owner,
+                        'repo': repo_name,
+                        'state': github_config.get('state', 'all'),
+                        'max_items': github_config.get('maxItems', 200)
+                    })
+                
+                repo_feedback = github_collector.collect()
+                logger.info(f"  ✓ Found {len(repo_feedback)} items from {repo_owner}/{repo_name}")
+                github_feedback.extend(repo_feedback)
+            
+            logger.info(f"GitHub Discussions collector found {len(github_feedback)} total items from {len(enabled_repos)} repositories.")
             collection_status['sources_completed'].append('GitHub Discussions')
             if total_sources > 0:
                 collection_status['progress'] = (len(collection_status['sources_completed']) / total_sources) * 100
@@ -256,7 +368,61 @@ def collect_feedback_route():
             collection_status['source_counts'] = collection_status.get('source_counts', {})
             collection_status['source_counts']['github'] = len(github_feedback)
             all_feedback.extend(github_feedback)
-            results['github'] = {'count': len(github_feedback), 'completed': True}
+            results['github'] = {'count': len(github_feedback), 'completed': True, 'repositories': len(enabled_repos)}
+        
+        # Collect from GitHub Issues if enabled
+        if source_configs.get('githubIssues', {}).get('enabled', False):
+            collection_status['current_source'] = 'GitHub Issues'
+            collection_status['message'] = 'Collecting from GitHub Issues...'
+            github_issues_config = source_configs['githubIssues']
+            
+            # Get list of repositories to collect from
+            repositories = github_issues_config.get('repositories', [])
+            if not repositories:
+                # Fallback to single repo config for backward compatibility
+                repositories = [{
+                    'owner': github_issues_config.get('owner', 'microsoft'),
+                    'repo': github_issues_config.get('repo', 'Microsoft-Fabric-workload-development-sample'),
+                    'enabled': True
+                }]
+            
+            # Filter to only enabled repositories
+            enabled_repos = [r for r in repositories if r.get('enabled', True)]
+            logger.info(f"🐙 GITHUB ISSUES: Collecting from {len(enabled_repos)} repositories")
+            
+            github_issues_feedback = []
+            for repo_config in enabled_repos:
+                repo_owner = repo_config.get('owner')
+                repo_name = repo_config.get('repo')
+                
+                if not repo_owner or not repo_name:
+                    logger.warning(f"Skipping invalid repository config: {repo_config}")
+                    continue
+                
+                logger.info(f"  📦 Collecting from {repo_owner}/{repo_name}")
+                
+                github_issues_collector = GitHubIssuesCollector()
+                
+                # Pass configuration to collector
+                github_issues_collector.configure({
+                    'owner': repo_owner,
+                    'repo': repo_name,
+                    'max_items': github_issues_config.get('maxItems', 200)
+                })
+                
+                repo_feedback = github_issues_collector.collect()
+                logger.info(f"  ✓ Found {len(repo_feedback)} items from {repo_owner}/{repo_name}")
+                github_issues_feedback.extend(repo_feedback)
+            
+            logger.info(f"GitHub Issues collector found {len(github_issues_feedback)} total items from {len(enabled_repos)} repositories.")
+            collection_status['sources_completed'].append('GitHub Issues')
+            if total_sources > 0:
+                collection_status['progress'] = (len(collection_status['sources_completed']) / total_sources) * 100
+            # Add source counts for real-time updates
+            collection_status['source_counts'] = collection_status.get('source_counts', {})
+            collection_status['source_counts']['github_issues'] = len(github_issues_feedback)
+            all_feedback.extend(github_issues_feedback)
+            results['githubIssues'] = {'count': len(github_issues_feedback), 'completed': True, 'repositories': len(enabled_repos)}
         
         # Collect from Azure DevOps if enabled
         if source_configs.get('ado', {}).get('enabled', False):
@@ -371,11 +537,12 @@ def collect_feedback_route():
         # Add sentiment analysis to all feedback sources
         reddit_feedback = add_sentiment_to_feedback(reddit_feedback, "Reddit")
         fabric_feedback = add_sentiment_to_feedback(fabric_feedback, "Fabric Community")
-        github_feedback = add_sentiment_to_feedback(github_feedback, "GitHub")
+        github_feedback = add_sentiment_to_feedback(github_feedback, "GitHub Discussions")
+        github_issues_feedback = add_sentiment_to_feedback(github_issues_feedback, "GitHub Issues")
         
         # Note: all_feedback was already built by extending with each source
         # No need to combine again as it would lose the items
-        logger.info(f"Final feedback counts: Reddit={len(reddit_feedback)}, Fabric={len(fabric_feedback)}, GitHub={len(github_feedback)}, ADO={len(ado_feedback)}, Total={len(all_feedback)}")
+        logger.info(f"Final feedback counts: Reddit={len(reddit_feedback)}, Fabric={len(fabric_feedback)}, GitHub Discussions={len(github_feedback)}, GitHub Issues={len(github_issues_feedback)}, ADO={len(ado_feedback)}, Total={len(all_feedback)}")
         
         # Generate deterministic IDs for all feedback items BEFORE state initialization
         from id_generator import FeedbackIDGenerator
@@ -408,6 +575,7 @@ def collect_feedback_route():
             "reddit": {"count": len(reddit_feedback), "completed": True},
             "fabric": {"count": len(fabric_feedback), "completed": True},
             "github": {"count": len(github_feedback), "completed": True},
+            "github_issues": {"count": len(github_issues_feedback), "completed": True},
             "ado": {"count": len(ado_feedback), "completed": True},
             "total": len(all_feedback)
         }
@@ -483,7 +651,15 @@ def feedback_viewer():
     """Full-featured feedback viewer with template rendering"""
     global last_collected_feedback
     
-    import fabric_sql_writer
+    try:
+        import fabric_sql_writer
+    except ImportError as e:
+        logger.warning(f"Fabric SQL Writer not available (ODBC driver missing): {e}")
+        fabric_sql_writer = None
+    except Exception as e:
+        logger.warning(f"Fabric SQL Writer failed to load: {e}")
+        fabric_sql_writer = None
+        
     import id_generator
     from id_generator import FeedbackIDGenerator
     
@@ -646,6 +822,21 @@ def feedback_viewer():
         all_sources = sorted(list(set(item.get('Sources') or item.get('source') for item in last_collected_feedback if item.get('Sources') or item.get('source'))))
         all_categories = sorted(list(set(item.get('Category') or item.get('category') for item in last_collected_feedback if item.get('Category') or item.get('category'))))
         all_enhanced_categories = sorted(list(set(item.get('Enhanced_Category') or item.get('enhanced_category') for item in last_collected_feedback if item.get('Enhanced_Category') or item.get('enhanced_category'))))
+        all_subcategories = sorted(list(set(item.get('Subcategory') or item.get('subcategory') for item in last_collected_feedback if item.get('Subcategory') or item.get('subcategory'))))
+        
+        # Group subcategories by feature area for organized display
+        subcategories_by_feature_area = {}
+        for item in last_collected_feedback:
+            feature_area = item.get('Feature_Area') or item.get('feature_area')
+            subcategory = item.get('Subcategory') or item.get('subcategory')
+            if feature_area and subcategory:
+                if feature_area not in subcategories_by_feature_area:
+                    subcategories_by_feature_area[feature_area] = set()
+                subcategories_by_feature_area[feature_area].add(subcategory)
+        # Convert sets to sorted lists and sort by feature area
+        subcategories_by_feature_area = {k: sorted(v) for k, v in sorted(subcategories_by_feature_area.items())}
+        
+        all_impact_types = sorted(list(set(item.get('Impacttype') or item.get('impacttype') for item in last_collected_feedback if item.get('Impacttype') or item.get('impacttype'))))
         all_audiences = sorted(list(set(item.get('Audience') or item.get('audience') for item in last_collected_feedback if item.get('Audience') or item.get('audience'))))
         all_priorities = ['critical', 'high', 'medium', 'low']
         all_domains = sorted(list(set(item.get('Primary_Domain') or item.get('domain') for item in last_collected_feedback if item.get('Primary_Domain') or item.get('domain'))))
@@ -658,7 +849,8 @@ def feedback_viewer():
         logger.info(f"🔍 STATES FOUND: {all_states}")
         logger.info(f"🔍 AUDIENCES FOUND: {all_audiences}")
     else:
-        all_sources, all_categories, all_enhanced_categories, all_audiences, all_priorities, all_domains, all_sentiments, all_states = [], [], [], [], [], [], [], []
+        all_sources, all_categories, all_enhanced_categories, all_subcategories, all_impact_types, all_audiences, all_priorities, all_domains, all_sentiments, all_states = [], [], [], [], [], [], [], [], [], []
+        subcategories_by_feature_area = {}
         logger.warning("⚠️ NO FEEDBACK DATA: No last_collected_feedback available for filters")
 
     total_items = len(feedback_to_display)
@@ -672,6 +864,9 @@ def feedback_viewer():
                            all_sources=all_sources,
                            all_categories=all_categories,
                            all_enhanced_categories=all_enhanced_categories,
+                           all_subcategories=all_subcategories,
+                           subcategories_by_feature_area=subcategories_by_feature_area,
+                           all_impact_types=all_impact_types,
                            all_audiences=all_audiences,
                            all_priorities=all_priorities,
                            all_domains=all_domains,
@@ -1071,6 +1266,8 @@ def get_filtered_feedback():
         domain_filters = [d.strip() for d in request.args.get('domain', '').split(',') if d.strip()]
         sentiment_filters = [s.strip() for s in request.args.get('sentiment', '').split(',') if s.strip()]
         enhanced_category_filters = [c.strip() for c in request.args.get('enhanced_category', '').split(',') if c.strip()]
+        subcategory_filters = [s.strip() for s in request.args.get('subcategory', '').split(',') if s.strip()]
+        impacttype_filters = [i.strip() for i in request.args.get('impacttype', '').split(',') if i.strip()]
         
         # Search query
         search_query = request.args.get('search', '').strip()
@@ -1120,6 +1317,8 @@ def get_filtered_feedback():
             domain_filters=domain_filters,
             sentiment_filters=sentiment_filters,
             enhanced_category_filters=enhanced_category_filters,
+            subcategory_filters=subcategory_filters,
+            impacttype_filters=impacttype_filters,
             search_query=search_query,
             show_repeating=show_repeating,
             show_only_stored=show_only_stored,
@@ -1195,6 +1394,7 @@ def get_filtered_feedback():
 def apply_filters_to_feedback(feedback_data, source_filters=None, audience_filters=None, 
                             priority_filters=None, state_filters=None, domain_filters=None,
                             sentiment_filters=None, enhanced_category_filters=None, 
+                            subcategory_filters=None, impacttype_filters=None,
                             search_query='', show_repeating=False, show_only_stored=False, 
                             sort_by='newest'):
     """Extracted filtering logic for reuse between web and API routes"""
@@ -1271,6 +1471,20 @@ def apply_filters_to_feedback(feedback_data, source_filters=None, audience_filte
         filtered_feedback = [
             item for item in filtered_feedback
             if item.get('Enhanced_Category') in enhanced_category_filters
+        ]
+    
+    # Apply subcategory filter
+    if subcategory_filters:
+        filtered_feedback = [
+            item for item in filtered_feedback
+            if item.get('Subcategory') in subcategory_filters
+        ]
+    
+    # Apply impact type filter
+    if impacttype_filters:
+        filtered_feedback = [
+            item for item in filtered_feedback
+            if item.get('Impacttype') in impacttype_filters
         ]
     
     # Apply sorting
@@ -1717,6 +1931,15 @@ def sync_with_fabric():
     try:
         logger.info("🔄 Starting Fabric SQL sync process...")
         
+        # Get request data early (before any processing)
+        request_data = {}
+        try:
+            if request.is_json:
+                request_data = request.get_json() or {}
+        except Exception as json_error:
+            logger.debug(f"No JSON body in request: {json_error}")
+            request_data = {}
+        
         # Import SQL writer
         import fabric_sql_writer
         
@@ -1806,6 +2029,13 @@ def sync_with_fabric():
             logger.info(f"✅ Successfully completed Fabric sync: {sync_result['new_items']} new items + {len(state_data)} state records")
             logger.info("🔑 Set session flags and pseudo-bearer token for domain updates")
             
+            # Check if recategorization is requested (request_data parsed at function start)
+            recategorize_result = None
+            if request_data.get('recategorize', False):
+                logger.info("🔄 Starting automatic recategorization...")
+                recategorize_result = writer.recategorize_all_feedback(use_token=False)
+                logger.info(f"✅ Recategorization complete: {recategorize_result['recategorized']} items updated")
+            
             # Create detailed success message
             message_parts = [
                 f"Added {sync_result['new_items']} new items",
@@ -1816,15 +2046,23 @@ def sync_with_fabric():
             if sync_result.get('id_regenerated', 0) > 0:
                 message_parts.append(f"regenerated {sync_result['id_regenerated']} deterministic IDs")
             
+            if recategorize_result:
+                message_parts.append(f"recategorized {recategorize_result['recategorized']} items")
+            
             success_message = f"Connected to Fabric SQL Database. {', '.join(message_parts)}"
             
-            return jsonify({
+            response_data = {
                 'status': 'success',
                 'message': success_message,
                 'sync_result': sync_result,
                 'state_data': state_data,
                 'connected': True
-            })
+            }
+            
+            if recategorize_result:
+                response_data['recategorize_result'] = recategorize_result
+            
+            return jsonify(response_data)
             
         except Exception as sql_error:
             logger.error(f"❌ SQL connection failed: {sql_error}")

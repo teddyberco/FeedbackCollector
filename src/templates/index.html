@@ -126,6 +126,125 @@
             </div>
         </section>
 
+        <!-- Category Management -->
+        <section class="fluent-card">
+            <div class="fluent-card-header">
+                <h2 class="fluent-section-title">
+                    <i class="bi bi-diagram-3"></i>
+                    Category Management
+                </h2>
+            </div>
+            <div class="fluent-card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-lightbulb"></i>
+                    <strong>How it works:</strong> Each subcategory contains keywords. When feedback arrives, the system scans for these keywords to automatically categorize it.
+                    <br><small>Example: A subcategory "Performance Issues" with keywords ["slow", "lag", "performance"] will catch feedback mentioning those words.</small>
+                </div>
+                
+                <div id="categoryTree" class="category-tree">
+                    <!-- Category tree will be populated by JavaScript -->
+                </div>
+                
+                <div class="config-field-row mt-3">
+                    <button class="fluent-button fluent-button-primary" onclick="addCategory()">
+                        <i class="bi bi-plus-circle"></i> Add Category
+                    </button>
+                    <button class="fluent-button fluent-button-success" onclick="saveCategories()">
+                        <i class="bi bi-check"></i> Save Categories
+                    </button>
+                    <button class="fluent-button fluent-button-warning" onclick="restoreDefaultCategories()">
+                        <i class="bi bi-arrow-clockwise"></i> Restore Defaults
+                    </button>
+                </div>
+                
+                <div id="categoriesStatus" class="status-message"></div>
+            </div>
+        </section>
+
+        <!-- Subcategory Edit Modal -->
+        <div id="subcategoryModal" class="modal" style="display: none;">
+            <div class="modal-content" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h3>Edit Subcategory</h3>
+                    <button class="modal-close" onclick="closeSubcategoryModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="config-field">
+                        <label for="subName">Subcategory Name:</label>
+                        <input type="text" id="subName" class="fluent-input" />
+                    </div>
+                    <div class="config-field">
+                        <label for="subPriority">Priority:</label>
+                        <select id="subPriority" class="fluent-input">
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+                    <div class="config-field">
+                        <label for="subFeatureArea">Feature Area:</label>
+                        <input type="text" id="subFeatureArea" class="fluent-input" placeholder="Optional" />
+                    </div>
+                    <div class="config-field">
+                        <label>Keywords:</label>
+                        <div class="keyword-manager">
+                            <div class="keyword-input-row">
+                                <input type="text" id="newSubcategoryKeyword" class="fluent-input" placeholder="Enter keyword and click Add" />
+                                <button type="button" class="fluent-button fluent-button-primary" onclick="addKeywordToSubcategory()">
+                                    <i class="bi bi-plus-circle"></i> Add
+                                </button>
+                            </div>
+                            <div id="subcategoryKeywordsList" class="keywords-list mt-2">
+                                <!-- Keywords will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="fluent-button fluent-button-success" onclick="saveSubcategoryEdit()">
+                        <i class="bi bi-check"></i> Save
+                    </button>
+                    <button type="button" class="fluent-button fluent-button-secondary" onclick="closeSubcategoryModal()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Impact Type Management -->
+        <section class="fluent-card">
+            <div class="fluent-card-header">
+                <h2 class="fluent-section-title">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Impact Type Management
+                </h2>
+            </div>
+            <div class="fluent-card-body">
+                <p class="text-muted mb-3">
+                    Configure impact types (BUG, FEATURE_REQUEST, etc.) to classify feedback based on keywords.
+                </p>
+                
+                <div id="impactTypeList" class="impact-type-list">
+                    <!-- Impact types will be populated by JavaScript -->
+                </div>
+                
+                <div class="config-field-row mt-3">
+                    <button class="fluent-button fluent-button-primary" onclick="addImpactType()">
+                        <i class="bi bi-plus-circle"></i> Add Impact Type
+                    </button>
+                    <button class="fluent-button fluent-button-success" onclick="saveImpactTypes()">
+                        <i class="bi bi-check"></i> Save Impact Types
+                    </button>
+                    <button class="fluent-button fluent-button-warning" onclick="restoreDefaultImpactTypes()">
+                        <i class="bi bi-arrow-clockwise"></i> Restore Defaults
+                    </button>
+                </div>
+                
+                <div id="impactTypesStatus" class="status-message"></div>
+            </div>
+        </section>
+
         <!-- Storage Options -->
         <section class="fluent-card">
             <div class="fluent-card-header">
@@ -677,6 +796,10 @@
                     console.error('Error fetching initial keywords:', error);
                     showKeywordsStatus('Error loading initial keywords.', true);
                 });
+            
+            // Load categories and impact types
+            loadCategories();
+            loadImpactTypes();
         });
 
         function addKeyword() {
@@ -739,6 +862,573 @@
                 console.error('Error:', error);
                 showKeywordsStatus('Error restoring default keywords.', true);
             });
+        }
+
+        // ==================== Category Management ====================
+        let currentCategories = {};
+        
+        // Load and render categories
+        function loadCategories() {
+            fetch('/api/categories')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        currentCategories = data.categories;
+                        renderCategoryTree(currentCategories);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading categories:', error);
+                    showCategoriesStatus('Error loading categories.', true);
+                });
+        }
+        
+        // Render category tree
+        function renderCategoryTree(categories) {
+            const treeContainer = document.getElementById('categoryTree');
+            treeContainer.innerHTML = '';
+            
+            Object.keys(categories).forEach(categoryKey => {
+                const category = categories[categoryKey];
+                const categoryDiv = createCategoryNode(categoryKey, category);
+                treeContainer.appendChild(categoryDiv);
+            });
+        }
+        
+        // Create category node with subcategories
+        function createCategoryNode(key, category) {
+            const div = document.createElement('div');
+            div.className = 'category-node';
+            div.innerHTML = `
+                <div class="category-header">
+                    <button class="expand-btn" onclick="toggleCategory(this)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <strong>${category.name || key}</strong>
+                    <div class="category-actions">
+                        <button class="btn-icon" onclick="editCategory('${key}')" title="Edit category">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn-icon" onclick="addSubcategory('${key}')" title="Add subcategory">
+                            <i class="bi bi-plus-circle"></i>
+                        </button>
+                        <button class="btn-icon btn-danger" onclick="deleteCategory('${key}')" title="Delete category">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="category-content" style="display: none;">
+                    <div class="subcategories-container">
+                        ${renderSubcategories(key, category.subcategories || {})}
+                    </div>
+                </div>
+            `;
+            return div;
+        }
+        
+        // Render subcategories
+        function renderSubcategories(categoryKey, subcategories) {
+            let html = '';
+            Object.keys(subcategories).forEach(subKey => {
+                const sub = subcategories[subKey];
+                const keywordCount = (sub.keywords || []).length;
+                const keywordPreview = keywordCount > 0 ? 
+                    `<span class="keyword-count" title="${(sub.keywords || []).join(', ')}">${keywordCount} keyword${keywordCount !== 1 ? 's' : ''}</span>` : 
+                    '<span class="text-muted">No keywords</span>';
+                
+                html += `
+                    <div class="subcategory-node">
+                        <div class="subcategory-header">
+                            <button class="expand-btn" onclick="toggleSubcategory(this)">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
+                            <div class="subcategory-info">
+                                <span class="subcategory-name">${sub.name || subKey}</span>
+                                <div class="subcategory-meta">
+                                    <span class="badge bg-${getPriorityBadgeClass(sub.priority)}">${sub.priority || 'medium'}</span>
+                                    ${keywordPreview}
+                                </div>
+                            </div>
+                            <div class="subcategory-actions">
+                                <button class="btn-icon" onclick="editSubcategory('${categoryKey}', '${subKey}')" title="Edit subcategory">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="btn-icon btn-danger" onclick="deleteSubcategory('${categoryKey}', '${subKey}')" title="Delete subcategory">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="subcategory-content" style="display: none;">
+                            ${renderSubcategoryDetails(sub)}
+                        </div>
+                    </div>
+                `;
+            });
+            return html || '<p class="text-muted ms-4">No subcategories</p>';
+        }
+        
+        // Helper function for priority badge colors
+        function getPriorityBadgeClass(priority) {
+            const classes = {
+                'critical': 'danger',
+                'high': 'warning',
+                'medium': 'info',
+                'low': 'secondary'
+            };
+            return classes[priority?.toLowerCase()] || 'info';
+        }
+        
+        // Render subcategory details
+        function renderSubcategoryDetails(subcategory) {
+            return `
+                <div class="subcategory-details">
+                    ${subcategory.feature_area ? `<div class="mb-2"><strong>Feature Area:</strong> <span class="text-primary">${subcategory.feature_area}</span></div>` : ''}
+                    <div class="mb-2">
+                        <strong>Keywords that trigger this category:</strong>
+                        <div class="keywords-list mt-2">
+                            ${subcategory.keywords && subcategory.keywords.length > 0 ? 
+                                subcategory.keywords.map(kw => `<span class="keyword-tag">${kw}</span>`).join('') :
+                                '<span class="text-muted">No keywords configured - this subcategory won\'t be auto-detected</span>'
+                            }
+                        </div>
+                    </div>
+                    <div class="text-muted small">
+                        <i class="bi bi-info-circle"></i> Feedback containing any of these keywords will be automatically categorized here
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Toggle category expansion
+        function toggleCategory(button) {
+            const content = button.closest('.category-header').nextElementSibling;
+            const icon = button.querySelector('i');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.className = 'bi bi-chevron-down';
+            } else {
+                content.style.display = 'none';
+                icon.className = 'bi bi-chevron-right';
+            }
+        }
+        
+        // Toggle subcategory expansion
+        function toggleSubcategory(button) {
+            const content = button.closest('.subcategory-header').nextElementSibling;
+            const icon = button.querySelector('i');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.className = 'bi bi-chevron-down';
+            } else {
+                content.style.display = 'none';
+                icon.className = 'bi bi-chevron-right';
+            }
+        }
+        
+        // Add new category
+        function addCategory() {
+            const name = prompt('Enter category name:');
+            if (!name) return;
+            
+            const key = name.toUpperCase().replace(/\s+/g, '_');
+            if (currentCategories[key]) {
+                alert('Category already exists!');
+                return;
+            }
+            
+            currentCategories[key] = {
+                name: name,
+                subcategories: {}
+            };
+            renderCategoryTree(currentCategories);
+        }
+        
+        // Edit category
+        function editCategory(key) {
+            const category = currentCategories[key];
+            const newName = prompt('Edit category name:', category.name);
+            if (newName && newName !== category.name) {
+                category.name = newName;
+                renderCategoryTree(currentCategories);
+            }
+        }
+        
+        // Delete category
+        function deleteCategory(key) {
+            if (!confirm(`Delete category "${currentCategories[key].name}"?`)) return;
+            delete currentCategories[key];
+            renderCategoryTree(currentCategories);
+        }
+        
+        // Add subcategory
+        function addSubcategory(categoryKey) {
+            const name = prompt('Enter subcategory name:');
+            if (!name) return;
+            
+            const subKey = name.toUpperCase().replace(/\s+/g, '_');
+            if (currentCategories[categoryKey].subcategories[subKey]) {
+                alert('Subcategory already exists!');
+                return;
+            }
+            
+            currentCategories[categoryKey].subcategories[subKey] = {
+                name: name,
+                keywords: [],
+                priority: 'medium',
+                feature_area: ''
+            };
+            renderCategoryTree(currentCategories);
+        }
+        
+        // Edit subcategory (opens modal)
+        let editingCategoryKey = null;
+        let editingSubKey = null;
+        let tempKeywords = [];
+        
+        function editSubcategory(categoryKey, subKey) {
+            const sub = currentCategories[categoryKey].subcategories[subKey];
+            
+            editingCategoryKey = categoryKey;
+            editingSubKey = subKey;
+            tempKeywords = [...(sub.keywords || [])];
+            
+            document.getElementById('subName').value = sub.name;
+            document.getElementById('subPriority').value = sub.priority || 'medium';
+            document.getElementById('subFeatureArea').value = sub.feature_area || '';
+            
+            renderSubcategoryKeywordsList();
+            document.getElementById('subcategoryModal').style.display = 'flex';
+        }
+        
+        function renderSubcategoryKeywordsList() {
+            const container = document.getElementById('subcategoryKeywordsList');
+            if (tempKeywords.length === 0) {
+                container.innerHTML = '<span class="text-muted">No keywords added yet</span>';
+                return;
+            }
+            
+            container.innerHTML = tempKeywords.map((kw, idx) => `
+                <span class="keyword-tag">
+                    ${kw}
+                    <button class="keyword-remove" onclick="removeKeywordFromSubcategory(${idx})" title="Remove keyword">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </span>
+            `).join('');
+        }
+        
+        function addKeywordToSubcategory() {
+            console.log('addKeywordToSubcategory called');
+            const input = document.getElementById('newSubcategoryKeyword');
+            if (!input) {
+                console.error('newSubcategoryKeyword input not found');
+                return;
+            }
+            
+            console.log('Input element:', input);
+            console.log('Input value before trim:', input.value);
+            const keyword = input.value.trim();
+            console.log('Keyword after trim:', keyword);
+            
+            if (!keyword) {
+                console.log('Empty keyword, returning');
+                alert('Please enter a keyword before clicking Add');
+                return;
+            }
+            
+            if (tempKeywords.includes(keyword)) {
+                alert('Keyword already exists!');
+                return;
+            }
+            
+            tempKeywords.push(keyword);
+            console.log('Keywords after adding:', tempKeywords);
+            input.value = '';
+            renderSubcategoryKeywordsList();
+        }
+        
+        // Make function globally accessible
+        window.addKeywordToSubcategory = addKeywordToSubcategory;
+        
+        function removeKeywordFromSubcategory(index) {
+            tempKeywords.splice(index, 1);
+            renderSubcategoryKeywordsList();
+        }
+        
+        function saveSubcategoryEdit() {
+            const sub = currentCategories[editingCategoryKey].subcategories[editingSubKey];
+            
+            sub.name = document.getElementById('subName').value.trim();
+            sub.priority = document.getElementById('subPriority').value;
+            sub.feature_area = document.getElementById('subFeatureArea').value.trim();
+            sub.keywords = [...tempKeywords];
+            
+            closeSubcategoryModal();
+            renderCategoryTree(currentCategories);
+        }
+        
+        function closeSubcategoryModal() {
+            document.getElementById('subcategoryModal').style.display = 'none';
+            editingCategoryKey = null;
+            editingSubKey = null;
+            tempKeywords = [];
+        }
+        
+        // Make functions globally accessible
+        window.removeKeywordFromSubcategory = removeKeywordFromSubcategory;
+        window.saveSubcategoryEdit = saveSubcategoryEdit;
+        window.closeSubcategoryModal = closeSubcategoryModal;
+        
+        // Allow Enter key to add keyword in subcategory modal
+        document.addEventListener('DOMContentLoaded', function() {
+            const newKeywordInput = document.getElementById('newSubcategoryKeyword');
+            if (newKeywordInput) {
+                newKeywordInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addKeywordToSubcategory();
+                    }
+                });
+            }
+        });
+        
+        // Delete subcategory
+        function deleteSubcategory(categoryKey, subKey) {
+            if (!confirm(`Delete subcategory "${currentCategories[categoryKey].subcategories[subKey].name}"?`)) return;
+            delete currentCategories[categoryKey].subcategories[subKey];
+            renderCategoryTree(currentCategories);
+        }
+        
+        // Save categories
+        function saveCategories() {
+            fetch('/api/categories', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ categories: currentCategories })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showCategoriesStatus('Categories saved successfully!');
+                } else {
+                    showCategoriesStatus(data.message || 'Error saving categories.', true);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showCategoriesStatus('Error saving categories.', true);
+            });
+        }
+        
+        // Restore default categories
+        function restoreDefaultCategories() {
+            if (!confirm('Restore default categories? This will replace your current configuration.')) return;
+            
+            fetch('/api/categories/restore_default', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    currentCategories = data.categories;
+                    renderCategoryTree(currentCategories);
+                    showCategoriesStatus('Default categories restored!');
+                } else {
+                    showCategoriesStatus(data.message || 'Error restoring defaults.', true);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showCategoriesStatus('Error restoring defaults.', true);
+            });
+        }
+        
+        // Show categories status message
+        function showCategoriesStatus(message, isError = false) {
+            const statusDiv = document.getElementById('categoriesStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-message ${isError ? 'status-error' : 'status-success'}`;
+            statusDiv.style.display = 'block';
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        // ==================== Impact Type Management ====================
+        let currentImpactTypes = {};
+        
+        // Load and render impact types
+        function loadImpactTypes() {
+            fetch('/api/impact-types')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        currentImpactTypes = data.impact_types;
+                        renderImpactTypeList(currentImpactTypes);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading impact types:', error);
+                    showImpactTypesStatus('Error loading impact types.', true);
+                });
+        }
+        
+        // Render impact type list
+        function renderImpactTypeList(impactTypes) {
+            const container = document.getElementById('impactTypeList');
+            container.innerHTML = '';
+            
+            Object.keys(impactTypes).forEach(key => {
+                const type = impactTypes[key];
+                const typeCard = createImpactTypeCard(key, type);
+                container.appendChild(typeCard);
+            });
+        }
+        
+        // Create impact type card
+        function createImpactTypeCard(key, type) {
+            const div = document.createElement('div');
+            div.className = 'impact-type-card';
+            div.style.borderLeft = `4px solid ${type.color || '#666'}`;
+            
+            div.innerHTML = `
+                <div class="impact-type-header">
+                    <div class="impact-type-info">
+                        <span class="impact-type-name" style="color: ${type.color || '#666'}">
+                            <strong>${key}</strong>
+                        </span>
+                        <span class="impact-type-priority badge bg-${getPriorityClass(type.priority)}">
+                            ${type.priority}
+                        </span>
+                    </div>
+                    <div class="impact-type-actions">
+                        <button class="btn-icon" onclick="editImpactType('${key}')" title="Edit impact type">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn-icon btn-danger" onclick="deleteImpactType('${key}')" title="Delete impact type">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="impact-type-details">
+                    ${type.description ? `<p class="text-muted">${type.description}</p>` : ''}
+                    <div class="keywords-list">
+                        ${(type.keywords || []).map(kw => `<span class="keyword-tag">${kw}</span>`).join('')}
+                    </div>
+                </div>
+            `;
+            return div;
+        }
+        
+        // Helper function for priority badge color
+        function getPriorityClass(priority) {
+            const classes = {
+                'critical': 'danger',
+                'high': 'warning',
+                'medium': 'info',
+                'low': 'secondary'
+            };
+            return classes[priority?.toLowerCase()] || 'secondary';
+        }
+        
+        // Add new impact type
+        function addImpactType() {
+            const key = prompt('Enter impact type key (e.g., BUG, FEATURE_REQUEST):');
+            if (!key) return;
+            
+            const upperKey = key.toUpperCase().replace(/\s+/g, '_');
+            if (currentImpactTypes[upperKey]) {
+                alert('Impact type already exists!');
+                return;
+            }
+            
+            const description = prompt('Description:') || '';
+            const priority = prompt('Priority (critical/high/medium/low):', 'medium') || 'medium';
+            const color = prompt('Color (hex code):', '#666') || '#666';
+            const keywordsStr = prompt('Keywords (comma-separated):') || '';
+            
+            currentImpactTypes[upperKey] = {
+                description: description,
+                priority: priority.toLowerCase(),
+                color: color,
+                keywords: keywordsStr ? keywordsStr.split(',').map(k => k.trim()).filter(k => k) : []
+            };
+            renderImpactTypeList(currentImpactTypes);
+        }
+        
+        // Edit impact type
+        function editImpactType(key) {
+            const type = currentImpactTypes[key];
+            
+            const description = prompt('Description:', type.description) || '';
+            const priority = prompt('Priority (critical/high/medium/low):', type.priority) || 'medium';
+            const color = prompt('Color (hex code):', type.color) || '#666';
+            const keywordsStr = prompt('Keywords (comma-separated):', (type.keywords || []).join(', '));
+            
+            type.description = description;
+            type.priority = priority.toLowerCase();
+            type.color = color;
+            type.keywords = keywordsStr ? keywordsStr.split(',').map(k => k.trim()).filter(k => k) : [];
+            
+            renderImpactTypeList(currentImpactTypes);
+        }
+        
+        // Delete impact type
+        function deleteImpactType(key) {
+            if (!confirm(`Delete impact type "${key}"?`)) return;
+            delete currentImpactTypes[key];
+            renderImpactTypeList(currentImpactTypes);
+        }
+        
+        // Save impact types
+        function saveImpactTypes() {
+            fetch('/api/impact-types', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ impact_types: currentImpactTypes })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showImpactTypesStatus('Impact types saved successfully!');
+                } else {
+                    showImpactTypesStatus(data.message || 'Error saving impact types.', true);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showImpactTypesStatus('Error saving impact types.', true);
+            });
+        }
+        
+        // Restore default impact types
+        function restoreDefaultImpactTypes() {
+            if (!confirm('Restore default impact types? This will replace your current configuration.')) return;
+            
+            fetch('/api/impact-types/restore_default', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    currentImpactTypes = data.impact_types;
+                    renderImpactTypeList(currentImpactTypes);
+                    showImpactTypesStatus('Default impact types restored!');
+                } else {
+                    showImpactTypesStatus(data.message || 'Error restoring defaults.', true);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showImpactTypesStatus('Error restoring defaults.', true);
+            });
+        }
+        
+        // Show impact types status message
+        function showImpactTypesStatus(message, isError = false) {
+            const statusDiv = document.getElementById('impactTypesStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-message ${isError ? 'status-error' : 'status-success'}`;
+            statusDiv.style.display = 'block';
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
         }
 
         // Toggle the collection progress drawer
@@ -1593,6 +2283,357 @@
         // Source configuration is already initialized in source-configuration.js
         // No additional initialization needed here
     </script>
+
+    <style>
+        /* Category Tree Styles */
+        .category-tree {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .category-node {
+            margin-bottom: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            background-color: white;
+            padding: 10px;
+        }
+        
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        
+        .category-header strong {
+            flex: 1;
+            font-size: 1.1em;
+            color: #0078d4;
+        }
+        
+        .category-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .category-content {
+            padding: 10px 10px 10px 30px;
+        }
+        
+        .subcategories-container {
+            margin-top: 10px;
+        }
+        
+        .subcategory-node {
+            margin-bottom: 10px;
+            border-left: 3px solid #0078d4;
+            padding-left: 10px;
+        }
+        
+        .subcategory-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            background-color: #f9f9f9;
+            border-radius: 3px;
+        }
+        
+        .subcategory-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .subcategory-name {
+            font-weight: 500;
+            font-size: 1em;
+        }
+        
+        .subcategory-meta {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-size: 0.85em;
+        }
+        
+        .keyword-count {
+            color: #0078d4;
+            font-size: 0.85em;
+            cursor: help;
+        }
+        
+        .subcategory-actions {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .subcategory-content {
+            padding: 8px 8px 8px 25px;
+        }
+        
+        .subcategory-details {
+            font-size: 0.9em;
+            color: #555;
+        }
+        
+        .subcategory-details > div {
+            margin-bottom: 5px;
+        }
+        
+        .keywords-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        
+        .keyword-tag {
+            background-color: #e1f5fe;
+            color: #0277bd;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            border: 1px solid #b3e5fc;
+        }
+        
+        .expand-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #666;
+            transition: transform 0.2s;
+        }
+        
+        .expand-btn:hover {
+            color: #0078d4;
+        }
+        
+        .btn-icon {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 3px;
+            color: #666;
+            transition: all 0.2s;
+        }
+        
+        .btn-icon:hover {
+            background-color: #e0e0e0;
+            color: #0078d4;
+        }
+        
+        .btn-icon.btn-danger {
+            color: #d32f2f;
+        }
+        
+        .btn-icon.btn-danger:hover {
+            background-color: #ffebee;
+            color: #b71c1c;
+        }
+        
+        /* Impact Type Styles */
+        .impact-type-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+        
+        .impact-type-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            background-color: white;
+            transition: box-shadow 0.2s;
+        }
+        
+        .impact-type-card:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .impact-type-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .impact-type-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+        }
+        
+        .impact-type-name {
+            font-size: 1.1em;
+        }
+        
+        .impact-type-priority {
+            font-size: 0.75em;
+            text-transform: uppercase;
+        }
+        
+        .impact-type-actions {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .impact-type-details {
+            font-size: 0.9em;
+        }
+        
+        .impact-type-details p {
+            margin-bottom: 8px;
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlideIn 0.3s ease-out;
+        }
+        
+        @keyframes modalSlideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .modal-header h3 {
+            margin: 0;
+            color: #0078d4;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 28px;
+            font-weight: bold;
+            color: #aaa;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+        
+        .modal-close:hover {
+            color: #000;
+        }
+        
+        .modal-body {
+            padding: 20px;
+        }
+        
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 15px 20px;
+            border-top: 1px solid #e0e0e0;
+            background-color: #f9f9f9;
+        }
+        
+        /* Keyword Manager Styles */
+        .keyword-manager {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            background-color: #f9f9f9;
+        }
+        
+        .keyword-input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .keyword-input-row input {
+            flex: 1;
+        }
+        
+        .keyword-tag {
+            background-color: #e1f5fe;
+            color: #0277bd;
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            border: 1px solid #b3e5fc;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .keyword-remove {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #0277bd;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+        
+        .keyword-remove:hover {
+            background-color: #0277bd;
+            color: white;
+        }
+    </style>
 
 </body>
 </html>

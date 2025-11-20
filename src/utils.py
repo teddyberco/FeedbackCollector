@@ -5,7 +5,7 @@ import re
 from config import (
     FEEDBACK_CATEGORIES_WITH_KEYWORDS, DEFAULT_CATEGORY,
     ENHANCED_FEEDBACK_CATEGORIES, AUDIENCE_DETECTION_KEYWORDS, PRIORITY_LEVELS,
-    DOMAIN_CATEGORIES
+    DOMAIN_CATEGORIES, IMPACT_TYPES_CONFIG
 )
 
 # Configure logging
@@ -415,6 +415,43 @@ def detect_audience(text: str, source: str = "", scenario: str = "", organizatio
     
     return 'Customer'  # Fallback
 
+def determine_impact_type(text: str) -> str:
+    """
+    Determine the impact type of feedback based on keyword analysis.
+    
+    Args:
+        text: The feedback text to analyze
+    
+    Returns:
+        Impact type: 'BUG', 'FEATURE_REQUEST', 'PERFORMANCE', 'COMPATIBILITY', 'QUESTION', or 'FEEDBACK'
+    """
+    if not text or not isinstance(text, str):
+        return 'FEEDBACK'
+    
+    text_lower = text.lower()
+    impact_scores = {}
+    
+    # Score each impact type based on keyword matches
+    for impact_id, impact_info in IMPACT_TYPES_CONFIG.items():
+        score = 0
+        for keyword in impact_info['keywords']:
+            if keyword.lower() in text_lower:
+                score += 1
+        impact_scores[impact_id] = score
+    
+    # Find the highest scoring impact type
+    max_score = max(impact_scores.values()) if impact_scores else 0
+    
+    if max_score == 0:
+        return 'FEEDBACK'  # Default to general feedback
+    
+    # Return the impact type with the highest score
+    for impact_id, score in impact_scores.items():
+        if score == max_score:
+            return impact_id
+    
+    return 'FEEDBACK'  # Fallback
+
 def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = "", organization: str = "") -> dict:
     """
     Enhanced categorization that provides hierarchical categorization with audience detection.
@@ -433,6 +470,7 @@ def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = ""
         - priority: Priority level
         - feature_area: Feature area classification
         - confidence: Confidence score (0.0 to 1.0)
+        - impact_type: Impact type (BUG, FEATURE_REQUEST, PERFORMANCE, etc.)
         - legacy_category: For backward compatibility
     """
     if not text or not isinstance(text, str):
@@ -443,6 +481,7 @@ def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = ""
             'priority': 'medium',
             'feature_area': 'General',
             'confidence': 0.0,
+            'impact_type': 'FEEDBACK',
             'legacy_category': DEFAULT_CATEGORY
         }
     
@@ -450,6 +489,9 @@ def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = ""
     
     # Detect audience first
     audience = detect_audience(text, source, scenario, organization)
+    
+    # Determine impact type
+    impact_type = determine_impact_type(text)
     
     # Initialize result
     result = {
@@ -459,6 +501,7 @@ def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = ""
         'priority': 'medium',
         'feature_area': 'General',
         'confidence': 0.0,
+        'impact_type': impact_type,
         'legacy_category': categorize_feedback(text)
     }
     

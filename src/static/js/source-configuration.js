@@ -12,8 +12,26 @@ class SourceConfigManager {
             },
             github: {
                 enabled: true,
-                owner: 'microsoft',
-                repo: 'Microsoft-Fabric-workload-development-sample',
+                repositories: [
+                    {
+                        owner: 'microsoft',
+                        repo: 'Microsoft-Fabric-workload-development-sample',
+                        enabled: true
+                    }
+                ],
+                state: 'all',
+                labels: [],
+                maxItems: 200
+            },
+            githubIssues: {
+                enabled: true,
+                repositories: [
+                    {
+                        owner: 'microsoft',
+                        repo: 'Microsoft-Fabric-workload-development-sample',
+                        enabled: true
+                    }
+                ],
                 state: 'all',
                 labels: [],
                 maxItems: 200
@@ -126,6 +144,30 @@ class SourceConfigManager {
             if (e.target.matches('.btn-configure') || e.target.closest('.btn-configure')) {
                 this.toggleSourceConfig(e.target.closest('.source-card'));
             }
+            
+            // Add repository button
+            if (e.target.matches('.btn-add-repo') || e.target.closest('.btn-add-repo')) {
+                this.handleAddRepository(e.target.closest('.source-card'));
+            }
+            
+            // Remove repository button
+            if (e.target.matches('.btn-remove-repo') || e.target.closest('.btn-remove-repo')) {
+                const button = e.target.closest('.btn-remove-repo');
+                const repoIndex = parseInt(button.dataset.repoIndex);
+                this.handleRemoveRepository(repoIndex);
+            }
+            
+            // GitHub Discussions - Add repository button
+            if (e.target.matches('.btn-add-github-repo') || e.target.closest('.btn-add-github-repo')) {
+                this.handleAddGithubRepository(e.target.closest('.source-card'));
+            }
+            
+            // GitHub Discussions - Remove repository button
+            if (e.target.matches('.btn-remove-github-repo') || e.target.closest('.btn-remove-github-repo')) {
+                const button = e.target.closest('.btn-remove-github-repo');
+                const repoIndex = parseInt(button.dataset.repoIndex);
+                this.handleRemoveGithubRepository(repoIndex);
+            }
         });
         
         // Input change listeners
@@ -140,7 +182,167 @@ class SourceConfigManager {
             if (e.target.matches('.setting-input')) {
                 this.handleSettingChange(e.target);
             }
+            
+            // Repository toggle listeners
+            if (e.target.matches('.repo-toggle')) {
+                this.handleRepoToggle(e.target);
+            }
+            
+            // GitHub repo toggle listeners
+            if (e.target.matches('.github-repo-toggle')) {
+                this.handleGithubRepoToggle(e.target);
+            }
         });
+    }
+    
+    handleAddRepository(sourceCard) {
+        const ownerInput = sourceCard.querySelector('#newRepoOwner');
+        const repoInput = sourceCard.querySelector('#newRepoName');
+        
+        const owner = ownerInput.value.trim();
+        const repo = repoInput.value.trim();
+        
+        if (!owner || !repo) {
+            alert('Please enter both owner and repository name');
+            return;
+        }
+        
+        // Check for duplicates
+        const existingRepos = this.sources.githubIssues.repositories || [];
+        const isDuplicate = existingRepos.some(r => 
+            r.owner.toLowerCase() === owner.toLowerCase() && 
+            r.repo.toLowerCase() === repo.toLowerCase()
+        );
+        
+        if (isDuplicate) {
+            alert('This repository is already in the list');
+            return;
+        }
+        
+        // Add the new repository
+        if (!this.sources.githubIssues.repositories) {
+            this.sources.githubIssues.repositories = [];
+        }
+        
+        this.sources.githubIssues.repositories.push({
+            owner: owner,
+            repo: repo,
+            enabled: true
+        });
+        
+        // Clear inputs
+        ownerInput.value = '';
+        repoInput.value = '';
+        
+        // Re-render the source card
+        this.renderSourceCards();
+        this.saveConfiguration();
+        
+        // Re-open the configuration panel
+        setTimeout(() => {
+            const newCard = document.querySelector('[data-source="githubIssues"]');
+            const configDiv = newCard.querySelector('.source-config');
+            configDiv.classList.add('expanded');
+        }, 100);
+    }
+    
+    handleRemoveRepository(repoIndex) {
+        if (!confirm('Are you sure you want to remove this repository?')) {
+            return;
+        }
+        
+        this.sources.githubIssues.repositories.splice(repoIndex, 1);
+        this.renderSourceCards();
+        this.saveConfiguration();
+        
+        // Re-open the configuration panel
+        setTimeout(() => {
+            const card = document.querySelector('[data-source="githubIssues"]');
+            const configDiv = card.querySelector('.source-config');
+            configDiv.classList.add('expanded');
+        }, 100);
+    }
+    
+    handleRepoToggle(toggle) {
+        const repoIndex = parseInt(toggle.dataset.repoIndex);
+        this.sources.githubIssues.repositories[repoIndex].enabled = toggle.checked;
+        this.updateSourceStatus('githubIssues');
+        this.saveConfiguration();
+    }
+    
+    handleAddGithubRepository(sourceCard) {
+        const ownerInput = sourceCard.querySelector('#newGithubRepoOwner');
+        const repoInput = sourceCard.querySelector('#newGithubRepoName');
+        
+        const owner = ownerInput.value.trim();
+        const repo = repoInput.value.trim();
+        
+        if (!owner || !repo) {
+            alert('Please enter both owner and repository name');
+            return;
+        }
+        
+        // Check for duplicates
+        const existingRepos = this.sources.github.repositories || [];
+        const isDuplicate = existingRepos.some(r => 
+            r.owner.toLowerCase() === owner.toLowerCase() && 
+            r.repo.toLowerCase() === repo.toLowerCase()
+        );
+        
+        if (isDuplicate) {
+            alert('This repository is already in the list');
+            return;
+        }
+        
+        // Add the new repository
+        if (!this.sources.github.repositories) {
+            this.sources.github.repositories = [];
+        }
+        
+        this.sources.github.repositories.push({
+            owner: owner,
+            repo: repo,
+            enabled: true
+        });
+        
+        // Clear inputs
+        ownerInput.value = '';
+        repoInput.value = '';
+        
+        // Re-render the source card
+        this.renderSourceCards();
+        this.saveConfiguration();
+        
+        // Re-open the configuration panel
+        setTimeout(() => {
+            const newCard = document.querySelector('[data-source="github"]');
+            const configDiv = newCard.querySelector('.source-config');
+            configDiv.classList.add('expanded');
+        }, 100);
+    }
+    
+    handleRemoveGithubRepository(repoIndex) {
+        if (!confirm('Are you sure you want to remove this repository?')) {
+            return;
+        }
+        
+        this.sources.github.repositories.splice(repoIndex, 1);
+        this.renderSourceCards();
+        this.saveConfiguration();
+        
+        // Re-open the configuration panel
+        setTimeout(() => {
+            const card = document.querySelector('[data-source="github"]');
+            const configDiv = card.querySelector('.source-config');
+            configDiv.classList.add('expanded');
+        }, 100);
+    }
+    
+    handleGithubRepoToggle(toggle) {
+        const repoIndex = parseInt(toggle.dataset.repoIndex);
+        this.sources.github.repositories[repoIndex].enabled = toggle.checked;
+        this.updateSourceStatus('github');
+        this.saveConfiguration();
     }
     
     handleSourceToggle(toggle) {
@@ -239,9 +441,19 @@ class SourceConfigManager {
                 }
                 break;
             case 'github':
-                if (!this.sources.github.owner || !this.sources.github.repo) {
+                const githubRepos = this.sources.github.repositories || [];
+                const enabledGithubRepos = githubRepos.filter(r => r.enabled);
+                if (enabledGithubRepos.length === 0) {
                     isValid = false;
-                    message = 'Missing repository';
+                    message = 'No repositories enabled';
+                }
+                break;
+            case 'githubIssues':
+                const repos = this.sources.githubIssues.repositories || [];
+                const enabledRepos = repos.filter(r => r.enabled);
+                if (enabledRepos.length === 0) {
+                    isValid = false;
+                    message = 'No repositories enabled';
                 }
                 break;
             case 'ado':
@@ -274,6 +486,12 @@ class SourceConfigManager {
                 name: 'GitHub Discussions',
                 icon: 'bi bi-github',
                 description: 'Collect feedback from GitHub repository discussions'
+            },
+            {
+                id: 'githubIssues',
+                name: 'GitHub Issues',
+                icon: 'bi bi-exclamation-circle',
+                description: 'Collect feedback from GitHub repository issues'
             },
             {
                 id: 'fabricCommunity',
@@ -372,19 +590,115 @@ class SourceConfigManager {
                 `;
                 
             case 'github':
-                return `
-                    <div class="config-field-row">
-                        <div class="config-field">
-                            <label class="fluent-label">Owner:</label>
-                            <input type="text" class="fluent-input source-input" 
-                                   data-field="owner" value="${source.owner}">
-                        </div>
-                        <div class="config-field">
-                            <label class="fluent-label">Repository:</label>
-                            <input type="text" class="fluent-input source-input" 
-                                   data-field="repo" value="${source.repo}">
+                const githubRepos = source.repositories || [];
+                const githubRepoList = githubRepos.map((repo, index) => `
+                    <div class="repo-item" data-repo-index="${index}">
+                        <div class="config-field-row" style="align-items: center;">
+                            <label class="fluent-toggle" style="margin: 0;">
+                                <input type="checkbox" class="github-repo-toggle" 
+                                       data-repo-index="${index}" ${repo.enabled ? 'checked' : ''}>
+                                <span class="fluent-toggle-slider"></span>
+                            </label>
+                            <div style="flex: 1;">
+                                <strong>${repo.owner}/${repo.repo}</strong>
+                            </div>
+                            <button class="fluent-button-icon btn-remove-github-repo" 
+                                    data-repo-index="${index}" 
+                                    aria-label="Remove repository"
+                                    style="color: var(--error-color);">
+                                <i class="bi bi-trash"></i>
+                            </button>
                         </div>
                     </div>
+                `).join('');
+                
+                return `
+                    <div class="config-field">
+                        <label class="fluent-label">Repositories:</label>
+                        <div class="repo-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+                            ${githubRepoList || '<div class="fluent-alert fluent-alert-warning"><i class="bi bi-exclamation-triangle"></i><div>No repositories configured</div></div>'}
+                        </div>
+                    </div>
+                    
+                    <div class="config-field" style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                        <label class="fluent-label">Add New Repository:</label>
+                        <div class="config-field-row">
+                            <input type="text" class="fluent-input" 
+                                   id="newGithubRepoOwner" placeholder="Owner (e.g., microsoft)">
+                            <input type="text" class="fluent-input" 
+                                   id="newGithubRepoName" placeholder="Repository (e.g., fabric-samples)">
+                            <button class="fluent-button fluent-button-primary btn-add-github-repo">
+                                <i class="bi bi-plus"></i> Add
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="config-field">
+                        <label class="fluent-label">Discussion State:</label>
+                        <select class="fluent-select source-input" data-field="state">
+                            <option value="open" ${source.state === 'open' ? 'selected' : ''}>Open</option>
+                            <option value="closed" ${source.state === 'closed' ? 'selected' : ''}>Closed</option>
+                            <option value="all" ${source.state === 'all' ? 'selected' : ''}>All</option>
+                        </select>
+                    </div>
+                    <div class="config-field">
+                        <label class="fluent-label">Max Items per Repository:</label>
+                        <input type="number" class="fluent-input source-input" 
+                               data-field="maxItems" value="${source.maxItems}" min="1" max="1000">
+                    </div>
+                    <div class="fluent-alert fluent-alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <div>Note: Repository must have Discussions enabled. All enabled repositories will be collected.</div>
+                    </div>
+                    <div class="source-info">
+                        <span>Repositories: ${githubRepos.filter(r => r.enabled).length} enabled / ${githubRepos.length} total</span>
+                    </div>
+                `;
+                
+            case 'githubIssues':
+                const repos = source.repositories || [];
+                const repoList = repos.map((repo, index) => `
+                    <div class="repo-item" data-repo-index="${index}">
+                        <div class="config-field-row" style="align-items: center;">
+                            <label class="fluent-toggle" style="margin: 0;">
+                                <input type="checkbox" class="repo-toggle" 
+                                       data-repo-index="${index}" ${repo.enabled ? 'checked' : ''}>
+                                <span class="fluent-toggle-slider"></span>
+                            </label>
+                            <div style="flex: 1;">
+                                <strong>${repo.owner}/${repo.repo}</strong>
+                            </div>
+                            <button class="fluent-button-icon btn-remove-repo" 
+                                    data-repo-index="${index}" 
+                                    aria-label="Remove repository"
+                                    style="color: var(--error-color);">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                
+                return `
+                    <div class="config-field">
+                        <label class="fluent-label">Repositories:</label>
+                        <div class="repo-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+                            ${repoList || '<div class="fluent-alert fluent-alert-warning"><i class="bi bi-exclamation-triangle"></i><div>No repositories configured</div></div>'}
+                        </div>
+                    </div>
+                    
+                    <div class="config-field" style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                        <label class="fluent-label">Add New Repository:</label>
+                        <div class="config-field-row">
+                            <input type="text" class="fluent-input" 
+                                   id="newRepoOwner" placeholder="Owner (e.g., microsoft)">
+                            <input type="text" class="fluent-input" 
+                                   id="newRepoName" placeholder="Repository (e.g., fabric-samples)">
+                            <button class="fluent-button fluent-button-primary btn-add-repo">
+                                <i class="bi bi-plus"></i> Add
+                            </button>
+                        </div>
+                    </div>
+                    
                     <div class="config-field">
                         <label class="fluent-label">Issue State:</label>
                         <select class="fluent-select source-input" data-field="state">
@@ -394,13 +708,16 @@ class SourceConfigManager {
                         </select>
                     </div>
                     <div class="config-field">
-                        <label class="fluent-label">Max Items:</label>
+                        <label class="fluent-label">Max Items per Repository:</label>
                         <input type="number" class="fluent-input source-input" 
                                data-field="maxItems" value="${source.maxItems}" min="1" max="1000">
                     </div>
+                    <div class="fluent-alert fluent-alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <div>Collects issues only (excludes pull requests). All enabled repositories will be collected.</div>
+                    </div>
                     <div class="source-info">
-                        <span>Last collected: Never</span>
-                        <span>Items found: 0</span>
+                        <span>Repositories: ${repos.filter(r => r.enabled).length} enabled / ${repos.length} total</span>
                     </div>
                 `;
                 

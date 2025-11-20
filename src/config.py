@@ -38,8 +38,8 @@ FABRIC_SQL_SERVER = os.getenv('FABRIC_SQL_SERVER')
 FABRIC_SQL_DATABASE = os.getenv('FABRIC_SQL_DATABASE')
 FABRIC_SQL_AUTHENTICATION = os.getenv('FABRIC_SQL_AUTHENTICATION', 'AzureActiveDirectoryInteractive')
 
-# Enhanced Hierarchical Feedback Categories
-ENHANCED_FEEDBACK_CATEGORIES = {
+# Enhanced Hierarchical Feedback Categories (Default Configuration)
+DEFAULT_ENHANCED_FEEDBACK_CATEGORIES = {
     'DEVELOPER_REQUESTS': {
         'name': 'Developer Experience Requests',
         'audience': 'Developer',
@@ -49,7 +49,8 @@ ENHANCED_FEEDBACK_CATEGORIES = {
                 'name': 'WDK Enhancement',
                 'keywords': [
                     'wdk', 'workload development kit', 'development kit', 'build', 'compile', 'debug',
-                    'testing framework', 'unit test', 'deployment', 'packaging', 'manifest', 'workload project'
+                    'testing framework', 'unit test', 'deployment', 'packaging', 'manifest', 'workload project',
+                    'fet', 'fabric extensibility toolkit'
                 ],
                 'priority': 'high',
                 'feature_area': 'Workload Development'
@@ -58,7 +59,8 @@ ENHANCED_FEEDBACK_CATEGORIES = {
                 'name': 'SDK Enhancement',
                 'keywords': [
                     'sdk', 'software development kit', 'api', 'connector', 'authentication', 'data source',
-                    'data connection', 'rest api', 'graphql', 'oauth', 'service principal', 'token'
+                    'data connection', 'rest api', 'graphql', 'oauth', 'service principal', 'token',
+                    'fet', 'fabric extensibility toolkit'
                 ],
                 'priority': 'high',
                 'feature_area': 'Workload Development'
@@ -186,40 +188,73 @@ ENHANCED_FEEDBACK_CATEGORIES = {
                 'feature_area': 'Platform Integration'
             }
         }
+    }
+}
+
+# Impact Types Configuration
+IMPACT_TYPES = {
+    'BUG': {
+        'name': 'Bug',
+        'description': 'Defects, errors, crashes, or incorrect behavior',
+        'keywords': [
+            'bug', 'error', 'issue', 'problem', 'broken', 'not working', 'crash',
+            'exception', 'failure', 'malfunction', 'incorrect behavior', 'defect'
+        ],
+        'priority': 'critical',
+        'color': '#dc3545'  # Red
     },
-    'TECHNICAL_ISSUES': {
-        'name': 'Technical Issues & Bugs',
-        'audience': 'All',
-        'description': 'Bug reports and technical issues across all areas',
-        'subcategories': {
-            'BUGS': {
-                'name': 'Bug Reports',
-                'keywords': [
-                    'bug', 'error', 'issue', 'problem', 'broken', 'not working', 'crash',
-                    'exception', 'failure', 'malfunction', 'incorrect behavior'
-                ],
-                'priority': 'critical',
-                'feature_area': 'Quality'
-            },
-            'PERFORMANCE': {
-                'name': 'Performance Issues',
-                'keywords': [
-                    'slow', 'performance', 'speed', 'lag', 'delay', 'timeout', 'hang', 'freeze',
-                    'response time', 'latency', 'throughput', 'optimization'
-                ],
-                'priority': 'high',
-                'feature_area': 'Performance'
-            },
-            'COMPATIBILITY': {
-                'name': 'Compatibility Issues',
-                'keywords': [
-                    'compatibility', 'incompatible', 'version', 'browser', 'environment',
-                    'platform support', 'cross-platform', 'backwards compatibility'
-                ],
-                'priority': 'medium',
-                'feature_area': 'Compatibility'
-            }
-        }
+    'FEATURE_REQUEST': {
+        'name': 'Feature Request',
+        'description': 'Requests for new features or enhancements',
+        'keywords': [
+            'feature request', 'suggest', 'suggestion', 'enhancement', 'improve',
+            'add', 'allow', 'provide', 'would be great if', 'need a way to',
+            'missing', 'lack', 'should have'
+        ],
+        'priority': 'medium',
+        'color': '#28a745'  # Green
+    },
+    'PERFORMANCE': {
+        'name': 'Performance',
+        'description': 'Speed, latency, throughput, or resource usage issues',
+        'keywords': [
+            'slow', 'performance', 'speed', 'lag', 'delay', 'timeout', 'hang', 'freeze',
+            'response time', 'latency', 'throughput', 'optimization', 'memory',
+            'cpu', 'resource usage'
+        ],
+        'priority': 'high',
+        'color': '#fd7e14'  # Orange
+    },
+    'COMPATIBILITY': {
+        'name': 'Compatibility',
+        'description': 'Version, platform, or integration compatibility issues',
+        'keywords': [
+            'compatibility', 'incompatible', 'version', 'browser', 'environment',
+            'platform support', 'cross-platform', 'backwards compatibility',
+            'breaking change'
+        ],
+        'priority': 'medium',
+        'color': '#ffc107'  # Yellow
+    },
+    'QUESTION': {
+        'name': 'Question',
+        'description': 'Questions, clarifications, or help requests',
+        'keywords': [
+            'question', 'how to', 'how do i', 'help', 'clarification', 'unclear',
+            'understand', 'explain', 'what is', 'why', 'when', 'where'
+        ],
+        'priority': 'low',
+        'color': '#17a2b8'  # Cyan
+    },
+    'FEEDBACK': {
+        'name': 'General Feedback',
+        'description': 'General observations, opinions, or comments',
+        'keywords': [
+            'feedback', 'comment', 'observation', 'opinion', 'thought',
+            'experience', 'note', 'remark'
+        ],
+        'priority': 'low',
+        'color': '#6c757d'  # Gray
     }
 }
 
@@ -420,7 +455,9 @@ DEFAULT_KEYWORDS = [
     "ISV Workloads",
     "Develop Workloads",
     "Marketplace", 
-    "ISV"
+    "ISV",
+    "FET",
+    "Fabric Extensibility Toolkit"
 ]
 
 def save_keywords(keywords_to_save):
@@ -467,11 +504,109 @@ def load_keywords():
 # For dynamic updates during runtime for collectors, app.py will call load_keywords() again.
 KEYWORDS = load_keywords()
 
+# Categories and Impact Types file paths
+CATEGORIES_FILE = os.path.join(os.path.dirname(__file__), 'categories.json')
+IMPACT_TYPES_FILE = os.path.join(os.path.dirname(__file__), 'impact_types.json')
+
+def save_categories(categories_to_save):
+    """Save custom categories configuration to JSON file."""
+    try:
+        with open(CATEGORIES_FILE, 'w') as f:
+            json.dump(categories_to_save, f, indent=2)
+    except Exception as e:
+        print(f"Error saving categories to '{CATEGORIES_FILE}': {e}")
+
+def load_categories():
+    """Load categories configuration from JSON file, or use defaults."""
+    if os.path.exists(CATEGORIES_FILE):
+        try:
+            with open(CATEGORIES_FILE, 'r') as f:
+                content = f.read()
+                if not content.strip():
+                    print(f"Warning: '{CATEGORIES_FILE}' is empty. Using default categories and saving them to the file.")
+                    save_categories(DEFAULT_ENHANCED_FEEDBACK_CATEGORIES)
+                    return DEFAULT_ENHANCED_FEEDBACK_CATEGORIES.copy()
+                loaded_cats = json.loads(content)
+                if isinstance(loaded_cats, dict):
+                    return loaded_cats
+                else:
+                    print(f"Warning: Content of '{CATEGORIES_FILE}' is not a dict. Using default categories and overwriting the file.")
+                    save_categories(DEFAULT_ENHANCED_FEEDBACK_CATEGORIES)
+                    return DEFAULT_ENHANCED_FEEDBACK_CATEGORIES.copy()
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON from '{CATEGORIES_FILE}': {e}. Overwriting with default categories.")
+            save_categories(DEFAULT_ENHANCED_FEEDBACK_CATEGORIES)
+            return DEFAULT_ENHANCED_FEEDBACK_CATEGORIES.copy()
+        except Exception as e:
+            print(f"Unexpected error loading '{CATEGORIES_FILE}': {e}. Using default categories for this session.")
+            try:
+                save_categories(DEFAULT_ENHANCED_FEEDBACK_CATEGORIES)
+            except Exception as save_e:
+                print(f"Could not save default categories to '{CATEGORIES_FILE}' after load error: {save_e}")
+            return DEFAULT_ENHANCED_FEEDBACK_CATEGORIES.copy()
+    else:
+        print(f"'{CATEGORIES_FILE}' not found. Creating with default categories.")
+        save_categories(DEFAULT_ENHANCED_FEEDBACK_CATEGORIES)
+        return DEFAULT_ENHANCED_FEEDBACK_CATEGORIES.copy()
+
+def save_impact_types(impact_types_to_save):
+    """Save custom impact types configuration to JSON file."""
+    try:
+        with open(IMPACT_TYPES_FILE, 'w') as f:
+            json.dump(impact_types_to_save, f, indent=2)
+    except Exception as e:
+        print(f"Error saving impact types to '{IMPACT_TYPES_FILE}': {e}")
+
+def load_impact_types():
+    """Load impact types configuration from JSON file, or use defaults."""
+    if os.path.exists(IMPACT_TYPES_FILE):
+        try:
+            with open(IMPACT_TYPES_FILE, 'r') as f:
+                content = f.read()
+                if not content.strip():
+                    print(f"Warning: '{IMPACT_TYPES_FILE}' is empty. Using default impact types and saving them to the file.")
+                    save_impact_types(IMPACT_TYPES)
+                    return IMPACT_TYPES.copy()
+                loaded_types = json.loads(content)
+                if isinstance(loaded_types, dict):
+                    return loaded_types
+                else:
+                    print(f"Warning: Content of '{IMPACT_TYPES_FILE}' is not a dict. Using default impact types and overwriting the file.")
+                    save_impact_types(IMPACT_TYPES)
+                    return IMPACT_TYPES.copy()
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON from '{IMPACT_TYPES_FILE}': {e}. Overwriting with default impact types.")
+            save_impact_types(IMPACT_TYPES)
+            return IMPACT_TYPES.copy()
+        except Exception as e:
+            print(f"Unexpected error loading '{IMPACT_TYPES_FILE}': {e}. Using default impact types for this session.")
+            try:
+                save_impact_types(IMPACT_TYPES)
+            except Exception as save_e:
+                print(f"Could not save default impact types to '{IMPACT_TYPES_FILE}' after load error: {save_e}")
+            return IMPACT_TYPES.copy()
+    else:
+        print(f"'{IMPACT_TYPES_FILE}' not found. Creating with default impact types.")
+        save_impact_types(IMPACT_TYPES)
+        return IMPACT_TYPES.copy()
+
+# Initialize categories and impact types - loaded once when module is imported
+ENHANCED_FEEDBACK_CATEGORIES = load_categories()
+IMPACT_TYPES_CONFIG = load_impact_types()
+
 # Source URLs
 MS_FABRIC_COMMUNITY_URL = "https://community.fabric.microsoft.com/t5/Fabric-platform-forums/ct-p/AC-Community"
 REDDIT_SUBREDDIT = "MicrosoftFabric"
 GITHUB_REPO_OWNER = "microsoft"
 GITHUB_REPO_NAME = "Microsoft-Fabric-workload-development-sample"
+
+# Additional GitHub Repositories (can be configured in web interface)
+# Format: list of dicts with 'owner' and 'repo' keys
+ADDITIONAL_GITHUB_REPOS = [
+    # Examples:
+    # {'owner': 'microsoft', 'repo': 'fabric-samples'},
+    # {'owner': 'microsoft', 'repo': 'powerbi-desktop'},
+]
 
 # Feedback State Management Configuration
 FEEDBACK_STATES = {

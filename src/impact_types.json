@@ -1,0 +1,119 @@
+{
+  "BUG": {
+    "name": "Bug",
+    "description": "Defects, errors, crashes, or incorrect behavior",
+    "keywords": [
+      "bug",
+      "error",
+      "issue",
+      "problem",
+      "broken",
+      "not working",
+      "crash",
+      "exception",
+      "failure",
+      "malfunction",
+      "incorrect behavior",
+      "defect"
+    ],
+    "priority": "critical",
+    "color": "#dc3545"
+  },
+  "FEATURE_REQUEST": {
+    "name": "Feature Request",
+    "description": "Requests for new features or enhancements",
+    "keywords": [
+      "feature request",
+      "suggest",
+      "suggestion",
+      "enhancement",
+      "improve",
+      "add",
+      "allow",
+      "provide",
+      "would be great if",
+      "need a way to",
+      "missing",
+      "lack",
+      "should have"
+    ],
+    "priority": "medium",
+    "color": "#28a745"
+  },
+  "PERFORMANCE": {
+    "name": "Performance",
+    "description": "Speed, latency, throughput, or resource usage issues",
+    "keywords": [
+      "slow",
+      "performance",
+      "speed",
+      "lag",
+      "delay",
+      "timeout",
+      "hang",
+      "freeze",
+      "response time",
+      "latency",
+      "throughput",
+      "optimization",
+      "memory",
+      "cpu",
+      "resource usage"
+    ],
+    "priority": "high",
+    "color": "#fd7e14"
+  },
+  "COMPATIBILITY": {
+    "name": "Compatibility",
+    "description": "Version, platform, or integration compatibility issues",
+    "keywords": [
+      "compatibility",
+      "incompatible",
+      "version",
+      "browser",
+      "environment",
+      "platform support",
+      "cross-platform",
+      "backwards compatibility",
+      "breaking change"
+    ],
+    "priority": "medium",
+    "color": "#ffc107"
+  },
+  "QUESTION": {
+    "name": "Question",
+    "description": "Questions, clarifications, or help requests",
+    "keywords": [
+      "question",
+      "how to",
+      "how do i",
+      "help",
+      "clarification",
+      "unclear",
+      "understand",
+      "explain",
+      "what is",
+      "why",
+      "when",
+      "where"
+    ],
+    "priority": "low",
+    "color": "#17a2b8"
+  },
+  "FEEDBACK": {
+    "name": "General Feedback",
+    "description": "General observations, opinions, or comments",
+    "keywords": [
+      "feedback",
+      "comment",
+      "observation",
+      "opinion",
+      "thought",
+      "experience",
+      "note",
+      "remark"
+    ],
+    "priority": "low",
+    "color": "#6c757d"
+  }
+}

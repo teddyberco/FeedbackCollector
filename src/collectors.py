@@ -340,11 +340,20 @@ class GitHubDiscussionsCollector:
             'Authorization': f'Bearer {config.GITHUB_TOKEN}', 'Content-Type': 'application/json',
             'Accept': 'application/vnd.github+json', 'X-Github-Api-Version': '2022-11-28'
         }
+        self.owner = config.GITHUB_REPO_OWNER
+        self.repo = config.GITHUB_REPO_NAME
+        
+    def configure(self, settings: Dict[str, Any]):
+        """Allow configuration override from API"""
+        if 'owner' in settings:
+            self.owner = settings['owner']
+        if 'repo' in settings:
+            self.repo = settings['repo']
         
     def collect(self) -> List[Dict[str, Any]]:
         feedback_items = []
         try:
-            repo_url = f"https://api.github.com/repos/{config.GITHUB_REPO_OWNER}/{config.GITHUB_REPO_NAME}"
+            repo_url = f"https://api.github.com/repos/{self.owner}/{self.repo}"
             logger.info(f"Verifying access to {repo_url}")
             repo_response = self.session.get(repo_url)
             repo_response.raise_for_status()
@@ -352,13 +361,13 @@ class GitHubDiscussionsCollector:
                 logger.error("Discussions are not enabled on this repository")
                 return []
             all_discussions, page, per_page = [], 1, min(100, config.MAX_ITEMS_PER_RUN) 
-            logger.info(f"Fetching all discussions for {config.GITHUB_REPO_OWNER}/{config.GITHUB_REPO_NAME} (up to {config.MAX_ITEMS_PER_RUN} items).")
+            logger.info(f"Fetching all discussions for {self.owner}/{self.repo} (up to {config.MAX_ITEMS_PER_RUN} items).")
             while True:
                 if len(all_discussions) >= config.MAX_ITEMS_PER_RUN: break
                 remaining_to_fetch = config.MAX_ITEMS_PER_RUN - len(all_discussions)
                 current_page_limit = min(per_page, remaining_to_fetch)
                 if current_page_limit <= 0: break
-                discussions_url = f"https://api.github.com/repos/{config.GITHUB_REPO_OWNER}/{config.GITHUB_REPO_NAME}/discussions"
+                discussions_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/discussions"
                 logger.info(f"Fetching discussions page {page} from {discussions_url} (per_page={current_page_limit})")
                 discussions_resp = self.session.get(discussions_url, params={'page': page, 'per_page': current_page_limit, 'sort': 'updated', 'direction': 'desc'})
                 discussions_resp.raise_for_status()
@@ -388,7 +397,7 @@ class GitHubDiscussionsCollector:
                     full_feedback_text_github,
                     source='GitHub Discussions',
                     scenario='Partner',
-                    organization=f'GitHub/{config.GITHUB_REPO_OWNER}'
+                    organization=f'GitHub/{self.owner}'
                 )
                 
                 feedback_items.append({
@@ -400,7 +409,7 @@ class GitHubDiscussionsCollector:
                     'Scenario': 'Partner', 'Customer': author,
                     'Tag': tag_value,
                     'Created': created_at_str,
-                    'Organization': f'GitHub/{config.GITHUB_REPO_OWNER}', 'Status': config.DEFAULT_STATUS,
+                    'Organization': f'GitHub/{self.owner}', 'Status': config.DEFAULT_STATUS,
                     'Created_by': config.SYSTEM_USER,
                     'Rawfeedback': f"Source URL: {url}\nRaw API Response: {json.dumps(discussion, indent=2)}",
                     'Sentiment': analyze_sentiment(full_feedback_text_github),
@@ -426,6 +435,161 @@ class GitHubDiscussionsCollector:
         if any(word in content_lower for word in ['error', 'bug', 'issue', 'problem']): return 'Bug'
         if any(word in content_lower for word in ['suggest', 'feature', 'improve']): return 'Feature Request'
         if any(word in content_lower for word in ['help', 'how to', 'question']): return 'Question'
+        return 'Feedback'
+
+class GitHubIssuesCollector:
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers = {
+            'Authorization': f'Bearer {config.GITHUB_TOKEN}', 'Content-Type': 'application/json',
+            'Accept': 'application/vnd.github+json', 'X-Github-Api-Version': '2022-11-28'
+        }
+        self.owner = config.GITHUB_REPO_OWNER
+        self.repo = config.GITHUB_REPO_NAME
+        
+    def configure(self, settings: Dict[str, Any]):
+        """Allow configuration override from API"""
+        if 'owner' in settings:
+            self.owner = settings['owner']
+        if 'repo' in settings:
+            self.repo = settings['repo']
+        
+    def collect(self) -> List[Dict[str, Any]]:
+        feedback_items = []
+        try:
+            repo_url = f"https://api.github.com/repos/{self.owner}/{self.repo}"
+            logger.info(f"Verifying access to {repo_url}")
+            repo_response = self.session.get(repo_url)
+            repo_response.raise_for_status()
+            
+            all_issues, page, per_page = [], 1, min(100, config.MAX_ITEMS_PER_RUN)
+            logger.info(f"Fetching all issues for {self.owner}/{self.repo} (up to {config.MAX_ITEMS_PER_RUN} items).")
+            
+            while True:
+                if len(all_issues) >= config.MAX_ITEMS_PER_RUN: 
+                    break
+                remaining_to_fetch = config.MAX_ITEMS_PER_RUN - len(all_issues)
+                current_page_limit = min(per_page, remaining_to_fetch)
+                if current_page_limit <= 0: 
+                    break
+                    
+                issues_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/issues"
+                logger.info(f"Fetching issues page {page} from {issues_url} (per_page={current_page_limit})")
+                
+                # Fetch both open and closed issues, exclude pull requests
+                issues_resp = self.session.get(issues_url, params={
+                    'page': page, 
+                    'per_page': current_page_limit, 
+                    'state': 'all',  # Get both open and closed issues
+                    'sort': 'updated', 
+                    'direction': 'desc'
+                })
+                issues_resp.raise_for_status()
+                page_data = issues_resp.json()
+                
+                if not page_data: 
+                    break
+                
+                # Filter out pull requests (GitHub API returns PRs as issues)
+                actual_issues = [item for item in page_data if 'pull_request' not in item]
+                all_issues.extend(actual_issues)
+                
+                logger.info(f"Found {len(actual_issues)} issues on page {page}. Total fetched: {len(all_issues)}")
+                
+                if len(page_data) < current_page_limit or ('Link' in issues_resp.headers and 'rel="next"' not in issues_resp.headers['Link']):
+                    break
+                page += 1
+                
+            logger.info(f"Found {len(all_issues)} issues to process (up to MAX_ITEMS_PER_RUN).")
+            
+            count = 0
+            for issue in all_issues:
+                if count >= config.MAX_ITEMS_PER_RUN: 
+                    break
+                    
+                title, body = issue.get('title', ''), issue.get('body', '') or ''
+                issue_number = issue.get('number', '')
+                logger.info(f"Processing GitHub issue #{issue_number}: {title}")
+                
+                author_node = issue.get('user')
+                author = author_node.get('login', 'Anonymous') if author_node else 'Anonymous'
+                created_at_str = issue.get('created_at', datetime.now(timezone.utc).isoformat())
+                url = issue.get('html_url', '')
+                state = issue.get('state', 'open')
+                
+                # Get labels as tags
+                labels = issue.get('labels', [])
+                tag_value = ', '.join([label.get('name', '') for label in labels if label.get('name')])
+                
+                full_feedback_text_github = f"{title}\n\n{body}"
+                
+                # Enhanced categorization
+                enhanced_cat = enhanced_categorize_feedback(
+                    full_feedback_text_github,
+                    source='GitHub Issues',
+                    scenario='Partner',
+                    organization=f'GitHub/{self.owner}'
+                )
+                
+                feedback_items.append({
+                    'Feedback_Gist': generate_feedback_gist(full_feedback_text_github),
+                    'Feedback': full_feedback_text_github, 
+                    'Title': title,  # Add explicit Title field for ID generation
+                    'Content': full_feedback_text_github,  # Add explicit Content field for ID generation
+                    'Source': 'GitHub Issues',  # Add explicit Source field for ID generation
+                    'Author': author,  # Add explicit Author field for ID generation
+                    'Created_Date': created_at_str,  # Add explicit Created_Date field for ID generation
+                    'Url': url,
+                    'Area': 'Issues',
+                    'Sources': 'GitHub Issues',
+                    'Impacttype': self._determine_impact_type_content(full_feedback_text_github, labels),
+                    'Scenario': 'Partner', 
+                    'Customer': author,
+                    'Tag': tag_value,
+                    'Created': created_at_str,
+                    'Organization': f'GitHub/{self.owner}', 
+                    'Status': 'Closed' if state == 'closed' else config.DEFAULT_STATUS,
+                    'Created_by': config.SYSTEM_USER,
+                    'Rawfeedback': f"Source URL: {url}\nIssue Number: {issue_number}\nState: {state}\nRaw API Response: {json.dumps(issue, indent=2)}",
+                    'Sentiment': analyze_sentiment(full_feedback_text_github),
+                    'Category': enhanced_cat['legacy_category'],
+                    'Enhanced_Category': enhanced_cat['primary_category'],
+                    'Subcategory': enhanced_cat['subcategory'],
+                    'Audience': enhanced_cat['audience'],
+                    'Priority': enhanced_cat['priority'],
+                    'Feature_Area': enhanced_cat['feature_area'],
+                    'Categorization_Confidence': enhanced_cat['confidence'],
+                    'Domains': enhanced_cat.get('domains', []),
+                    'Primary_Domain': enhanced_cat.get('primary_domain', None)
+                })
+                count += 1
+                
+            logger.info(f"Collected {len(feedback_items)} relevant feedback items from GitHub Issues")
+            return feedback_items[:config.MAX_ITEMS_PER_RUN]
+            
+        except Exception as e:
+            logger.error(f"Error collecting GitHub Issues: {str(e)}", exc_info=True)
+            return []
+
+    def _determine_impact_type_content(self, content: str, labels: List[Dict[str, Any]]) -> str:
+        """Determine impact type from content and labels"""
+        # Check labels first
+        label_names = [label.get('name', '').lower() for label in labels]
+        if any(label in label_names for label in ['bug', 'defect', 'error']):
+            return 'Bug'
+        if any(label in label_names for label in ['enhancement', 'feature', 'feature request']):
+            return 'Feature Request'
+        if any(label in label_names for label in ['question', 'help wanted', 'support']):
+            return 'Question'
+            
+        # Fall back to content analysis
+        content_lower = content.lower()
+        if any(word in content_lower for word in ['error', 'bug', 'issue', 'problem', 'broken', 'crash']):
+            return 'Bug'
+        if any(word in content_lower for word in ['suggest', 'feature', 'improve', 'enhancement', 'add']):
+            return 'Feature Request'
+        if any(word in content_lower for word in ['help', 'how to', 'question', 'how do i']):
+            return 'Question'
         return 'Feedback'
 
 class ADOChildTasksCollector:
