@@ -58,38 +58,102 @@ A comprehensive, enterprise-grade web-based tool that intelligently collects, pr
 
 ## 🚀 Quick Start
 
-### 1. **Installation**
+### Web Application (Development)
+
+#### 1. **Installation**
 ```bash
 git clone [repository-url]
 cd FeedbackCollector
 pip install -r src/requirements.txt
 ```
 
-### 2. **ODBC Driver Setup**
+#### 2. **ODBC Driver Setup**
 Ensure you have one of the supported ODBC drivers installed:
 - ODBC Driver 18 for SQL Server (recommended)
 - ODBC Driver 17 for SQL Server
 - ODBC Driver 13 for SQL Server
 - SQL Server Native Client 11.0
 
-### 3. **Environment Setup**
+#### 3. **Environment Setup**
 ```bash
 cp src/.env.template src/.env
 # Edit src/.env with your API credentials
 ```
 
-### 4. **Launch Web Interface**
+#### 4. **Launch Web Interface**
 ```bash
 cd src
 python run_web.py
 ```
 
-### 5. **Access Application**
+#### 5. **Access Application**
 - Open browser to `http://localhost:5000`
 - Authenticate with your Bearer token
 - Start collecting feedback with real-time progress tracking
 - View and manage feedback at `/feedback` endpoint with state management
 - Access Power BI insights at `/insights` endpoint
+
+---
+
+### 💻 Windows Desktop Application
+
+**NEW**: Standalone Windows executable - no Python installation required!
+
+#### Quick Start
+1. Download the portable application package
+2. Extract to any folder (e.g., `C:\FeedbackCollector\`)
+3. **Configure API credentials** (see setup below)
+4. Double-click `FeedbackCollector.exe`
+5. Browser opens automatically to `http://localhost:5000`
+
+#### First-Time Setup (Required)
+Before collecting feedback, you **must** configure API credentials:
+
+1. **Navigate to the application folder**
+   ```powershell
+   cd path\to\FeedbackCollector
+   ```
+
+2. **Create configuration file**
+   ```powershell
+   Copy-Item .env.example -Destination .env
+   ```
+
+3. **Edit `.env` with your API credentials:**
+   - **Reddit API**: Get from https://www.reddit.com/prefs/apps
+   - **GitHub Token**: Get from https://github.com/settings/tokens
+   - (Optional) Azure DevOps PAT
+   - (Optional) Microsoft Fabric configuration
+
+4. **Restart the application**
+
+#### Features
+- ✅ **Standalone**: No Python installation needed
+- ✅ **Portable**: Runs from any folder, no installation required
+- ✅ **Auto-launch**: Browser opens automatically
+- ✅ **Full-featured**: All web app capabilities included
+- ✅ **Easy distribution**: Share single folder with colleagues
+- ✅ **Size**: ~400MB (includes Python runtime + dependencies)
+
+#### Distribution
+To share with others:
+1. ZIP the entire application folder
+2. Recipients extract and configure their own `.env` file
+3. No Python or dependencies needed on target PC
+
+#### Requirements
+- **Windows 10/11** (64-bit)
+- **No Python required**
+- **~500MB free disk space**
+- **API credentials** (Reddit, GitHub)
+
+#### Troubleshooting
+- **Port 5000 in use?** Close other applications or restart PC
+- **Collection fails?** Check `.env` file has valid credentials
+- **Browser doesn't open?** Manually navigate to `http://localhost:5000`
+- See `README.txt` inside application folder for detailed help
+
+---
 
 ## 🏗️ Architecture Overview
 
@@ -320,6 +384,8 @@ The application automatically connects to the Fabric SQL Database for state mana
 - **State Analytics**: Workflow progress and bottleneck identification
 
 ## 📁 Project Structure
+
+### Development Repository
 ```
 FeedbackCollector/
 ├── src/
@@ -335,18 +401,44 @@ FeedbackCollector/
 │   ├── run_web.py               # Web server launcher
 │   ├── utils.py                 # Enhanced categorization & text processing
 │   ├── keywords.json            # Domain and category keywords
+│   ├── categories.json          # Feedback categories configuration
+│   ├── impact_types.json        # Impact type definitions
 │   ├── requirements.txt         # Python dependencies
 │   ├── .env.template           # Environment template
-│   └── templates/               # HTML templates
-│       ├── index.html           # Main interface with state management
-│       ├── feedback_viewer.html # Enhanced data viewer with state controls
-│       └── insights_page.html   # Power BI dashboard
+│   ├── templates/               # HTML templates
+│   │   ├── index.html           # Main interface with state management
+│   │   ├── feedback_viewer.html # Enhanced data viewer with state controls
+│   │   └── insights_page.html   # Power BI dashboard
+│   └── static/                  # Static assets
+│       ├── css/                 # Stylesheets
+│       └── js/                  # JavaScript modules
 ├── data/                        # CSV output files with timestamped collections
 ├── test_fabric_sql_connection.py # SQL Database connectivity testing
 ├── test_state_management.py     # State management testing utilities
 ├── .gitignore                   # Git exclusions
 └── README.md                    # This file
 ```
+
+### Windows Desktop Application (Separate Build)
+```
+FeedbackCollector_Desktop_Build/
+├── dist/
+│   └── FeedbackCollector/       # ← READY FOR DISTRIBUTION
+│       ├── FeedbackCollector.exe # Main executable
+│       ├── .env.example          # Configuration template
+│       ├── README.txt            # Quick start guide
+│       ├── _internal/            # Bundled Python runtime & dependencies
+│       │   ├── src/              # Application source files
+│       │   │   ├── templates/
+│       │   │   └── static/
+│       │   └── ...               # Python libraries
+│       └── data/                 # Auto-created on first run
+├── Update_And_Rebuild.bat        # Windows rebuild script
+├── Update_And_Rebuild.ps1        # PowerShell rebuild script
+└── README.md                     # Desktop app documentation
+```
+
+**Note**: Desktop build is maintained in a separate folder to keep the development project clean.
 
 ## 📋 Enhanced Data Schema
 
@@ -482,6 +574,44 @@ The Fabric SQL Database stores feedback state information:
 - Add docstrings for public functions
 - Include error handling and logging
 - Maintain backwards compatibility
+
+### **Updating the Desktop Application**
+
+After making changes to the web application, rebuild the desktop app:
+
+#### Quick Update Process
+```powershell
+cd D:\FeedbackCollector_Desktop_Build
+.\Update_And_Rebuild.ps1  # or Update_And_Rebuild.bat
+```
+
+This script will:
+1. Copy updated source files from development project
+2. Rebuild the Windows executable with PyInstaller
+3. Create updated distributable in `dist/FeedbackCollector/`
+
+#### Manual Update Process
+```powershell
+# 1. Copy updated source files
+cd D:\FeedbackCollector_Desktop_Build
+Copy-Item "D:\FeedbackCollector\src\*" -Destination "src\" -Recurse -Force
+
+# 2. Rebuild executable
+python -m PyInstaller FeedbackCollector.spec --noconfirm
+
+# 3. Test the updated executable
+cd dist\FeedbackCollector
+.\FeedbackCollector.exe
+```
+
+#### When to Rebuild
+- ✅ **Always**: After changing Python code (`*.py` files)
+- ✅ **Always**: After updating templates or static files
+- ✅ **Use --clean flag**: After adding new dependencies
+- ✅ **Test first**: Always test in development before rebuilding
+
+#### Build Artifacts
+Desktop build files are kept separate in `D:\FeedbackCollector_Desktop_Build\` to avoid cluttering the development repository.
 
 ## 📄 License
 
