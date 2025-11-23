@@ -88,8 +88,8 @@ try {
     exit 1
 }
 
-# Step 4: Verify output
-Write-Host "[4/4] Verifying build output..." -ForegroundColor Green
+# Step 4: Verify output and copy .env to root
+Write-Host "[4/5] Verifying build output..." -ForegroundColor Green
 
 $exePath = "$BuildPath\dist\FeedbackCollector\FeedbackCollector.exe"
 if (Test-Path $exePath) {
@@ -97,16 +97,30 @@ if (Test-Path $exePath) {
     Write-Host "  ✓ Executable created: $exePath" -ForegroundColor Gray
     Write-Host "  ✓ Size: $([math]::Round($exeSize, 2)) MB" -ForegroundColor Gray
     
-    # Check if .env was included
+    # Check if .env was included in _internal
     $envInDist = "$BuildPath\dist\FeedbackCollector\_internal\.env"
     if (Test-Path $envInDist) {
-        Write-Host "  ✓ .env file included in distribution" -ForegroundColor Gray
+        Write-Host "  ✓ .env file included in _internal\ directory" -ForegroundColor Gray
     } else {
         Write-Host "  ⚠ Warning: .env file not found in _internal directory" -ForegroundColor Yellow
     }
 } else {
     Write-Host "ERROR: Executable not found at expected location" -ForegroundColor Red
     exit 1
+}
+
+# Step 5: Copy .env to root distribution folder for easier access
+Write-Host "[5/5] Copying .env to distribution root..." -ForegroundColor Green
+$envInInternal = "$BuildPath\dist\FeedbackCollector\_internal\.env"
+$envInRoot = "$BuildPath\dist\FeedbackCollector\.env"
+if (Test-Path $envInInternal) {
+    Copy-Item $envInInternal -Destination $envInRoot -Force
+    Write-Host "  ✓ .env file copied to distribution root" -ForegroundColor Gray
+    Write-Host "  ✓ .env available at both locations:" -ForegroundColor Gray
+    Write-Host "    - dist\FeedbackCollector\.env (root)" -ForegroundColor DarkGray
+    Write-Host "    - dist\FeedbackCollector\_internal\.env (bundled)" -ForegroundColor DarkGray
+} else {
+    Write-Host "  ⚠ Warning: Could not copy .env to root" -ForegroundColor Yellow
 }
 
 Write-Host ""
