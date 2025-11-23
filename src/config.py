@@ -459,6 +459,7 @@ TABLE_COLUMNS = [
     'Categorization_Confidence',  # Confidence score for categorization
     'Domains',  # Cross-cutting domain concerns (JSON array)
     'Primary_Domain',  # Primary domain classification
+    'Matched_Keywords',  # Keywords that matched this feedback (JSON array)
     'State',  # NEW: Current state of feedback (New, Triaged, Closed, Irrelevant)
     'Feedback_Notes',  # NEW: Notes about the feedback
     'Last_Updated',  # NEW: When the state was last changed
@@ -480,10 +481,8 @@ KEYWORDS_FILE = os.path.join(os.path.dirname(__file__), 'keywords.json')
 # Default keywords
 DEFAULT_KEYWORDS = [
     "workload hub",
-    "workloads",
     "Workload Development Kit",
     "WDK",
-    "ISV Workloads",
     "Develop Workloads",
     "Marketplace", 
     "ISV",

@@ -56,6 +56,20 @@ def load_latest_feedback_from_csv():
         
         # Convert DataFrame to list of dictionaries
         feedback_items = df.to_dict('records')
+        
+        # Parse Matched_Keywords from string to list
+        import ast
+        for item in feedback_items:
+            if 'Matched_Keywords' in item:
+                try:
+                    # Convert string representation of list back to actual list
+                    if isinstance(item['Matched_Keywords'], str):
+                        item['Matched_Keywords'] = ast.literal_eval(item['Matched_Keywords'])
+                    elif pd.isna(item['Matched_Keywords']):
+                        item['Matched_Keywords'] = []
+                except (ValueError, SyntaxError):
+                    item['Matched_Keywords'] = []
+        
         logger.info(f"Loaded {len(feedback_items)} items from CSV")
         
         return feedback_items
@@ -256,6 +270,7 @@ def collect_feedback_route():
         cfg.ENHANCED_FEEDBACK_CATEGORIES = cfg.load_categories()
         cfg.IMPACT_TYPES_CONFIG = cfg.load_impact_types()
         logger.info(f"🔄 Reloaded config - Keywords: {len(cfg.KEYWORDS)}, Categories: {len(cfg.ENHANCED_FEEDBACK_CATEGORIES)}, Impact Types: {len(cfg.IMPACT_TYPES_CONFIG)}")
+        logger.info(f"📝 Current keywords: {cfg.KEYWORDS}")
         
         all_feedback = []
         results = {}
@@ -558,10 +573,15 @@ def collect_feedback_route():
             if 'Feedback_ID' not in feedback_item or not feedback_item.get('Feedback_ID'):
                 feedback_item['Feedback_ID'] = FeedbackIDGenerator.generate_id_from_feedback_dict(feedback_item)
                 logger.info(f"Generated deterministic ID for item: {feedback_item['Feedback_ID']}")
-                logger.info(f"  Title: {feedback_item.get('Title', 'MISSING')}")
-                logger.info(f"  Content: {str(feedback_item.get('Content', 'MISSING'))[:100]}...")
-                logger.info(f"  Source: {feedback_item.get('Source', 'MISSING')}")
-                logger.info(f"  Author: {feedback_item.get('Author', 'MISSING')}")
+                # Use the actual field names from collectors
+                title = feedback_item.get('Feedback_Gist') or feedback_item.get('Title', 'N/A')
+                content = feedback_item.get('Feedback') or feedback_item.get('Content', 'N/A')
+                source = feedback_item.get('Sources') or feedback_item.get('Source', 'N/A')
+                author = feedback_item.get('Customer') or feedback_item.get('Author', 'N/A')
+                logger.info(f"  Title: {title}")
+                logger.info(f"  Content: {str(content)[:100]}...")
+                logger.info(f"  Source: {source}")
+                logger.info(f"  Author: {author}")
         
         # Check if we're in online mode (connected to Fabric)
         from flask import session
@@ -751,7 +771,7 @@ def feedback_viewer():
             # Basic processing for CSV data
             for item in last_collected_feedback:
                 if 'id' not in item or not item['id']:
-                    item['id'] = FeedbackIDGenerator.generate_id(item)
+                    item['id'] = FeedbackIDGenerator.generate_id_from_feedback_dict(item)
                 state_manager.initialize_feedback_state(item)
     
     feedback_to_display = list(last_collected_feedback)
@@ -967,24 +987,42 @@ def write_to_fabric_route():
         if not fabric_token:
             return jsonify({'status': 'error', 'message': 'Fabric access token is required.'}), 400
 
-        logger.info(f"Attempting to write {len(last_collected_feedback)} items to Fabric Lakehouse.")
+        # Filter out feedback items without matched keywords
+        filtered_feedback = [
+            item for item in last_collected_feedback 
+            if item.get('Matched_Keywords') and len(item.get('Matched_Keywords', [])) > 0
+        ]
         
-        # Import and use the fabric_writer module
+        if not filtered_feedback:
+            return jsonify({'status': 'warning', 'message': 'No feedback items with matched keywords to write. All items were filtered out.'}), 200
+        
+        logger.info(f"Attempting to write {len(filtered_feedback)} items (filtered from {len(last_collected_feedback)}) to Fabric SQL Database.")
+        
+        # Use fabric_sql_writer for direct SQL writes
         try:
-            import fabric_writer
+            from fabric_sql_writer import FabricSQLWriter
         except ImportError as ie:
-            logger.error(f"Failed to import fabric_writer module: {ie}")
-            return jsonify({'status': 'error', 'message': f'Fabric writer module not available: {str(ie)}'}), 500
+            logger.error(f"Failed to import fabric_sql_writer module: {ie}")
+            return jsonify({'status': 'error', 'message': f'Fabric SQL writer module not available: {str(ie)}'}), 500
         
-        # Call the actual fabric_writer
-        success = fabric_writer.write_data_to_fabric(fabric_token, last_collected_feedback)
-        
-        if success:
-            logger.info(f"Successfully wrote {len(last_collected_feedback)} items to Fabric Lakehouse")
-            return jsonify({'status': 'success', 'message': f'Successfully wrote {len(last_collected_feedback)} items to Fabric table {config.FABRIC_TARGET_TABLE_NAME}.'})
-        else:
-            logger.error("Failed to write data to Fabric Lakehouse")
-            return jsonify({'status': 'error', 'message': 'Failed to write data to Fabric Lakehouse. Check logs for details.'}), 500
+        # Write to SQL database
+        try:
+            writer = FabricSQLWriter(bearer_token=fabric_token)
+            result = writer.bulletproof_sync_with_deduplication(filtered_feedback)
+            
+            new_items = result.get('new_items', 0)
+            existing_items = result.get('existing_items', 0)
+            
+            logger.info(f"Successfully wrote {new_items} new items to Fabric SQL Database ({existing_items} already existed)")
+            return jsonify({
+                'status': 'success', 
+                'message': f'Successfully wrote {new_items} new items to Fabric SQL Database. {existing_items} items already existed. (Filtered from {len(last_collected_feedback)} total)',
+                'new_items': new_items,
+                'existing_items': existing_items
+            })
+        except Exception as write_error:
+            logger.error(f"Failed to write data to Fabric SQL Database: {write_error}", exc_info=True)
+            return jsonify({'status': 'error', 'message': f'Failed to write data to Fabric SQL Database: {str(write_error)}'}), 500
 
     except Exception as e:
         logger.error(f"Error writing to Fabric: {e}", exc_info=True)
@@ -995,7 +1033,7 @@ fabric_operations = {}
 
 @app.route('/api/write_to_fabric_async', methods=['POST'])
 def write_to_fabric_async_endpoint():
-    """Start asynchronous write to Fabric Lakehouse with progress tracking"""
+    """Start asynchronous write to Fabric SQL Database with progress tracking"""
     try:
         import uuid
         import threading
@@ -1011,6 +1049,15 @@ def write_to_fabric_async_endpoint():
         if not last_collected_feedback:
             return jsonify({'status': 'error', 'message': 'No feedback data collected yet or last collection was empty.'}), 400
         
+        # Filter out feedback items without matched keywords
+        filtered_feedback = [
+            item for item in last_collected_feedback 
+            if item.get('Matched_Keywords') and len(item.get('Matched_Keywords', [])) > 0
+        ]
+        
+        if not filtered_feedback:
+            return jsonify({'status': 'warning', 'message': 'No feedback items with matched keywords to write. All items were filtered out.'}), 200
+        
         # Generate unique operation ID
         operation_id = str(uuid.uuid4())
         
@@ -1018,7 +1065,7 @@ def write_to_fabric_async_endpoint():
         fabric_operations[operation_id] = {
             'status': 'starting',
             'progress': 0,
-            'total_items': len(last_collected_feedback),
+            'total_items': len(filtered_feedback),
             'processed_items': 0,
             'start_time': datetime.now(),
             'logs': [],
@@ -1032,83 +1079,44 @@ def write_to_fabric_async_endpoint():
         def fabric_write_worker():
             try:
                 fabric_operations[operation_id]['logs'].append({
-                    'message': f'🚀 Starting Fabric write operation for {len(last_collected_feedback)} items',
+                    'message': f'🚀 Starting Fabric SQL write operation for {len(filtered_feedback)} items (filtered from {len(last_collected_feedback)} total)',
                     'type': 'info'
                 })
                 fabric_operations[operation_id]['status'] = 'in_progress'
-                fabric_operations[operation_id]['operation'] = 'Writing to Fabric Lakehouse...'
+                fabric_operations[operation_id]['operation'] = 'Writing to Fabric SQL Database...'
                 
-                import fabric_writer
+                from fabric_sql_writer import FabricSQLWriter
                 
-                def progress_callback(processed, total, operation, message):
-                    fabric_operations[operation_id]['processed_items'] = processed
-                    fabric_operations[operation_id]['progress'] = (processed / total) * 100 if total > 0 else 0
-                    fabric_operations[operation_id]['operation'] = operation
-                    if message:
-                        fabric_operations[operation_id]['logs'].append({
-                            'message': message,
-                            'type': 'info'
-                        })
-                
-                # Call fabric writer with progress callback
+                # Call SQL writer
                 fabric_operations[operation_id]['logs'].append({
-                    'message': '📝 Calling Fabric writer module...',
+                    'message': '📝 Writing to Fabric SQL Database...',
                     'type': 'info'
                 })
                 
-                success = fabric_writer.write_data_to_fabric(fabric_token, last_collected_feedback)
+                writer = FabricSQLWriter(bearer_token=fabric_token)
+                result = writer.bulletproof_sync_with_deduplication(filtered_feedback)
+                
+                new_items = result.get('new_items', 0)
+                existing_items = result.get('existing_items', 0)
                 
                 fabric_operations[operation_id]['completed'] = True
-                fabric_operations[operation_id]['success'] = success
+                fabric_operations[operation_id]['success'] = True
                 fabric_operations[operation_id]['progress'] = 100
-                fabric_operations[operation_id]['processed_items'] = len(last_collected_feedback)
+                fabric_operations[operation_id]['processed_items'] = len(filtered_feedback)
+                fabric_operations[operation_id]['new_items'] = new_items
+                fabric_operations[operation_id]['existing_items'] = existing_items
                 
-                if success:
-                    fabric_operations[operation_id]['message'] = f'Successfully wrote {len(last_collected_feedback)} items to Fabric Lakehouse'
-                    fabric_operations[operation_id]['logs'].append({
-                        'message': '✅ Fabric write operation completed successfully',
-                        'type': 'success'
-                    })
-                    
-                    # After successful write, also load existing states
-                    fabric_operations[operation_id]['logs'].append({
-                        'message': '🔄 Loading existing feedback states from Fabric...',
-                        'type': 'info'
-                    })
-                    fabric_operations[operation_id]['operation'] = 'Loading existing states...'
-                    
-                    try:
-                        # Load states for all feedback items
-                        load_states_after_fabric_write(fabric_token, operation_id)
-                        
-                        # Store token in session for feedback viewer
-                        from flask import session
-                        session['fabric_bearer_token'] = fabric_token
-                        session['states_loaded'] = True
-                        
-                        fabric_operations[operation_id]['logs'].append({
-                            'message': '✅ States loaded successfully - feedback viewer ready!',
-                            'type': 'success'
-                        })
-                        fabric_operations[operation_id]['logs'].append({
-                            'message': '🔄 Preparing to hide duplicate items from view...',
-                            'type': 'info'
-                        })
-                        fabric_operations[operation_id]['message'] = f'Successfully wrote {len(last_collected_feedback)} items and loaded states'
-                        fabric_operations[operation_id]['hide_duplicates'] = True
-                        
-                    except Exception as state_error:
-                        fabric_operations[operation_id]['logs'].append({
-                            'message': f'⚠️ States loading failed: {str(state_error)} (feedback still written successfully)',
-                            'type': 'warning'
-                        })
-                        logger.warning(f"Failed to load states after fabric write: {state_error}")
-                else:
-                    fabric_operations[operation_id]['message'] = 'Failed to write data to Fabric Lakehouse'
-                    fabric_operations[operation_id]['logs'].append({
-                        'message': '❌ Fabric write operation failed',
-                        'type': 'danger'
-                    })
+                fabric_operations[operation_id]['message'] = f'Successfully wrote {new_items} new items to Fabric SQL Database ({existing_items} already existed)'
+                fabric_operations[operation_id]['logs'].append({
+                    'message': '✅ Fabric SQL write operation completed successfully',
+                    'type': 'success'
+                })
+                
+                # Store token in session for feedback viewer
+                from flask import session
+                session['fabric_bearer_token'] = fabric_token
+                session['states_loaded'] = True
+                
             except Exception as e:
                 fabric_operations[operation_id]['completed'] = True
                 fabric_operations[operation_id]['success'] = False
@@ -1714,7 +1722,7 @@ def get_fabric_token_status():
 
 @app.route('/api/fabric/token/validate', methods=['POST'])
 def validate_fabric_token():
-    """Fast validation: If Livy accepts session start request, token is valid"""
+    """Validate Fabric token by testing SQL connection"""
     try:
         data = request.get_json()
         if not data:
@@ -1724,59 +1732,50 @@ def validate_fabric_token():
         if not token:
             return jsonify({'status': 'error', 'message': 'Token required'}), 400
 
-        logger.warning(f"🔥 FABRIC TOKEN FAST VALIDATION: Testing token with Livy session start")
+        logger.info(f"🔥 FABRIC TOKEN VALIDATION: Testing token with SQL connection")
         
-        # Use new fast token test function
-        import fabric_writer
-        from config import FABRIC_LIVY_ENDPOINT
+        # Test token with SQL connection
+        from fabric_sql_writer import FabricSQLWriter
         
-        # Fast test: If Livy accepts session creation, token is valid
-        session_id = fabric_writer._test_fabric_token(token, FABRIC_LIVY_ENDPOINT)
-        
-        if session_id:
-            # Session request accepted - token is valid!
-            # Store token immediately since Livy accepted our authentication
-            from flask import session as flask_session
-            flask_session['fabric_bearer_token'] = token
-            flask_session['states_loaded'] = True
-            flask_session['fabric_token_validated_at'] = datetime.now().isoformat()
-            flask_session['fabric_session_starting'] = True
-            flask_session['fabric_session_id'] = session_id
+        try:
+            writer = FabricSQLWriter(bearer_token=token)
+            conn = writer.connect_with_token(token)
             
-            # Clear any previous validation state
-            flask_session.pop('fabric_token_validating', None)
-            flask_session.pop('fabric_validation_started_at', None)
-            flask_session.pop('fabric_validation_status', None)
-            
-            logger.warning(f"✅ FABRIC TOKEN FAST VALIDATION: Token validated - Livy session {session_id} starting in background")
-            
-            # Don't close the session - let it start in background for immediate use
-            
-            return jsonify({
-                'status': 'success',
-                'message': 'Token validated - Livy session starting in background',
-                'validated_at': flask_session['fabric_token_validated_at'],
-                'session_status': 'starting',
-                'session_id': session_id
-            })
-        else:
-            # Clear any validation state on failure
-            from flask import session as flask_session
-            flask_session.pop('fabric_token_validating', None)
-            flask_session.pop('fabric_validation_started_at', None)
-            flask_session.pop('fabric_validation_status', None)
-            
-            logger.error(f"❌ FABRIC TOKEN FAST VALIDATION: Livy rejected session start - invalid token")
+            if conn:
+                conn.close()
+                
+                # Token is valid - store it
+                from flask import session as flask_session
+                flask_session['fabric_bearer_token'] = token
+                flask_session['states_loaded'] = True
+                flask_session['fabric_token_validated_at'] = datetime.now().isoformat()
+                
+                logger.info(f"✅ FABRIC TOKEN VALIDATION: Token validated successfully")
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Token validated successfully',
+                    'validated_at': flask_session['fabric_token_validated_at']
+                })
+            else:
+                logger.error(f"❌ FABRIC TOKEN VALIDATION: SQL connection failed")
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Token validation failed - could not connect to SQL database'
+                }), 400
+                
+        except Exception as conn_error:
+            logger.error(f"❌ FABRIC TOKEN VALIDATION: Connection error: {conn_error}")
             return jsonify({
                 'status': 'error',
-                'message': 'Token validation failed - Livy rejected authentication'
+                'message': f'Token validation failed: {str(conn_error)}'
             }), 400
             
-    except ImportError:
-        logger.error("❌ FABRIC TOKEN VALIDATION: fabric_writer module not available")
+    except ImportError as ie:
+        logger.error(f"❌ FABRIC TOKEN VALIDATION: fabric_sql_writer module not available: {ie}")
         return jsonify({
             'status': 'error',
-            'message': 'Fabric validation not available - fabric_writer module missing'
+            'message': 'Fabric SQL writer not available'
         }), 500
     except Exception as e:
         logger.error(f"❌ FABRIC TOKEN VALIDATION: Error validating token: {e}")

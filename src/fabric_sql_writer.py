@@ -209,6 +209,7 @@ class FabricSQLWriter:
                 Categorization_Confidence FLOAT,
                 Primary_Domain NVARCHAR(100),
                 Domains NTEXT, -- Store as JSON string
+                Matched_Keywords NTEXT, -- Store matched keywords as JSON array
                 User_Modified_Categorization BIT DEFAULT 0, -- Flag to protect user changes from auto-recategorization
                 Auto_Recategorized_Date DATETIME2, -- Timestamp of last automatic recategorization
                 Collected_Date DATETIME2 DEFAULT GETDATE(),
@@ -244,6 +245,7 @@ class FabricSQLWriter:
             "Categorization_Confidence FLOAT",
             "Primary_Domain NVARCHAR(100)",
             "Domains NTEXT",
+            "Matched_Keywords NTEXT",
             "User_Modified_Categorization BIT DEFAULT 0",
             "Auto_Recategorized_Date DATETIME2"
         ]
@@ -422,10 +424,35 @@ class FabricSQLWriter:
                     # Update feedback with deterministic ID
                     feedback['Feedback_ID'] = deterministic_id
                     
-                    # Check for duplicates by ID
+                    # Check for duplicates by ID - UPDATE if exists to add keywords
                     if deterministic_id in existing_items_db:
                         existing_items += 1
-                        logger.debug(f"✅ Item already exists by ID: {deterministic_id}")
+                        logger.debug(f"✅ Item already exists by ID: {deterministic_id} - checking for keyword updates")
+                        
+                        # Extract and serialize keywords for update
+                        import json
+                        matched_keywords_raw = feedback.get('Matched_Keywords', [])
+                        if isinstance(matched_keywords_raw, list):
+                            matched_keywords = json.dumps(matched_keywords_raw)
+                        elif isinstance(matched_keywords_raw, str):
+                            matched_keywords = matched_keywords_raw
+                        else:
+                            matched_keywords = '[]'
+                        
+                        # Update existing record with keywords if they're not empty
+                        if matched_keywords and matched_keywords != '[]':
+                            try:
+                                cursor.execute("""
+                                    UPDATE Feedback 
+                                    SET Matched_Keywords = ?
+                                    WHERE Feedback_ID = ?
+                                    AND (Matched_Keywords IS NULL OR DATALENGTH(Matched_Keywords) = 0)
+                                """, [matched_keywords, deterministic_id])
+                                if cursor.rowcount > 0:
+                                    logger.info(f"🔄 Updated keywords for existing item: {deterministic_id}")
+                            except Exception as update_error:
+                                logger.warning(f"⚠️ Could not update keywords for {deterministic_id}: {update_error}")
+                        
                         continue
                     
                     # Check for duplicates by content using proper field mapping - handle float/NaN values
@@ -471,6 +498,16 @@ class FabricSQLWriter:
                     primary_domain = feedback.get('Primary_Domain', '')
                     domains = str(feedback.get('Domains', [])) if feedback.get('Domains') else ''
                     
+                    # Serialize Matched_Keywords as JSON string
+                    import json
+                    matched_keywords_raw = feedback.get('Matched_Keywords', [])
+                    if isinstance(matched_keywords_raw, list):
+                        matched_keywords = json.dumps(matched_keywords_raw)
+                    elif isinstance(matched_keywords_raw, str):
+                        matched_keywords = matched_keywords_raw  # Already JSON string
+                    else:
+                        matched_keywords = '[]'
+                    
                     # Map ISV/Platform to Developer for audience standardization
                     if audience in ['ISV', 'Platform']:
                         audience = 'Developer'
@@ -492,14 +529,14 @@ class FabricSQLWriter:
                             Created_Date, Sentiment, Primary_Category, Enhanced_Category,
                             Audience, Priority, Feedback_Gist, Area, Impacttype, Scenario,
                             Tag, Organization, Status, Created_by, Rawfeedback, Category,
-                            Subcategory, Feature_Area, Categorization_Confidence, Primary_Domain, Domains
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            Subcategory, Feature_Area, Categorization_Confidence, Primary_Domain, Domains, Matched_Keywords
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, [
                         deterministic_id, title, content, source, source_url, author,
                         created_date, sentiment, primary_category, enhanced_category,
                         audience, priority, feedback_gist, area, impacttype, scenario,
                         tag, organization, status, created_by, rawfeedback, category,
-                        subcategory, feature_area, categorization_confidence, primary_domain, domains
+                        subcategory, feature_area, categorization_confidence, primary_domain, domains, matched_keywords
                     ])
                     
                     # Add to existing sets to prevent duplicates within this batch

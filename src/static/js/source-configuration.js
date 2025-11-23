@@ -8,7 +8,7 @@ class SourceConfigManager {
                 sort: 'new',
                 timeFilter: 'month',
                 postTypes: ['all'],
-                maxItems: 200
+                maxItems: 5
             },
             github: {
                 enabled: true,
@@ -17,11 +17,21 @@ class SourceConfigManager {
                         owner: 'microsoft',
                         repo: 'Microsoft-Fabric-workload-development-sample',
                         enabled: true
+                    },
+                    {
+                        owner: 'microsoft',
+                        repo: 'fabric-extensibility-toolkit',
+                        enabled: true
+                    },
+                    {
+                        owner: 'microsoft',
+                        repo: 'Microsoft-fabric-tools-workload',
+                        enabled: true
                     }
                 ],
                 state: 'all',
                 labels: [],
-                maxItems: 200
+                maxItems: 5
             },
             githubIssues: {
                 enabled: true,
@@ -30,28 +40,38 @@ class SourceConfigManager {
                         owner: 'microsoft',
                         repo: 'Microsoft-Fabric-workload-development-sample',
                         enabled: true
+                    },
+                    {
+                        owner: 'microsoft',
+                        repo: 'fabric-extensibility-toolkit',
+                        enabled: true
+                    },
+                    {
+                        owner: 'microsoft',
+                        repo: 'Microsoft-fabric-tools-workload',
+                        enabled: true
                     }
                 ],
                 state: 'all',
                 labels: [],
-                maxItems: 200
+                maxItems: 5
             },
             fabricCommunity: {
                 enabled: true,
-                maxItems: 200
+                maxItems: 5
             },
             ado: {
                 enabled: true,
                 parentWorkItem: '1319103',
                 workItemTypes: ['Bug', 'Feature', 'User Story'],
                 states: ['New', 'Active', 'Resolved'],
-                maxItems: 200
+                maxItems: 5
             }
         };
         
         this.settings = {
             timeRangeMonths: 6,
-            maxItemsPerSource: 200,
+            maxItemsPerSource: 5,
             respectRateLimits: true,
             keywords: [],
             duplicateDetection: true,
@@ -789,6 +809,7 @@ class SourceConfigManager {
                 <div class="config-field">
                     <label class="fluent-label">Max Items per Source:</label>
                     <select class="fluent-select setting-input" data-field="maxItemsPerSource">
+                        <option value="5" ${parseInt(this.settings.maxItemsPerSource) === 5 ? 'selected' : ''}>5</option>
                         <option value="50" ${parseInt(this.settings.maxItemsPerSource) === 50 ? 'selected' : ''}>50</option>
                         <option value="100" ${parseInt(this.settings.maxItemsPerSource) === 100 ? 'selected' : ''}>100</option>
                         <option value="200" ${parseInt(this.settings.maxItemsPerSource) === 200 ? 'selected' : ''}>200</option>

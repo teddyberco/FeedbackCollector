@@ -22,8 +22,20 @@ def analyze_sentiment(text: str) -> str:
     if score > 0.1: return "Positive"
     return "Neutral"
 
+def find_matched_keywords(text: str, keywords: List[str]) -> List[str]:
+    """Find which keywords matched in the given text (case-insensitive)."""
+    if not text or not keywords:
+        return []
+    text_lower = text.lower()
+    matched = []
+    for keyword in keywords:
+        if keyword.lower() in text_lower:
+            matched.append(keyword)
+    return matched
+
 class RedditCollector:
     def __init__(self):
+        self.max_items = config.MAX_ITEMS_PER_RUN
         # Debug: Print what we're passing to praw
         print(f"🔍 RedditCollector init - REDDIT_CLIENT_ID type: {type(config.REDDIT_CLIENT_ID).__name__}, value exists: {config.REDDIT_CLIENT_ID is not None}")
         print(f"🔍 RedditCollector init - REDDIT_CLIENT_SECRET type: {type(config.REDDIT_CLIENT_SECRET).__name__}, value exists: {config.REDDIT_CLIENT_SECRET is not None}")
@@ -47,6 +59,12 @@ class RedditCollector:
             ratelimit_seconds=5,
             timeout=16
         )
+    
+    def configure(self, settings: Dict[str, Any]):
+        """Configure collector with custom settings"""
+        if 'max_items' in settings:
+            self.max_items = settings['max_items']
+            logger.info(f"RedditCollector configured with max_items={self.max_items}")
         
     def collect(self) -> List[Dict[str, Any]]:
         feedback_items = []
@@ -58,17 +76,24 @@ class RedditCollector:
             search_query = " OR ".join([f'"{k}"' for k in config.KEYWORDS])
             logger.info(f"Reddit search query: {search_query}")
 
-            submissions_generator = subreddit.search(search_query, sort="new", limit=config.MAX_ITEMS_PER_RUN)
+            submissions_generator = subreddit.search(search_query, sort="new", limit=self.max_items)
             
             count = 0
             for submission in submissions_generator:
-                if count >= config.MAX_ITEMS_PER_RUN:
-                    logger.info(f"Reached MAX_ITEMS_PER_RUN ({config.MAX_ITEMS_PER_RUN}) for Reddit submissions.")
+                if count >= self.max_items:
+                    logger.info(f"Reached max_items limit ({self.max_items}) for Reddit submissions.")
                     break
                 
                 logger.info(f"Processing submission via search: {submission.title}")
                 reddit_url = f"https://www.reddit.com{submission.permalink}"
                 full_feedback_text = f"{submission.title}\n\n{submission.selftext}"
+                
+                # Find matched keywords - filter out posts without keyword matches
+                matched_keywords = find_matched_keywords(full_feedback_text, config.KEYWORDS)
+                
+                if not matched_keywords:
+                    logger.info(f"Skipping submission (no keyword matches): {submission.title}")
+                    continue
                 
                 tag_value = self._extract_flair(submission)
 
@@ -83,6 +108,7 @@ class RedditCollector:
                 feedback_items.append({
                     'Feedback_Gist': generate_feedback_gist(full_feedback_text),
                     'Feedback': full_feedback_text,
+                    'Matched_Keywords': matched_keywords,
                     'Url': reddit_url,
                     'Area': 'Workloads',
                     'Sources': 'Reddit',
@@ -109,7 +135,7 @@ class RedditCollector:
                 count += 1
             
             logger.info(f"Collected {len(feedback_items)} feedback items from Reddit")
-            return feedback_items[:config.MAX_ITEMS_PER_RUN] 
+            return feedback_items[:self.max_items] 
             
         except Exception as e:
             error_msg = str(e)
@@ -141,12 +167,20 @@ class FabricCommunityCollector:
     def __init__(self):
         self.source_name = "Fabric Community"
         self.search_base_url = "https://community.fabric.microsoft.com/t5/forums/searchpage/tab/message"
-        self.max_items_to_fetch = config.MAX_ITEMS_PER_RUN 
+        self.max_items_to_fetch = config.MAX_ITEMS_PER_RUN
+        self.max_items = config.MAX_ITEMS_PER_RUN 
         self.search_page_size = 50 
         self.session = requests.Session()
         self.session.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
+    
+    def configure(self, settings: Dict[str, Any]):
+        """Configure collector with custom settings"""
+        if 'max_items' in settings:
+            self.max_items = settings['max_items']
+            self.max_items_to_fetch = settings['max_items']
+            logger.info(f"FabricCommunityCollector configured with max_items={self.max_items}")
         
     def collect(self) -> List[Dict[str, Any]]: 
         feedback_items = []
@@ -272,8 +306,12 @@ class FabricCommunityCollector:
                             organization='Microsoft Fabric Community'
                         )
                         
+                        # Find matched keywords
+                        matched_keywords = find_matched_keywords(feedback_text, keywords_to_use)
+                        
                         feedback_items.append({
                             'Feedback_Gist': gist, 'Feedback': feedback_text, 'Url': thread_url,
+                            'Matched_Keywords': matched_keywords,
                             'Area': 'Fabric Platform Search', 'Sources': self.source_name,
                             'Impacttype': self._determine_impact_type_content(title + " " + feedback_text), # Use title + feedback for impact
                             'Scenario': 'Customer', 'Customer': author_name,
@@ -353,6 +391,7 @@ class FabricCommunityCollector:
 
 class GitHubDiscussionsCollector:
     def __init__(self):
+        self.max_items = config.MAX_ITEMS_PER_RUN
         self.session = requests.Session()
         self.session.headers = {
             'Authorization': f'Bearer {config.GITHUB_TOKEN}', 'Content-Type': 'application/json',
@@ -367,6 +406,9 @@ class GitHubDiscussionsCollector:
             self.owner = settings['owner']
         if 'repo' in settings:
             self.repo = settings['repo']
+        if 'max_items' in settings:
+            self.max_items = settings['max_items']
+            logger.info(f"GitHubDiscussionsCollector configured with max_items={self.max_items}")
         
     def collect(self) -> List[Dict[str, Any]]:
         feedback_items = []
@@ -378,11 +420,11 @@ class GitHubDiscussionsCollector:
             if not repo_response.json().get('has_discussions'):
                 logger.error("Discussions are not enabled on this repository")
                 return []
-            all_discussions, page, per_page = [], 1, min(100, config.MAX_ITEMS_PER_RUN) 
-            logger.info(f"Fetching all discussions for {self.owner}/{self.repo} (up to {config.MAX_ITEMS_PER_RUN} items).")
+            all_discussions, page, per_page = [], 1, min(100, self.max_items) 
+            logger.info(f"Fetching all discussions for {self.owner}/{self.repo} (up to {self.max_items} items).")
             while True:
-                if len(all_discussions) >= config.MAX_ITEMS_PER_RUN: break
-                remaining_to_fetch = config.MAX_ITEMS_PER_RUN - len(all_discussions)
+                if len(all_discussions) >= self.max_items: break
+                remaining_to_fetch = self.max_items - len(all_discussions)
                 current_page_limit = min(per_page, remaining_to_fetch)
                 if current_page_limit <= 0: break
                 discussions_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/discussions"
@@ -396,10 +438,10 @@ class GitHubDiscussionsCollector:
                 if len(page_data) < current_page_limit or ('Link' in discussions_resp.headers and 'rel="next"' not in discussions_resp.headers['Link']):
                     break
                 page += 1
-            logger.info(f"Found {len(all_discussions)} discussions to process (up to MAX_ITEMS_PER_RUN).")
+            logger.info(f"Found {len(all_discussions)} discussions to process (up to max_items={self.max_items}).")
             count = 0
             for discussion in all_discussions:
-                if count >= config.MAX_ITEMS_PER_RUN: break
+                if count >= self.max_items: break
                 title, body = discussion.get('title', ''), discussion.get('body', '') 
                 logger.info(f"Processing GitHub discussion: {title}")
                 author_node = discussion.get('user') 
@@ -418,9 +460,13 @@ class GitHubDiscussionsCollector:
                     organization=f'GitHub/{self.owner}'
                 )
                 
+                # Find matched keywords
+                matched_keywords = find_matched_keywords(full_feedback_text_github, config.KEYWORDS)
+                
                 feedback_items.append({
                     'Feedback_Gist': generate_feedback_gist(full_feedback_text_github),
                     'Feedback': full_feedback_text_github, 'Url': url,
+                    'Matched_Keywords': matched_keywords,
                     'Area': discussion.get('category', {}).get('name', 'Workloads'),
                     'Sources': 'GitHub Discussions',
                     'Impacttype': self._determine_impact_type_content(full_feedback_text_github),
@@ -443,7 +489,7 @@ class GitHubDiscussionsCollector:
                 })
                 count +=1
             logger.info(f"Collected {len(feedback_items)} relevant feedback items from GitHub Discussions")
-            return feedback_items[:config.MAX_ITEMS_PER_RUN]
+            return feedback_items[:self.max_items]
         except Exception as e:
             logger.error(f"Error collecting GitHub feedback: {str(e)}", exc_info=True)
             return []
@@ -457,6 +503,7 @@ class GitHubDiscussionsCollector:
 
 class GitHubIssuesCollector:
     def __init__(self):
+        self.max_items = config.MAX_ITEMS_PER_RUN
         self.session = requests.Session()
         self.session.headers = {
             'Authorization': f'Bearer {config.GITHUB_TOKEN}', 'Content-Type': 'application/json',
@@ -471,6 +518,9 @@ class GitHubIssuesCollector:
             self.owner = settings['owner']
         if 'repo' in settings:
             self.repo = settings['repo']
+        if 'max_items' in settings:
+            self.max_items = settings['max_items']
+            logger.info(f"GitHubIssuesCollector configured with max_items={self.max_items}")
         
     def collect(self) -> List[Dict[str, Any]]:
         feedback_items = []
@@ -480,13 +530,13 @@ class GitHubIssuesCollector:
             repo_response = self.session.get(repo_url)
             repo_response.raise_for_status()
             
-            all_issues, page, per_page = [], 1, min(100, config.MAX_ITEMS_PER_RUN)
-            logger.info(f"Fetching all issues for {self.owner}/{self.repo} (up to {config.MAX_ITEMS_PER_RUN} items).")
+            all_issues, page, per_page = [], 1, min(100, self.max_items)
+            logger.info(f"Fetching all issues for {self.owner}/{self.repo} (up to {self.max_items} items).")
             
             while True:
-                if len(all_issues) >= config.MAX_ITEMS_PER_RUN: 
+                if len(all_issues) >= self.max_items: 
                     break
-                remaining_to_fetch = config.MAX_ITEMS_PER_RUN - len(all_issues)
+                remaining_to_fetch = self.max_items - len(all_issues)
                 current_page_limit = min(per_page, remaining_to_fetch)
                 if current_page_limit <= 0: 
                     break
@@ -518,11 +568,11 @@ class GitHubIssuesCollector:
                     break
                 page += 1
                 
-            logger.info(f"Found {len(all_issues)} issues to process (up to MAX_ITEMS_PER_RUN).")
+            logger.info(f"Found {len(all_issues)} issues to process (up to max_items={self.max_items}).")
             
             count = 0
             for issue in all_issues:
-                if count >= config.MAX_ITEMS_PER_RUN: 
+                if count >= self.max_items: 
                     break
                     
                 title, body = issue.get('title', ''), issue.get('body', '') or ''
@@ -549,9 +599,13 @@ class GitHubIssuesCollector:
                     organization=f'GitHub/{self.owner}'
                 )
                 
+                # Find matched keywords
+                matched_keywords = find_matched_keywords(full_feedback_text_github, config.KEYWORDS)
+                
                 feedback_items.append({
                     'Feedback_Gist': generate_feedback_gist(full_feedback_text_github),
-                    'Feedback': full_feedback_text_github, 
+                    'Feedback': full_feedback_text_github,
+                    'Matched_Keywords': matched_keywords, 
                     'Title': title,  # Add explicit Title field for ID generation
                     'Content': full_feedback_text_github,  # Add explicit Content field for ID generation
                     'Source': 'GitHub Issues',  # Add explicit Source field for ID generation

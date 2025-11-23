@@ -613,6 +613,7 @@ class ModernFilterSystem {
                                 <span class="badge bg-info ms-2">${item.Status}</span>
                             ` : ''}
                             ${sentimentBadge ? `<span class="ms-2">${sentimentBadge}</span>` : ''}
+                            ${this.getKeywordBadges(item.Matched_Keywords)}
                         </div>
                     </div>
                 </div>
@@ -666,6 +667,30 @@ class ModernFilterSystem {
         };
         const data = sentimentData[sentiment?.toLowerCase()] || sentimentData.neutral;
         return `<span class="badge ${data.class}">${data.emoji} ${sentiment}</span>`;
+    }
+
+    getKeywordBadges(keywords) {
+        if (!keywords || !Array.isArray(keywords) || keywords.length === 0) {
+            return '';
+        }
+        
+        const keywordsToShow = keywords.slice(0, 3);
+        const remainingCount = keywords.length - 3;
+        const remainingKeywords = keywords.slice(3).join(', ');
+        
+        let html = '<span class="keyword-tags ms-2">';
+        html += '<span class="keyword-label">🔑 Keywords:</span>';
+        
+        keywordsToShow.forEach(keyword => {
+            html += `<span class="badge keyword-badge">${keyword}</span>`;
+        });
+        
+        if (remainingCount > 0) {
+            html += `<span class="badge keyword-more" title="${remainingKeywords}">+${remainingCount} more</span>`;
+        }
+        
+        html += '</span>';
+        return html;
     }
     
     getAudienceBadge(audience) {
