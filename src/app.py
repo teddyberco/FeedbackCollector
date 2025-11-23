@@ -249,6 +249,14 @@ def collect_feedback_route():
         
         logger.info(f"📋 COLLECTION CONFIG: {total_sources} sources enabled: {enabled_sources}")
         
+        # Reload keywords, categories, and impact types from files before collection
+        # This ensures we use the latest configuration set via the web UI
+        import config as cfg
+        cfg.KEYWORDS = cfg.load_keywords()
+        cfg.ENHANCED_FEEDBACK_CATEGORIES = cfg.load_categories()
+        cfg.IMPACT_TYPES_CONFIG = cfg.load_impact_types()
+        logger.info(f"🔄 Reloaded config - Keywords: {len(cfg.KEYWORDS)}, Categories: {len(cfg.ENHANCED_FEEDBACK_CATEGORIES)}, Impact Types: {len(cfg.IMPACT_TYPES_CONFIG)}")
+        
         all_feedback = []
         results = {}
         
@@ -636,7 +644,10 @@ def collect_feedback_route():
         return jsonify(last_collection_summary)
         
     except Exception as e:
+        import traceback
+        full_traceback = traceback.format_exc()
         logger.error(f"Error in collection route: {e}")
+        logger.error(f"Full traceback:\n{full_traceback}")
         # Update status to error
         collection_status.update({
             'status': 'error',

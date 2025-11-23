@@ -24,10 +24,28 @@ def analyze_sentiment(text: str) -> str:
 
 class RedditCollector:
     def __init__(self):
+        # Debug: Print what we're passing to praw
+        print(f"🔍 RedditCollector init - REDDIT_CLIENT_ID type: {type(config.REDDIT_CLIENT_ID).__name__}, value exists: {config.REDDIT_CLIENT_ID is not None}")
+        print(f"🔍 RedditCollector init - REDDIT_CLIENT_SECRET type: {type(config.REDDIT_CLIENT_SECRET).__name__}, value exists: {config.REDDIT_CLIENT_SECRET is not None}")
+        print(f"🔍 RedditCollector init - REDDIT_USER_AGENT type: {type(config.REDDIT_USER_AGENT).__name__}, value: {config.REDDIT_USER_AGENT}")
+        
+        # Initialize with explicit configuration to avoid praw.ini lookup
         self.reddit = praw.Reddit(
             client_id=config.REDDIT_CLIENT_ID,
             client_secret=config.REDDIT_CLIENT_SECRET,
-            user_agent=config.REDDIT_USER_AGENT
+            user_agent=config.REDDIT_USER_AGENT,
+            check_for_updates=False,
+            comment_kind="t1",
+            message_kind="t4",
+            redditor_kind="t2",
+            submission_kind="t3",
+            subreddit_kind="t5",
+            trophy_kind="t6",
+            oauth_url="https://oauth.reddit.com",
+            reddit_url="https://www.reddit.com",
+            short_url="https://redd.it",
+            ratelimit_seconds=5,
+            timeout=16
         )
         
     def collect(self) -> List[Dict[str, Any]]:

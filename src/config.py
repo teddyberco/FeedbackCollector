@@ -1,8 +1,39 @@
 import os
+import sys
 from dotenv import load_dotenv
 import json # Ensure json is imported
 
-load_dotenv()
+# Determine the correct path for .env file when frozen
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable - PyInstaller extracts to _internal
+    # Try multiple locations
+    application_path = os.path.dirname(sys.executable)
+    env_paths = [
+        os.path.join(sys._MEIPASS, '.env'),  # Inside _internal (PyInstaller temp dir)
+        os.path.join(application_path, '_internal', '.env'),  # Relative to exe
+        os.path.join(application_path, '.env'),  # Same dir as exe
+    ]
+    env_path = None
+    for path in env_paths:
+        if os.path.exists(path):
+            env_path = path
+            print(f"✅ Found .env file at: {path}")
+            break
+    if not env_path:
+        env_path = env_paths[0]  # Default to first option
+        print(f"⚠️ .env file not found. Tried: {env_paths}")
+else:
+    # Running in normal Python environment
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+
+# Load .env file with override=True to ensure values are loaded
+result = load_dotenv(env_path, override=True)
+print(f"🔧 load_dotenv result: {result}, path: {env_path}")
+
+# Verify credentials are loaded
+if getattr(sys, 'frozen', False):
+    reddit_id = os.getenv('REDDIT_CLIENT_ID')
+    print(f"🔍 REDDIT_CLIENT_ID loaded: {reddit_id is not None and reddit_id != ''} (type: {type(reddit_id).__name__})")
 
 # API Configuration
 REDDIT_CLIENT_ID = os.getenv('REDDIT_CLIENT_ID')
