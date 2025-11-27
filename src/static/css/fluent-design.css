@@ -77,9 +77,10 @@ body {
 }
 
 .fluent-container {
-  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
   padding: var(--spacing-lg);
+  /* Removed max-width to allow full screen usage */
 }
 
 /* Typography */
@@ -893,3 +894,80 @@ body {
   border-color: #ffccc7;
   color: #cf1322;
 }
+
+/* Fluent Drawer */
+.fluent-drawer {
+  position: fixed;
+  top: 0;
+  right: -400px; /* Hidden by default */
+  width: 400px;
+  height: 100vh;
+  background-color: var(--fabric-white);
+  box-shadow: var(--shadow-depth-32);
+  z-index: 1050;
+  transition: right var(--transition-normal) cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.fluent-drawer.is-open {
+  right: 0;
+}
+
+.fluent-drawer-header {
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--fabric-gray-30);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fluent-drawer-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: var(--font-weight-semibold);
+}
+
+.fluent-drawer-body {
+  padding: var(--spacing-lg);
+  overflow-y: auto;
+  flex: 1;
+}
+
+.fluent-drawer-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.3);
+  z-index: 1040;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-normal);
+}
+
+.fluent-drawer-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+
+/* Card Title Truncation */
+.fluent-card-title-truncate {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  max-height: 2.8em; /* Fallback for line-clamp */
+}
+
+/* Dense Grid Mode */
+.feedback-grid-dense .col {
+  /* No specific styles needed for col if we change grid classes */
+}
+
+/* Custom grid classes for dense mode if needed, but we'll try to use Bootstrap classes dynamically first */
+

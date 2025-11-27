@@ -4,6 +4,7 @@
     <title>Feedback Viewer</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/fluent-design.css') }}" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- Domain display name mapping -->
@@ -29,23 +30,27 @@
     } %}
     
     <style>
+        /* 
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
             margin: 0; 
-            background-color: #f8f9fa; /* Light gray background for the page */
+            background-color: #f8f9fa; 
         }
+        */
         .container-custom { /* Renamed from container-fluid to allow custom padding */
             padding: 20px;
         }
         /* Card specific styles */
+        /*
         .card {
             transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-            border: 1px solid rgba(0,0,0,.125); /* Default Bootstrap card border */
+            border: 1px solid rgba(0,0,0,.125); 
         }
         .card:hover:not(.dropdown-open) {
             transform: translateY(-5px);
-            box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; /* Enhanced shadow on hover */
+            box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; 
         }
+        */
         
         .card.dropdown-open {
             z-index: 1000;
@@ -182,7 +187,7 @@
         /* Modern Card Layout */
         .filters-container {
             display: grid;
-            grid-template-columns: 280px 280px 580px;
+            grid-template-columns: 1fr 1fr 2fr;
             gap: 16px;
             margin-top: 24px;
         }
@@ -219,6 +224,7 @@
             }
         }
         
+        /*
         .filter-card {
             background: #ffffff;
             border-radius: 16px;
@@ -246,6 +252,7 @@
             box-shadow: 0 8px 24px rgba(0,0,0,0.12);
             transform: translateY(-4px);
         }
+        */
         
         .filter-card-header {
             display: flex;
@@ -294,6 +301,7 @@
             letter-spacing: 0.3px;
         }
         
+        /*
         .btn-outline-secondary {
             border: 2px solid #e2e8f0;
             font-weight: 600;
@@ -317,6 +325,7 @@
             box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
             border-color: #667eea;
         }
+        */
         
         /* Dropdown menu styling */
         .dropdown-menu {
@@ -366,6 +375,7 @@
         }
         
         /* Apply button styling */
+        /*
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
             border: none !important;
@@ -385,6 +395,7 @@
         .btn-primary:active {
             transform: translateY(0) !important;
         }
+        */
         
         @media (max-width: 768px) {
             .filters-row {
@@ -609,36 +620,38 @@
     <script src="{{ url_for('static', filename='js/modern-filter-system.js') }}"></script>
 </head>
 <body>
-    <div class="container-custom mt-3">
-        <h1>Collected Feedback</h1>
-        <p>
-            <a href="/">Back to Collector</a>
-            <button class="btn btn-outline-primary ms-2" id="collectionProgressBtn" onclick="toggleCollectionProgress()">
-                <i class="bi bi-activity me-1"></i>Collection Progress
-                <span class="badge bg-secondary ms-1" id="progressBadge">Ready</span>
+    <div class="fluent-container">
+        <h1 class="fluent-title">Collected Feedback</h1>
+        <div class="d-flex gap-2 mb-4">
+            <a href="/" class="fluent-button fluent-button-secondary text-decoration-none">
+                <i class="bi bi-arrow-left me-2"></i>Back to Collector
+            </a>
+            <button class="fluent-button fluent-button-secondary" id="collectionProgressBtn" onclick="toggleCollectionProgress()">
+                <i class="bi bi-activity me-2"></i>Collection Progress
+                <span class="fluent-badge fluent-badge-secondary ms-2" id="progressBadge">Ready</span>
             </button>
-            <button class="btn btn-primary ms-2" id="fabricSyncBtn" onclick="syncWithFabric()"
+            <button class="fluent-button fluent-button-primary" id="fabricSyncBtn" onclick="syncWithFabric()"
                     title="Connect to Fabric SQL database to load and manage feedback states">
-                <i class="bi bi-database me-1"></i>Sync with Fabric
-                <span class="badge bg-light text-dark ms-1" id="fabricSyncBadge">Not Connected</span>
+                <i class="bi bi-database me-2"></i>Sync with Fabric
+                <span class="fluent-badge fluent-badge-secondary ms-2" id="fabricSyncBadge" style="background: rgba(255,255,255,0.2); color: white;">Not Connected</span>
             </button>
-            <button class="btn btn-outline-secondary ms-2" id="domainSyncBtn" onclick="syncDomainsFromState()"
+            <button class="fluent-button fluent-button-secondary" id="domainSyncBtn" onclick="syncDomainsFromState()"
                     title="Sync domain updates from FeedbackState to Feedback table (useful after table recreation)"
                     style="display: none;">
-                <i class="bi bi-arrow-repeat me-1"></i>Sync Domains
+                <i class="bi bi-arrow-repeat me-2"></i>Sync Domains
             </button>
-        </p>
+        </div>
 
         <!-- Fabric Auth will now be handled through the persistent drawer -->
 
         <!-- Enhanced Statistics Dashboard -->
         {% if category_stats %}
-        <div class="alert alert-info" role="alert">
-            <h5 class="alert-heading">📊 Category Statistics</h5>
+        <div class="fluent-alert fluent-alert-info" role="alert">
+            <h5 class="fluent-section-title" style="font-size: 1rem; margin-bottom: 10px;">📊 Category Statistics</h5>
             <div class="row">
                 <div class="col-md-3">
                     <strong>By Audience:</strong>
-                    <ul class="mb-0">
+                    <ul class="mb-0 ps-3">
                         {% for audience, count in category_stats.by_audience.items() %}
                         <li>{{ audience }}: {{ count }} ({{ "%.1f"|format((count/category_stats.total_items)*100) }}%)</li>
                         {% endfor %}
@@ -646,7 +659,7 @@
                 </div>
                 <div class="col-md-3">
                     <strong>By Priority:</strong>
-                    <ul class="mb-0">
+                    <ul class="mb-0 ps-3">
                         {% for priority, data in category_stats.priority_distribution.items() %}
                         <li>{{ priority|title }}: {{ data.count }} ({{ data.percentage }}%)</li>
                         {% endfor %}
@@ -654,7 +667,7 @@
                 </div>
                 <div class="col-md-3">
                     <strong>By Domain:</strong>
-                    <ul class="mb-0">
+                    <ul class="mb-0 ps-3">
                         {% for domain, count in category_stats.by_domain.items() %}
                         {% if count > 0 %}
                         <li>{{ domain }}: {{ count }}</li>
@@ -664,7 +677,7 @@
                 </div>
                 <div class="col-md-3">
                     <strong>Top Categories:</strong>
-                    <ul class="mb-0">
+                    <ul class="mb-0 ps-3">
                         {% for category, count in (category_stats.by_enhanced_category.items()|list)[:3] %}
                         <li>{{ category[:20] }}{% if category|length > 20 %}...{% endif %}: {{ count }}</li>
                         {% endfor %}
@@ -673,70 +686,87 @@
             </div>
         </div>
         {% elif trending_category_name and trending_category_count > 0 %}
-        <div class="alert alert-info" role="alert">
-            <h5 class="alert-heading">🔥 Trending Category</h5>
-            <p>The most frequent category in the current view is: <strong>{{ trending_category_name }}</strong> ({{ trending_category_count }} item{% if trending_category_count != 1 %}s{% endif %}).</p>
+        <div class="fluent-alert fluent-alert-info" role="alert">
+            <h5 class="fluent-section-title" style="font-size: 1rem;">🔥 Trending Category</h5>
+            <p class="mb-0">The most frequent category in the current view is: <strong>{{ trending_category_name }}</strong> ({{ trending_category_count }} item{% if trending_category_count != 1 %}s{% endif %}).</p>
         </div>
         {% endif %}
 
         {% if feedback_items %}
-        <div class="alert alert-light border" role="alert">
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <h6 class="alert-heading mb-0">📊 Sentiment Overview</h6>
-                
-                <!-- Sort & Display Options -->
-                <div class="d-flex gap-2 align-items-center flex-wrap">
-                    <!-- Sort Options -->
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Date sort options">
-                        <button onclick="if(modernFilterSystem) modernFilterSystem.updateSort('newest')"
-                           class="btn {% if current_sort == 'newest' or not current_sort %}btn-success{% else %}btn-outline-success{% endif %}" style="font-size: 0.75rem;">📅 Newest</button>
-                        <button onclick="if(modernFilterSystem) modernFilterSystem.updateSort('oldest')"
-                           class="btn {% if current_sort == 'oldest' %}btn-success{% else %}btn-outline-success{% endif %}" style="font-size: 0.75rem;">📆 Oldest</button>
-                    </div>
+        <div class="fluent-card mb-4">
+            <div class="fluent-card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <h6 class="fluent-section-title mb-0" style="font-size: 1rem;">📊 Sentiment Overview</h6>
+                    
+                    <!-- Sort & Display Options -->
+                    <div class="d-flex gap-2 align-items-center flex-wrap">
+                        <!-- Sort Options -->
+                        <div class="d-flex gap-2" role="group" aria-label="Date sort options">
+                            <button onclick="if(modernFilterSystem) modernFilterSystem.updateSort('newest')"
+                               class="fluent-button {% if current_sort == 'newest' or not current_sort %}fluent-button-primary{% else %}fluent-button-secondary{% endif %}" style="font-size: 0.75rem; min-height: 32px;">📅 Newest</button>
+                            <button onclick="if(modernFilterSystem) modernFilterSystem.updateSort('oldest')"
+                               class="fluent-button {% if current_sort == 'oldest' %}fluent-button-primary{% else %}fluent-button-secondary{% endif %}" style="font-size: 0.75rem; min-height: 32px;">📆 Oldest</button>
+                        </div>
 
-                    <!-- Repeating Requests Toggle -->
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Repeating requests toggle">
-                        <button onclick="if(modernFilterSystem) modernFilterSystem.updateRepeating(false)"
-                           class="btn {% if not show_repeating %}btn-outline-info{% else %}btn-info{% endif %}" style="font-size: 0.75rem;">Hide</button>
-                        <button onclick="if(modernFilterSystem) modernFilterSystem.updateRepeating(true)"
-                           class="btn {% if show_repeating %}btn-info{% else %}btn-outline-info{% endif %}" style="font-size: 0.75rem;">🔍 Analyze</button>
+                        <!-- Repeating Requests Toggle -->
+                        <div class="d-flex gap-2" role="group" aria-label="Repeating requests toggle">
+                            <button onclick="if(modernFilterSystem) modernFilterSystem.updateRepeating(false)"
+                               class="fluent-button {% if not show_repeating %}fluent-button-primary{% else %}fluent-button-secondary{% endif %}" style="font-size: 0.75rem; min-height: 32px;">Hide</button>
+                            <button onclick="if(modernFilterSystem) modernFilterSystem.updateRepeating(true)"
+                               class="fluent-button {% if show_repeating %}fluent-button-primary{% else %}fluent-button-secondary{% endif %}" style="font-size: 0.75rem; min-height: 32px;">🔍 Analyze</button>
+                        </div>
+
+                        <!-- Density Toggle -->
+                        <div class="d-flex gap-2 ms-2 border-start ps-3" role="group" aria-label="Density toggle">
+                            <button onclick="if(modernFilterSystem) modernFilterSystem.updateDensity('cozy')"
+                               class="fluent-button fluent-button-secondary density-btn-cozy active" style="font-size: 0.75rem; min-height: 32px;" title="Cozy View">
+                               <i class="bi bi-grid-3x3-gap"></i> Cozy
+                            </button>
+                            <button onclick="if(modernFilterSystem) modernFilterSystem.updateDensity('dense')"
+                               class="fluent-button fluent-button-secondary density-btn-dense" style="font-size: 0.75rem; min-height: 32px;" title="Dense View">
+                               <i class="bi bi-grid-3x3"></i> Dense
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="d-flex gap-2 flex-wrap">
-                {% set positive_count = feedback_items | selectattr('Sentiment', 'equalto', 'Positive') | list | length %}
-                {% set negative_count = feedback_items | selectattr('Sentiment', 'equalto', 'Negative') | list | length %}
-                {% set neutral_count = feedback_items | selectattr('Sentiment', 'equalto', 'Neutral') | list | length %}
-                <span class="badge sentiment-positive">😊 {{ positive_count }} Positive</span>
-                <span class="badge sentiment-neutral">😐 {{ neutral_count }} Neutral</span>
-                <span class="badge sentiment-negative">😞 {{ negative_count }} Negative</span>
+                <div class="d-flex gap-2 flex-wrap">
+                    {% set positive_count = feedback_items | selectattr('Sentiment', 'equalto', 'Positive') | list | length %}
+                    {% set negative_count = feedback_items | selectattr('Sentiment', 'equalto', 'Negative') | list | length %}
+                    {% set neutral_count = feedback_items | selectattr('Sentiment', 'equalto', 'Neutral') | list | length %}
+                    <span class="fluent-badge fluent-badge-success">😊 {{ positive_count }} Positive</span>
+                    <span class="fluent-badge fluent-badge-secondary">😐 {{ neutral_count }} Neutral</span>
+                    <span class="fluent-badge fluent-badge-error">😞 {{ negative_count }} Negative</span>
+                </div>
             </div>
         </div>
         {% endif %}
 
         <!-- Enhanced Filter Section -->
-        <div class="filter-section">
-            <h5 class="mb-3"><i class="bi bi-funnel-fill"></i> Filters</h5>
+        <div class="mb-4 filter-section" id="filter-section-container">
+            <h5 class="fluent-section-title mb-3"><i class="bi bi-funnel-fill"></i> Filters</h5>
             
             <div class="filters-container">
                 <!-- Workflow Card -->
-                <div class="filter-card">
-                        <div class="filter-card-header">
-                            <span class="filter-card-icon">📋</span>
-                            <h6 class="filter-card-title">Workflow</h6>
+                <div class="fluent-card p-3">
+                        <div class="fluent-card-header p-0 border-0 mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="filter-card-icon" style="width: 32px; height: 32px; font-size: 1.2rem;">📋</span>
+                                <h6 class="fluent-section-title mb-0" style="font-size: 1rem;">Workflow</h6>
+                            </div>
                         </div>
                         <!-- State Filter -->
-                        <div class="filter-group">
-                            <label class="filter-label" for="stateFilter">📝 State</label>
+                        <div class="filter-group mb-3">
+                            <label class="fluent-label" for="stateFilter">📝 State</label>
                             <div class="dropdown">
-                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="stateFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="fluent-select d-flex justify-content-between align-items-center" type="button" id="stateFilter" data-bs-toggle="dropdown" aria-expanded="false">
                                     {% if selected_states %}
                                         {{ selected_states|length }} selected
                                     {% else %}
                                         All States
                                     {% endif %}
+                                    <i class="bi bi-chevron-down"></i>
                                 </button>
-                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                <div class="dropdown-menu p-3 shadow-sm border-0" style="min-width: 250px;">
                                     {% for state in all_states %}
                                     <div class="form-check">
                                         <input class="form-check-input filter-checkbox" type="checkbox" data-filter="state"
@@ -752,23 +782,24 @@
                                     </div>
                                     {% endfor %}
                                     <hr class="dropdown-divider">
-                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                    <button class="fluent-button fluent-button-primary w-100" onclick="applyMultiSelectFilters()">Apply</button>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Audience Filter -->
-                        <div class="filter-group">
-                            <label class="filter-label" for="audienceFilter">👥 Audience</label>
+                        <div class="filter-group mb-3">
+                            <label class="fluent-label" for="audienceFilter">👥 Audience</label>
                             <div class="dropdown">
-                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="audienceFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="fluent-select d-flex justify-content-between align-items-center" type="button" id="audienceFilter" data-bs-toggle="dropdown" aria-expanded="false">
                                     {% if selected_audiences %}
                                         {{ selected_audiences|length }} selected
                                     {% else %}
                                         All Audiences
                                     {% endif %}
+                                    <i class="bi bi-chevron-down"></i>
                                 </button>
-                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                <div class="dropdown-menu p-3 shadow-sm border-0" style="min-width: 250px;">
                                     {% for audience in all_audiences %}
                                     <div class="form-check">
                                         <input class="form-check-input filter-checkbox" type="checkbox" data-filter="audience"
@@ -783,23 +814,24 @@
                                     </div>
                                     {% endfor %}
                                     <hr class="dropdown-divider">
-                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                    <button class="fluent-button fluent-button-primary w-100" onclick="applyMultiSelectFilters()">Apply</button>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Priority Filter -->
                         <div class="filter-group">
-                            <label class="filter-label" for="priorityFilter">⚡ Priority</label>
+                            <label class="fluent-label" for="priorityFilter">⚡ Priority</label>
                             <div class="dropdown">
-                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="priorityFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="fluent-select d-flex justify-content-between align-items-center" type="button" id="priorityFilter" data-bs-toggle="dropdown" aria-expanded="false">
                                     {% if selected_priorities %}
                                         {{ selected_priorities|length }} selected
                                     {% else %}
                                         All Priorities
                                     {% endif %}
+                                    <i class="bi bi-chevron-down"></i>
                                 </button>
-                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                <div class="dropdown-menu p-3 shadow-sm border-0" style="min-width: 250px;">
                                     {% for priority in all_priorities %}
                                     <div class="form-check">
                                         <input class="form-check-input filter-checkbox" type="checkbox" data-filter="priority"
@@ -815,28 +847,31 @@
                                     </div>
                                     {% endfor %}
                                     <hr class="dropdown-divider">
-                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                    <button class="fluent-button fluent-button-primary w-100" onclick="applyMultiSelectFilters()">Apply</button>
                                 </div>
                             </div>
                         </div>
                 </div>
 
                 <!-- Classification Card -->
-                <div class="filter-card">
-                        <div class="filter-card-header">
-                            <span class="filter-card-icon">🎯</span>
-                            <h6 class="filter-card-title">Classification</h6>
+                <div class="fluent-card p-3">
+                        <div class="fluent-card-header p-0 border-0 mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="filter-card-icon" style="width: 32px; height: 32px; font-size: 1.2rem;">🎯</span>
+                                <h6 class="fluent-section-title mb-0" style="font-size: 1rem;">Classification</h6>
+                            </div>
                         </div>
                         
                         <!-- Impact Type Filter -->
                         {% if all_impact_types %}
-                        <div class="filter-group">
-                            <label class="filter-label" for="impactTypeFilter">⚠️ Impact Type</label>
+                        <div class="filter-group mb-3">
+                            <label class="fluent-label" for="impacttypeFilter">⚠️ Impact Type</label>
                             <div class="dropdown">
-                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="impactTypeFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="fluent-select d-flex justify-content-between align-items-center" type="button" id="impacttypeFilter" data-bs-toggle="dropdown" aria-expanded="false">
                                     All Types
+                                    <i class="bi bi-chevron-down"></i>
                                 </button>
-                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                <div class="dropdown-menu p-3 shadow-sm border-0" style="min-width: 250px;">
                                     {% for itype in all_impact_types %}
                                     <div class="form-check">
                                         <input class="form-check-input filter-checkbox" type="checkbox" data-filter="impacttype"
@@ -852,7 +887,7 @@
                                     </div>
                                     {% endfor %}
                                     <hr class="dropdown-divider">
-                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                    <button class="fluent-button fluent-button-primary w-100" onclick="applyMultiSelectFilters()">Apply</button>
                                 </div>
                             </div>
                         </div>
@@ -861,16 +896,17 @@
                         <!-- Sentiment Filter -->
                         {% if all_sentiments %}
                         <div class="filter-group">
-                            <label class="filter-label" for="sentimentFilter">😊 Sentiment</label>
+                            <label class="fluent-label" for="sentimentFilter">😊 Sentiment</label>
                             <div class="dropdown">
-                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="sentimentFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="fluent-select d-flex justify-content-between align-items-center" type="button" id="sentimentFilter" data-bs-toggle="dropdown" aria-expanded="false">
                                     {% if selected_sentiments %}
                                         {{ selected_sentiments|length }} selected
                                     {% else %}
                                         All Sentiments
                                     {% endif %}
+                                    <i class="bi bi-chevron-down"></i>
                                 </button>
-                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                <div class="dropdown-menu p-3 shadow-sm border-0" style="min-width: 250px;">
                                     {% for sentiment in all_sentiments %}
                                     <div class="form-check">
                                         <input class="form-check-input filter-checkbox" type="checkbox" data-filter="sentiment"
@@ -885,7 +921,7 @@
                                     </div>
                                     {% endfor %}
                                     <hr class="dropdown-divider">
-                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                    <button class="fluent-button fluent-button-primary w-100" onclick="applyMultiSelectFilters()">Apply</button>
                                 </div>
                             </div>
                         </div>
@@ -893,26 +929,29 @@
                 </div>
 
                 <!-- Content Card -->
-                <div class="filter-card content-card">
-                        <div class="filter-card-header">
-                            <span class="filter-card-icon">📌</span>
-                            <h6 class="filter-card-title">Content</h6>
+                <div class="fluent-card p-3 content-card">
+                        <div class="fluent-card-header p-0 border-0 mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="filter-card-icon" style="width: 32px; height: 32px; font-size: 1.2rem;">📌</span>
+                                <h6 class="fluent-section-title mb-0" style="font-size: 1rem;">Content</h6>
+                            </div>
                         </div>
                         
                         <div class="filter-groups-grid">
                         <!-- Category Filter -->
                         {% if all_enhanced_categories %}
-                        <div class="filter-group">
-                            <label class="filter-label" for="enhanced_categoryFilter">📂 Category</label>
+                        <div class="filter-group mb-3">
+                            <label class="fluent-label" for="enhanced_categoryFilter">📂 Category</label>
                             <div class="dropdown">
-                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="enhanced_categoryFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="fluent-select d-flex justify-content-between align-items-center" type="button" id="enhanced_categoryFilter" data-bs-toggle="dropdown" aria-expanded="false">
                                     {% if selected_enhanced_categories %}
                                         {{ selected_enhanced_categories|length }} selected
                                     {% else %}
                                         All Categories
                                     {% endif %}
+                                    <i class="bi bi-chevron-down"></i>
                                 </button>
-                                <div class="dropdown-menu p-3" style="min-width: 350px; max-height: 400px; overflow-y: auto;">
+                                <div class="dropdown-menu p-3 shadow-sm border-0" style="min-width: 350px; max-height: 400px; overflow-y: auto;">
                                     {% for cat in all_enhanced_categories %}
                                     <div class="form-check">
                                         <input class="form-check-input filter-checkbox" type="checkbox" data-filter="enhanced_category"
@@ -925,7 +964,7 @@
                                     </div>
                                     {% endfor %}
                                     <hr class="dropdown-divider">
-                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                    <button class="fluent-button fluent-button-primary w-100" onclick="applyMultiSelectFilters()">Apply</button>
                                 </div>
                             </div>
                         </div>
@@ -933,13 +972,14 @@
 
                         <!-- Subcategory Filter (Grouped by Feature Area) -->
                         {% if all_subcategories %}
-                        <div class="filter-group">
-                            <label class="filter-label" for="subcategoryFilter">📋 Subcategory</label>
+                        <div class="filter-group mb-3">
+                            <label class="fluent-label" for="subcategoryFilter">📋 Subcategory</label>
                             <div class="dropdown">
-                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="subcategoryFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="fluent-select d-flex justify-content-between align-items-center" type="button" id="subcategoryFilter" data-bs-toggle="dropdown" aria-expanded="false">
                                     All Subcategories
+                                    <i class="bi bi-chevron-down"></i>
                                 </button>
-                                <div class="dropdown-menu p-3" style="min-width: 350px; max-height: 400px; overflow-y: auto;">
+                                <div class="dropdown-menu p-3 shadow-sm border-0" style="min-width: 350px; max-height: 400px; overflow-y: auto;">
                                     {% for feature_area, subcats in subcategories_by_feature_area.items() %}
                                     <div class="text-muted small fw-bold px-2 pt-2" style="font-size: 0.75rem;">{{ feature_area }}</div>
                                     {% for subcat in subcats %}
@@ -954,7 +994,7 @@
                                     {% if not loop.last %}<hr class="dropdown-divider my-2">{% endif %}
                                     {% endfor %}
                                     <hr class="dropdown-divider">
-                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                    <button class="fluent-button fluent-button-primary w-100" onclick="applyMultiSelectFilters()">Apply</button>
                                 </div>
                             </div>
                         </div>
@@ -962,17 +1002,18 @@
 
                         <!-- Domain Filter -->
                         {% if all_domains %}
-                        <div class="filter-group">
-                            <label class="filter-label" for="domainFilter">🎯 Domain</label>
+                        <div class="filter-group mb-3">
+                            <label class="fluent-label" for="domainFilter">🎯 Domain</label>
                             <div class="dropdown">
-                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="domainFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="fluent-select d-flex justify-content-between align-items-center" type="button" id="domainFilter" data-bs-toggle="dropdown" aria-expanded="false">
                                     {% if selected_domains %}
                                         {{ selected_domains|length }} selected
                                     {% else %}
                                         All Domains
                                     {% endif %}
+                                    <i class="bi bi-chevron-down"></i>
                                 </button>
-                                <div class="dropdown-menu p-3" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
+                                <div class="dropdown-menu p-3 shadow-sm border-0" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
                                     {% for domain in all_domains %}
                                     <div class="form-check">
                                         <input class="form-check-input filter-checkbox" type="checkbox" data-filter="domain"
@@ -992,7 +1033,7 @@
                                     </div>
                                     {% endfor %}
                                     <hr class="dropdown-divider">
-                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                    <button class="fluent-button fluent-button-primary w-100" onclick="applyMultiSelectFilters()">Apply</button>
                                 </div>
                             </div>
                         </div>
@@ -1001,16 +1042,17 @@
                         <!-- Source Filter -->
                         {% if all_sources %}
                         <div class="filter-group">
-                            <label class="filter-label" for="sourceFilter">📡 Source</label>
+                            <label class="fluent-label" for="sourceFilter">📡 Source</label>
                             <div class="dropdown">
-                                <button class="btn btn-outline-secondary btn-sm dropdown-toggle w-100" type="button" id="sourceFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                <button class="fluent-select d-flex justify-content-between align-items-center" type="button" id="sourceFilter" data-bs-toggle="dropdown" aria-expanded="false">
                                     {% if selected_sources %}
                                         {{ selected_sources|length }} selected
                                     {% else %}
                                         All Sources
                                     {% endif %}
+                                    <i class="bi bi-chevron-down"></i>
                                 </button>
-                                <div class="dropdown-menu p-3" style="min-width: 250px;">
+                                <div class="dropdown-menu p-3 shadow-sm border-0" style="min-width: 250px;">
                                     {% for src in all_sources %}
                                     <div class="form-check">
                                         <input class="form-check-input filter-checkbox" type="checkbox" data-filter="source"
@@ -1025,7 +1067,7 @@
                                     </div>
                                     {% endfor %}
                                     <hr class="dropdown-divider">
-                                    <button class="btn btn-primary btn-sm w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                    <button class="fluent-button fluent-button-primary w-100" onclick="applyMultiSelectFilters()">Apply</button>
                                 </div>
                             </div>
                         </div>
@@ -1072,35 +1114,35 @@
             </div>
         </div>
         
-        <div id="filter-error" class="alert alert-danger d-none" role="alert">
+        <div id="filter-error" class="fluent-alert fluent-alert-error d-none" role="alert">
             <i class="bi bi-exclamation-triangle me-2"></i>
             <span id="filter-error-message">Error applying filters</span>
-            <button class="btn btn-sm btn-outline-danger ms-2" onclick="location.reload()">Reload Page</button>
+            <button class="fluent-button fluent-button-danger ms-2" onclick="location.reload()" style="padding: 4px 12px; min-height: 32px;">Reload Page</button>
         </div>
         
         {% if error %}
-            <div class="alert alert-danger">{{ error }}</div>
+            <div class="fluent-alert fluent-alert-error">{{ error }}</div>
         {% elif not feedback_items %}
             <!-- Empty State -->
             <div class="container text-center py-5">
                 <div class="row justify-content-center">
                     <div class="col-md-8">
-                        <div class="card shadow-sm">
-                            <div class="card-body py-5">
-                                <h3 class="card-title mb-4">📄 No Feedback Data Available</h3>
-                                <p class="card-text mb-4">
+                        <div class="fluent-card">
+                            <div class="fluent-card-body py-5">
+                                <h3 class="fluent-card-title mb-4">📄 No Feedback Data Available</h3>
+                                <p class="mb-4">
                                     You can either collect new feedback from various sources or load existing data from your Fabric SQL database.
                                 </p>
                                 <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-                                    <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg me-md-2">
+                                    <a href="{{ url_for('index') }}" class="fluent-button fluent-button-primary me-md-2" style="min-height: 40px; padding: 0 24px;">
                                         🔄 Collect New Feedback
                                     </a>
                                     {% if stored_token %}
-                                    <button class="btn btn-outline-primary btn-lg" onclick="loadFromFabricSQL()">
+                                    <button class="fluent-button fluent-button-secondary" onclick="loadFromFabricSQL()" style="min-height: 40px; padding: 0 24px;">
                                         📊 Load from Fabric SQL
                                     </button>
                                     {% else %}
-                                    <button class="btn btn-outline-secondary btn-lg" onclick="alert('Please connect to Fabric first using the drawer on the right.')">
+                                    <button class="fluent-button fluent-button-secondary" onclick="alert('Please connect to Fabric first using the drawer on the right.')" style="min-height: 40px; padding: 0 24px;">
                                         📊 Load from Fabric SQL
                                     </button>
                                     {% endif %}
@@ -1117,12 +1159,12 @@
         {% elif feedback_items %}
             <!-- Feedback Items Container - This will be updated by AJAX -->
             <div id="feedback-container">
-            <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4"> {# Bootstrap grid for cards #}
+            <div id="feedback-grid" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 row-cols-xxl-5 g-4"> {# Bootstrap grid for cards #}
                 {% for item in feedback_items %}
                 <div class="col">
-                    <div class="card h-100 shadow-sm"> {# h-100 for equal height cards in a row, shadow-sm for Fluent-like depth #}
-                        <div class="card-body d-flex flex-column">
-                            <h5 class="card-title">
+                    <div class="fluent-card h-100 d-flex flex-column">
+                        <div class="fluent-card-header border-bottom-0 pb-0 pt-3 px-3">
+                            <h5 class="fluent-section-title mb-1 fluent-card-title-truncate" style="font-size: 1.1rem; line-height: 1.4;" title="{{ item['Feedback_Gist'] or item.Title or ('Feedback from ' + (item.Sources or 'N/A')) }}">
                                 {% if item['Feedback_Gist'] and item['Feedback_Gist']|trim != '' and item['Feedback_Gist']|lower != 'no content' and item['Feedback_Gist']|lower != 'summary unavailable' %}
                                     {{ item['Feedback_Gist'] }}
                                 {% elif item.Title and item.Title|trim != '' %}
@@ -1131,16 +1173,18 @@
                                     Feedback from {{ item.Sources or 'N/A' }} {# Generic fallback #}
                                 {% endif %}
                             </h5>
-                            <h6 class="card-subtitle mb-2 text-muted">
+                            <h6 class="text-muted small mb-2">
                                 {{ item.Sources or 'Unknown Source' }}
                                 {% if item.Created and item.Created|trim != '' %}
                                     - {{ item.Created.split('T')[0] }} {# Show Date part only #}
                                 {% endif %}
                             </h6>
-                            
+                        </div>
+                        
+                        <div class="fluent-card-body pt-2 flex-grow-1">
                             <!-- Enhanced Categorization Info -->
                             {% if item.Audience or item.Enhanced_Category or item.Priority %}
-                            <div class="category-info">
+                            <div class="category-info mb-3">
                                 {% if item.Audience and item.Audience|trim != '' %}
                                     <span class="audience-badge audience-{{ item.Audience|lower }}"
                                           onclick="updateAudience('{{ item.Feedback_ID or '' }}', '{{ item.Audience }}')"
@@ -1165,7 +1209,7 @@
                            </div>
                            
                            <!-- State Management Section -->
-                           <div class="category-info">
+                           <div class="category-info mb-3">
                                <div class="d-flex justify-content-between align-items-center">
                                    <div>
                                        <!-- State Badge (clickable) with dropdown inside -->
@@ -1203,13 +1247,13 @@
                                    
                                    <!-- Actions Menu -->
                                    <div class="card-actions">
-                                       <button class="btn btn-sm btn-outline-secondary"
+                                       <button class="fluent-button-icon"
                                                data-feedback-id="{{ item.Feedback_ID or '' }}"
                                                onclick="toggleActionsMenu(this)"
                                                title="More actions">
-                                           [...]
+                                           <i class="bi bi-three-dots"></i>
                                        </button>
-                                       <div class="actions-menu">
+                                       <div class="actions-menu shadow-sm border-0 rounded-2">
                                            <a href="#" onclick="updateDomain('{{ item.Feedback_ID or '' }}', '{{ item.Primary_Domain or '' }}')">Update Domain</a>
                                            <a href="#" onclick="updateNotes('{{ item.Feedback_ID or '' }}', '{{ item.Feedback_Notes or '' }}')">
                                                {% if item.Feedback_Notes and item.Feedback_Notes|trim != '' %}Edit Note{% else %}Add Note{% endif %}
@@ -1221,12 +1265,12 @@
                            
                            <!-- State Notes Display -->
                            {% if item.Feedback_Notes and item.Feedback_Notes|trim != '' %}
-                           <div class="notes-display">
+                           <div class="notes-display bg-light p-2 rounded border-start border-3 border-primary mb-3 small">
                                📝 {{ item.Feedback_Notes }}
                            </div>
                            {% endif %}
                            
-                           <div class="category-info">
+                           <div class="category-info mb-3 small text-muted">
                                {% if item.Enhanced_Category and item.Enhanced_Category|trim != '' %}
                                <strong>Category:</strong> {{ item.Enhanced_Category }}
                                {% if item.Subcategory and item.Subcategory|trim != '' %}
@@ -1244,7 +1288,7 @@
                            </div>
                            
                            <!-- Domain Information -->
-                           <div class="category-info">
+                           <div class="category-info mb-3 small">
                                <strong>Domain:</strong>
                                {% if item.Primary_Domain and item.Primary_Domain|trim != '' %}
                                <span class="domain-badge" style="background-color: {{ domain_colors.get(item.Primary_Domain, '#6c757d') }}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem;">{{ domain_names.get(item.Primary_Domain, item.Primary_Domain) }}</span>
@@ -1254,36 +1298,36 @@
                            </div>
                            {% endif %}
                             
-                            <p class="card-text feedback-content mb-auto">
+                            <p class="card-text feedback-content mb-auto text-secondary">
                                 {{ item.Feedback }}
                             </p>
-                            <div class="mt-auto pt-2"> {# Push button to bottom #}
+                            <div class="mt-auto pt-3 d-flex align-items-center flex-wrap gap-2"> {# Push button to bottom #}
                                 {% if item.Url and item.Url|trim != '' %}
-                                    <a href="{{ item.Url }}" class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener noreferrer">View Source</a>
+                                    <a href="{{ item.Url }}" class="fluent-button fluent-button-secondary" target="_blank" rel="noopener noreferrer" style="min-height: 32px; padding: 4px 12px;">View Source</a>
                                 {% endif %}
                                 {% if item.Tag and item.Tag|trim != '' %}
-                                    <span class="badge bg-secondary ms-2">{{ item.Tag }}</span>
+                                    <span class="fluent-badge fluent-badge-secondary">{{ item.Tag }}</span>
                                 {% endif %}
                                 {% if item.Status and item.Status|trim != '' %}
-                                    <span class="badge bg-info ms-2">{{ item.Status }}</span>
+                                    <span class="fluent-badge fluent-badge-info">{{ item.Status }}</span>
                                 {% endif %}
                                 {% if item.Sentiment and item.Sentiment|trim != '' %}
                                     {% if item.Sentiment == 'Positive' %}
-                                        <span class="badge sentiment-positive ms-2" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😊 {{ item.Sentiment }}</span>
+                                        <span class="fluent-badge fluent-badge-success" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😊 {{ item.Sentiment }}</span>
                                     {% elif item.Sentiment == 'Negative' %}
-                                        <span class="badge sentiment-negative ms-2" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😞 {{ item.Sentiment }}</span>
+                                        <span class="fluent-badge fluent-badge-error" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😞 {{ item.Sentiment }}</span>
                                     {% else %}
-                                        <span class="badge sentiment-neutral ms-2" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😐 {{ item.Sentiment }}</span>
+                                        <span class="fluent-badge fluent-badge-secondary" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😐 {{ item.Sentiment }}</span>
                                     {% endif %}
                                 {% endif %}
                                 {% if item.Matched_Keywords and item.Matched_Keywords|length > 0 %}
-                                    <span class="keyword-tags">
-                                        <span class="keyword-label">🔑 Keywords:</span>
+                                    <span class="keyword-tags d-inline-flex align-items-center gap-1">
+                                        <span class="keyword-label small text-muted fw-bold">🔑 Keywords:</span>
                                         {% for keyword in item.Matched_Keywords[:3] %}
-                                            <span class="badge keyword-badge">{{ keyword }}</span>
+                                            <span class="fluent-badge fluent-badge-secondary" style="background: #e1dfdd; color: #323130;">{{ keyword }}</span>
                                         {% endfor %}
                                         {% if item.Matched_Keywords|length > 3 %}
-                                            <span class="badge keyword-more" title="{{ item.Matched_Keywords[3:]|join(', ') }}">+{{ item.Matched_Keywords|length - 3 }} more</span>
+                                            <span class="fluent-badge fluent-badge-primary" title="{{ item.Matched_Keywords[3:]|join(', ') }}">+{{ item.Matched_Keywords|length - 3 }} more</span>
                                         {% endif %}
                                     </span>
                                 {% endif %}
@@ -1295,7 +1339,7 @@
             </div> <!-- End of feedback grid -->
             </div> <!-- End of feedback-container -->
         {% else %}
-            <div class="alert alert-info">No feedback data to display. Try collecting feedback first.</div>
+            <div class="fluent-alert fluent-alert-info">No feedback data to display. Try collecting feedback first.</div>
         {% endif %}
 
     </div> <!-- End of container-custom -->
@@ -1409,11 +1453,16 @@
         function showToastMessage(message, type = 'info') {
             // Create toast element
             const toast = document.createElement('div');
-            toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            const alertType = type === 'danger' ? 'error' : type;
+            toast.className = `fluent-alert fluent-alert-${alertType} position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; box-shadow: var(--shadow-depth-16);';
             toast.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <div class="d-flex align-items-center justify-content-between w-100">
+                    <div>${message}</div>
+                    <button type="button" class="fluent-button-icon" onclick="this.closest('.fluent-alert').remove()">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
             `;
             
             // Add to page
@@ -1431,7 +1480,7 @@
         function updateNotesDisplay(feedbackId, notes) {
             // Find the feedback card and update notes display
             const stateBadge = document.querySelector(`[data-feedback-id="${feedbackId}"][data-current-state]`);
-            const card = stateBadge ? stateBadge.closest('.card-body') : null;
+            const card = stateBadge ? stateBadge.closest('.fluent-card-body') : null;
             
             if (card) {
                 // Look for existing notes display
@@ -1552,8 +1601,8 @@
                 
                 if (fabricConnected && syncBtn && syncBtn.classList) {
                     // Update sync button - always use btn-primary styling for consistency
-                    syncBtn.innerHTML = '<i class="bi bi-database me-1"></i>Sync with Fabric <span class="badge bg-success ms-1">Connected</span>';
-                    syncBtn.className = 'btn btn-primary ms-2'; // Force btn-primary styling
+                    syncBtn.innerHTML = '<i class="bi bi-database me-1"></i>Sync with Fabric <span class="fluent-badge fluent-badge-success ms-1" id="fabricSyncBadge">Connected</span>';
+                    syncBtn.className = 'fluent-button fluent-button-primary ms-2'; // Force btn-primary styling
                     console.log('✅ Updated sync button to connected state with btn-primary styling');
                     
                     // Badge is now handled inline in the button text above
@@ -1632,8 +1681,8 @@
                     <strong>✅ State management active</strong> - Connected to Fabric
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 `;
-                const container = document.querySelector('.container-custom');
-                const filterSection = document.querySelector('.filter-section');
+                const container = document.querySelector('.fluent-container');
+                const filterSection = document.querySelector('#filter-section-container');
                 if (container && filterSection) {
                     container.insertBefore(sessionMsg, filterSection);
                 } else if (container) {
@@ -1757,7 +1806,7 @@
             };
             
             const stateBadge = document.querySelector(`[data-feedback-id="${feedbackId}"][data-current-state]`);
-            const card = stateBadge ? stateBadge.closest('.card-body') : null;
+            const card = stateBadge ? stateBadge.closest('.fluent-card-body') : null;
             if (card) {
                 const domainBadges = card.querySelectorAll('.domain-badge');
                 if (domainBadges.length > 0) {
@@ -1827,7 +1876,7 @@
             loadingMsg.id = 'loadingMsg';
             loadingMsg.className = 'alert alert-info';
             loadingMsg.innerHTML = '🔄 Loading states from Fabric Lakehouse...';
-            document.querySelector('.container-custom').insertBefore(loadingMsg, document.querySelector('.filter-section'));
+            document.querySelector('.fluent-container').insertBefore(loadingMsg, document.querySelector('#filter-section-container'));
             
             fetch('/api/feedback/states/load', {
                 method: 'POST',
@@ -1855,7 +1904,7 @@
                     const successMsg = document.createElement('div');
                     successMsg.className = 'alert alert-success';
                     successMsg.innerHTML = `✅ Loaded ${Object.keys(data.states).length} feedback states from Fabric Lakehouse`;
-                    document.querySelector('.container-custom').insertBefore(successMsg, document.querySelector('.filter-section'));
+                    document.querySelector('.fluent-container').insertBefore(successMsg, document.querySelector('#filter-section-container'));
                     setTimeout(() => successMsg.remove(), 5000);
                 } else {
                     alert('Error loading states: ' + data.message);
@@ -1895,7 +1944,7 @@
                 // Update notes display (if notes exist)
                 if (stateData.Feedback_Notes && stateData.Feedback_Notes.trim() !== '') {
                     // Find or create notes display
-                    const card = stateBadge ? stateBadge.closest('.card-body') : null;
+                    const card = stateBadge ? stateBadge.closest('.fluent-card-body') : null;
                     if (card) {
                         let notesDisplay = card.querySelector('.notes-display');
                         if (!notesDisplay) {
@@ -1958,7 +2007,7 @@
                         <span>💾 You have unsaved state changes</span>
                         <button class="btn btn-primary" onclick="syncToFabric()">Sync to Fabric</button>
                     `;
-                    document.querySelector('.container-custom').insertBefore(syncButton, document.querySelector('.filter-section'));
+                    document.querySelector('.fluent-container').insertBefore(syncButton, document.querySelector('#filter-section-container'));
                 }
                 
                 // Update count
@@ -2006,7 +2055,7 @@
                     const successMsg = document.createElement('div');
                     successMsg.className = 'alert alert-success';
                     successMsg.innerHTML = `✅ Successfully synced ${data.updated_count} state changes to Fabric`;
-                    document.querySelector('.container-custom').insertBefore(successMsg, document.querySelector('.filter-section'));
+                    document.querySelector('.fluent-container').insertBefore(successMsg, document.querySelector('#filter-section-container'));
                     setTimeout(() => successMsg.remove(), 5000);
                 } else {
                     alert('Error syncing to Fabric: ' + data.message);
@@ -2092,7 +2141,7 @@
                         🔄 Loaded ${Object.keys(data.state_data).length} state records from FeedbackState table<br>
                         <small class="text-muted">Smart sync: Only new items were written to avoid duplicates</small>
                     `;
-                    document.querySelector('.container-custom').insertBefore(successMsg, document.querySelector('.filter-section'));
+                    document.querySelector('.fluent-container').insertBefore(successMsg, document.querySelector('#filter-section-container'));
                     
                     // CRITICAL FIX: Redirect to include fabric_connected parameter for session persistence
                     setTimeout(() => {
@@ -2150,7 +2199,7 @@
                     return;
                 }
                 
-                const card = stateBadge.closest('.card');
+                const card = stateBadge.closest('.fluent-card');
                 if (!card) {
                     console.warn(`No card found for state badge:`, stateBadge);
                     notFoundCount++;
@@ -2181,7 +2230,7 @@
                         if (!notesDisplay) {
                             notesDisplay = document.createElement('div');
                             notesDisplay.className = 'notes-display alert alert-info mt-2';
-                            const cardBody = card.querySelector('.card-body');
+                            const cardBody = card.querySelector('.fluent-card-body');
                             if (cardBody) {
                                 cardBody.appendChild(notesDisplay);
                             }
@@ -2409,7 +2458,7 @@
         
         // Hide cards for items not in stored IDs list
         function hideDuplicateCards(storedIds) {
-            const cards = document.querySelectorAll('.card');
+            const cards = document.querySelectorAll('.fluent-card');
             let hiddenCount = 0;
             let processedIds = new Set(); // Track which IDs we've already processed
             
@@ -2455,7 +2504,7 @@
                 `;
                 
                 // Insert at top of container
-                const container = document.querySelector('.container-custom');
+                const container = document.querySelector('.fluent-container');
                 if (container && container.firstChild) {
                     container.insertBefore(messageDiv, container.firstChild);
                 }
@@ -2464,7 +2513,7 @@
         
         // Function to show all cards again
         function showAllCards() {
-            const hiddenCards = document.querySelectorAll('.card.duplicate-hidden');
+            const hiddenCards = document.querySelectorAll('.fluent-card.duplicate-hidden');
             hiddenCards.forEach(card => {
                 card.style.display = 'block';
                 card.classList.remove('duplicate-hidden');
@@ -2621,7 +2670,7 @@
                     testBtn.textContent = 'Test State Loading';
                     testBtn.className = 'btn btn-warning btn-sm ms-2';
                     testBtn.onclick = testStateLoading;
-                    const container = document.querySelector('.container-custom p');
+                    const container = document.querySelector('.fluent-container');
                     if (container) {
                         container.appendChild(testBtn);
                     }
@@ -2757,7 +2806,7 @@
                     m.classList.remove('show');
                 }
             });
-            document.querySelectorAll('.card').forEach(c => {
+            document.querySelectorAll('.fluent-card').forEach(c => {
                 if (c && c.classList) {
                     c.classList.remove('dropdown-open');
                 }
@@ -2765,7 +2814,7 @@
             
             const feedbackId = element.getAttribute('data-feedback-id');
             const dropdown = document.querySelector(`.state-dropdown[data-feedback-id="${feedbackId}"]`);
-            const card = element.closest('.card');
+            const card = element.closest('.fluent-card');
             
             if (dropdown && dropdown.classList) {
                 dropdown.classList.toggle('show');
@@ -2885,7 +2934,7 @@
         // Update notes display in UI
         function updateNotesDisplay(feedbackId, notes) {
             const stateBadge = document.querySelector(`[data-feedback-id="${feedbackId}"][data-current-state]`);
-            const card = stateBadge ? stateBadge.closest('.card-body') : null;
+            const card = stateBadge ? stateBadge.closest('.fluent-card-body') : null;
             if (card) {
                 let notesDisplay = card.querySelector('.notes-display');
                 if (!notesDisplay) {
@@ -3254,10 +3303,16 @@
             const notes = prompt('Enter notes for this feedback:', currentNotes) || '';
             
             // Cache the notes change
-// Update domain display in UI
+            cacheStateChange(feedbackId, { notes: notes });
+            
+            // Update notes display in UI
+            updateNotesDisplay(feedbackId, notes);
+        }
+
+        // Update domain display in UI
         function updateDomainDisplay(feedbackId, domainName) {
             const stateBadge = document.querySelector(`[data-feedback-id="${feedbackId}"][data-current-state]`);
-            const card = stateBadge ? stateBadge.closest('.card-body') : null;
+            const card = stateBadge ? stateBadge.closest('.fluent-card-body') : null;
             if (card) {
                 const domainSection = card.querySelector('.category-info:has(.domain-badge)');
                 if (domainSection) {
@@ -3268,11 +3323,6 @@
                 }
             }
         }
-            cacheStateChange(feedbackId, { notes: notes });
-            
-            // Update notes display in UI
-            updateNotesDisplay(feedbackId, notes);
-        }
         
         // Close dropdowns when clicking outside
         document.addEventListener('click', function(event) {
@@ -3280,7 +3330,7 @@
                 !event.target.closest('.card-actions')) {
                 document.querySelectorAll('.state-dropdown').forEach(d => d.classList.remove('show'));
                 document.querySelectorAll('.actions-menu').forEach(m => m.classList.remove('show'));
-                document.querySelectorAll('.card').forEach(c => c.classList.remove('dropdown-open'));
+                document.querySelectorAll('.fluent-card').forEach(c => c.classList.remove('dropdown-open'));
             }
         });
         
@@ -4083,7 +4133,7 @@
             console.log(`🔧 CLIENT FILTER: Applying ${filterType} = ${filterValue}`);
             
             // Get all feedback cards
-            const feedbackCards = document.querySelectorAll('.feedback-card');
+            const feedbackCards = document.querySelectorAll('.fluent-card');
             let visibleCount = 0;
             
             feedbackCards.forEach(card => {
@@ -4111,16 +4161,16 @@
                 
                 // Apply source filter
                 if (filterType === 'source' && filterValue !== 'All') {
-                    const sourceText = card.querySelector('.card-subtitle')?.textContent || '';
+                    const sourceText = card.querySelector('h6')?.textContent || '';
                     shouldShow = sourceText.includes(filterValue);
                 }
                 
                 // Show/hide card
                 if (shouldShow) {
-                    card.style.display = 'block';
+                    card.parentElement.style.display = 'block'; // Hide the col wrapper
                     visibleCount++;
                 } else {
-                    card.style.display = 'none';
+                    card.parentElement.style.display = 'none';
                 }
             });
             
@@ -4793,7 +4843,7 @@
                         ✅ <strong>Domain Sync Complete!</strong> ${result.message}
                         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     `;
-                    document.querySelector('.container-custom').insertBefore(successMsg, document.querySelector('.filter-section'));
+                    document.querySelector('.fluent-container').insertBefore(successMsg, document.querySelector('#filter-section-container'));
                     setTimeout(() => successMsg.remove(), 8000);
                     
                     // Refresh the page to show updated domains

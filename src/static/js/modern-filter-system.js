@@ -30,6 +30,9 @@ class ModernFilterSystem {
         this.showRepeating = urlParams.get('show_repeating') === 'true';
         this.searchQuery = urlParams.get('search') || '';
         
+        // Initialize density from localStorage or default to 'cozy'
+        this.density = localStorage.getItem('feedbackDensity') || 'cozy';
+        
         this.debounceTimer = null;
         
         this.init();
@@ -43,6 +46,9 @@ class ModernFilterSystem {
         
         // Set up URL state management
         this.initializeUrlStateManagement();
+        
+        // Apply initial density
+        this.applyDensity(this.density);
         
         // Load initial data
         this.loadInitialData();
@@ -64,6 +70,43 @@ class ModernFilterSystem {
         console.log('✅ Modern Filter System initialized');
     }
     
+    updateDensity(density) {
+        if (this.density === density) return;
+        
+        this.density = density;
+        localStorage.setItem('feedbackDensity', density);
+        this.applyDensity(density);
+    }
+    
+    applyDensity(density) {
+        const grid = document.getElementById('feedback-grid');
+        if (!grid) return;
+        
+        // Update grid classes
+        if (density === 'dense') {
+            // Dense: More columns, tighter gaps
+            // lg: 4 cols, xl: 5 cols, xxl: 6 cols
+            grid.className = 'row row-cols-1 row-cols-md-2 row-cols-lg-4 row-cols-xl-5 row-cols-xxl-6 g-3';
+        } else {
+            // Cozy: Fewer columns, wider gaps
+            // lg: 3 cols, xl: 4 cols, xxl: 5 cols
+            grid.className = 'row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 row-cols-xxl-5 g-4';
+        }
+        
+        // Update toggle buttons
+        document.querySelectorAll('.density-btn-cozy').forEach(btn => {
+            if (density === 'cozy') btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+        
+        document.querySelectorAll('.density-btn-dense').forEach(btn => {
+            if (density === 'dense') btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+        
+        console.log(`🔧 Applied density: ${density}`);
+    }
+
     initializeFilterControls() {
         // Replace Apply Filters button with modern handling
         const applyBtn = document.querySelector('button[onclick="applyMultiSelectFilters()"]');
@@ -455,7 +498,12 @@ class ModernFilterSystem {
         
         if (this.currentPage === 1) {
             // Clear container and create proper grid structure for new results
-            container.innerHTML = '<div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4"></div>';
+            // Use current density setting
+            const gridClass = this.density === 'dense' 
+                ? 'row row-cols-1 row-cols-md-2 row-cols-lg-4 row-cols-xl-5 row-cols-xxl-6 g-3' 
+                : 'row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 row-cols-xxl-5 g-4';
+                
+            container.innerHTML = `<div id="feedback-grid" class="${gridClass}"></div>`;
         }
         
         // Get the grid container
@@ -494,7 +542,7 @@ class ModernFilterSystem {
         const stateClass = state.toLowerCase();
         const stateBadge = this.getStateBadge(state);
         const domainBadge = this.getDomainBadge(item.Primary_Domain);
-        const sentimentBadge = this.getSentimentBadge(item.Sentiment);
+        const sentimentBadge = this.getSentimentBadge(item.Sentiment, item);
         const audienceBadge = this.getAudienceBadge(item.Audience);
         const priorityBadge = this.getPriorityBadge(item.Priority);
         
@@ -512,26 +560,28 @@ class ModernFilterSystem {
         
         return `
             <div class="col">
-                <div class="card h-100 shadow-sm feedback-card" id="card-${feedbackId}">
-                    <div class="card-body d-flex flex-column">
-                        <h5 class="card-title">
+                <div class="fluent-card h-100 d-flex flex-column" id="card-${feedbackId}">
+                    <div class="fluent-card-header border-bottom-0 pb-0 pt-3 px-3">
+                        <h5 class="fluent-section-title mb-1 fluent-card-title-truncate" style="font-size: 1.1rem; line-height: 1.4;" title="${this.escapeHtml(cardTitle)}">
                             ${this.escapeHtml(cardTitle)}
                         </h5>
-                        <h6 class="card-subtitle mb-2 text-muted">
+                        <h6 class="text-muted small mb-2">
                             ${item.Sources || item.Source || 'Unknown Source'}
                             ${item.Created && item.Created.trim() ? ` - ${item.Created.split('T')[0]}` : ''}
                         </h6>
+                    </div>
                         
+                    <div class="fluent-card-body pt-2 flex-grow-1">
                         <!-- Enhanced Categorization Info -->
                         ${(item.Audience || item.Enhanced_Category || item.Priority) ? `
-                        <div class="category-info">
+                        <div class="category-info mb-3">
                             ${audienceBadge}
                             ${priorityBadge}
                         </div>
                         ` : ''}
                         
                         <!-- State Management Section -->
-                        <div class="category-info">
+                        <div class="category-info mb-3">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
                                     <span class="state-badge state-${stateClass}"
@@ -558,13 +608,13 @@ class ModernFilterSystem {
                                 
                                 <!-- Actions Menu -->
                                 <div class="card-actions">
-                                    <button class="btn btn-sm btn-outline-secondary"
+                                    <button class="fluent-button-icon"
                                             data-feedback-id="${feedbackId}"
                                             onclick="toggleActionsMenu(this)"
                                             title="More actions">
-                                        [...]
+                                        <i class="bi bi-three-dots"></i>
                                     </button>
-                                    <div class="actions-menu">
+                                    <div class="actions-menu shadow-sm border-0 rounded-2">
                                         <a href="#" onclick="updateDomain('${feedbackId}', '${item.Primary_Domain || ''}')">Update Domain</a>
                                         <a href="#" onclick="updateNotes('${feedbackId}', '${fabricStateData[feedbackId]?.notes || item.Feedback_Notes || ''}')">
                                             ${(fabricStateData[feedbackId]?.notes || item.Feedback_Notes) && (fabricStateData[feedbackId]?.notes || item.Feedback_Notes).trim() ? 'Edit Note' : 'Add Note'}
@@ -576,12 +626,12 @@ class ModernFilterSystem {
                         
                         <!-- State Notes Display -->
                         ${(fabricStateData[feedbackId]?.notes || item.Feedback_Notes) && (fabricStateData[feedbackId]?.notes || item.Feedback_Notes).trim() ? `
-                        <div class="notes-display">
+                        <div class="notes-display bg-light p-2 rounded border-start border-3 border-primary mb-3 small">
                             📝 ${this.escapeHtml(fabricStateData[feedbackId]?.notes || item.Feedback_Notes)}
                         </div>
                         ` : ''}
                         
-                        <div class="category-info">
+                        <div class="category-info mb-3 small text-muted">
                             ${item.Enhanced_Category && item.Enhanced_Category.trim() ? `
                             <strong>Category:</strong> ${item.Enhanced_Category}
                             ${item.Subcategory && item.Subcategory.trim() ? ` → ${item.Subcategory}` : ''}
@@ -593,26 +643,26 @@ class ModernFilterSystem {
                         </div>
                         
                         <!-- Domain Information -->
-                        <div class="category-info">
+                        <div class="category-info mb-3 small">
                             <strong>Domain:</strong>
                             ${domainBadge || '<span class="domain-badge" style="background-color: #6c757d; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem;">❓ Uncategorized</span>'}
                         </div>
                         
-                        <p class="card-text feedback-content mb-auto">
+                        <p class="card-text feedback-content mb-auto text-secondary">
                             ${this.escapeHtml(item.Feedback || 'No feedback content')}
                         </p>
                         
-                        <div class="mt-auto pt-2">
+                        <div class="mt-auto pt-3 d-flex align-items-center flex-wrap gap-2">
                             ${item.Url && item.Url.trim() ? `
-                                <a href="${item.Url}" class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener noreferrer">View Source</a>
+                                <a href="${item.Url}" class="fluent-button fluent-button-secondary" target="_blank" rel="noopener noreferrer" style="min-height: 32px; padding: 4px 12px;">View Source</a>
                             ` : ''}
                             ${item.Tag && item.Tag.trim() ? `
-                                <span class="badge bg-secondary ms-2">${item.Tag}</span>
+                                <span class="fluent-badge fluent-badge-secondary">${item.Tag}</span>
                             ` : ''}
                             ${item.Status && item.Status.trim() ? `
-                                <span class="badge bg-info ms-2">${item.Status}</span>
+                                <span class="fluent-badge fluent-badge-info">${item.Status}</span>
                             ` : ''}
-                            ${sentimentBadge ? `<span class="ms-2">${sentimentBadge}</span>` : ''}
+                            ${sentimentBadge ? sentimentBadge : ''}
                             ${this.getKeywordBadges(item.Matched_Keywords)}
                         </div>
                     </div>
@@ -658,15 +708,28 @@ class ModernFilterSystem {
         return `<span class="domain-badge" style="background-color: ${color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem;">${displayName}</span>`;
     }
     
-    getSentimentBadge(sentiment) {
+    getSentimentBadge(sentiment, item = null) {
         if (!sentiment) return '';
-        const sentimentData = {
-            'positive': { emoji: '😊', class: 'sentiment-positive' },
-            'negative': { emoji: '😞', class: 'sentiment-negative' },
-            'neutral': { emoji: '😐', class: 'sentiment-neutral' }
-        };
-        const data = sentimentData[sentiment?.toLowerCase()] || sentimentData.neutral;
-        return `<span class="badge ${data.class}">${data.emoji} ${sentiment}</span>`;
+        
+        const sentimentLower = sentiment.toLowerCase();
+        let badgeClass = 'fluent-badge-secondary';
+        let emoji = '😐';
+        
+        if (sentimentLower === 'positive') {
+            badgeClass = 'fluent-badge-success';
+            emoji = '😊';
+        } else if (sentimentLower === 'negative') {
+            badgeClass = 'fluent-badge-error';
+            emoji = '😞';
+        }
+        
+        let title = `Sentiment: ${sentiment}`;
+        if (item) {
+            if (item.Sentiment_Score) title += ` (Score: ${item.Sentiment_Score})`;
+            if (item.Sentiment_Confidence) title += ` - Confidence: ${item.Sentiment_Confidence}`;
+        }
+        
+        return `<span class="fluent-badge ${badgeClass}" title="${title}">${emoji} ${sentiment}</span>`;
     }
 
     getKeywordBadges(keywords) {
@@ -678,15 +741,15 @@ class ModernFilterSystem {
         const remainingCount = keywords.length - 3;
         const remainingKeywords = keywords.slice(3).join(', ');
         
-        let html = '<span class="keyword-tags ms-2">';
-        html += '<span class="keyword-label">🔑 Keywords:</span>';
+        let html = '<span class="keyword-tags d-inline-flex align-items-center gap-1">';
+        html += '<span class="keyword-label small text-muted fw-bold">🔑 Keywords:</span>';
         
         keywordsToShow.forEach(keyword => {
-            html += `<span class="badge keyword-badge">${keyword}</span>`;
+            html += `<span class="fluent-badge fluent-badge-secondary" style="background: #e1dfdd; color: #323130;">${keyword}</span>`;
         });
         
         if (remainingCount > 0) {
-            html += `<span class="badge keyword-more" title="${remainingKeywords}">+${remainingCount} more</span>`;
+            html += `<span class="fluent-badge fluent-badge-primary" title="${remainingKeywords}">+${remainingCount} more</span>`;
         }
         
         html += '</span>';
@@ -826,11 +889,11 @@ class ModernFilterSystem {
         if (!statusElement) {
             statusElement = document.createElement('div');
             statusElement.id = 'feedbackStatusDisplay';
-            statusElement.className = 'alert alert-light border mb-3';
+            statusElement.className = 'fluent-alert fluent-alert-info mb-3';
             
             // Insert it above the feedback container (after filter section)
             const feedbackContainer = document.getElementById('feedback-container');
-            const filterSection = document.querySelector('.filter-section');
+            const filterSection = document.querySelector('#filter-section-container');
             
             if (feedbackContainer && feedbackContainer.parentNode) {
                 // Insert it right before the feedback container

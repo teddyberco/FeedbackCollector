@@ -222,27 +222,27 @@ class BadgeStateManager {
      * Update Fabric Auth badge element
      */
     updateFabricAuthBadge() {
-        const badge = document.getElementById('fabricAuthBadge');
+        const badge = document.getElementById('fabricSyncBadge');
         if (badge) {
             const state = this.states.fabricAuth;
             badge.textContent = state.badge;
             
             // Remove all status classes
-            badge.classList.remove('bg-secondary', 'bg-success', 'bg-warning', 'bg-danger');
+            badge.classList.remove('fluent-badge-secondary', 'fluent-badge-success', 'fluent-badge-warning', 'fluent-badge-error');
             
             // Add appropriate class based on status
             switch (state.status) {
                 case 'connected':
-                    badge.classList.add('bg-success');
+                    badge.classList.add('fluent-badge-success');
                     break;
                 case 'validating':
-                    badge.classList.add('bg-warning');
+                    badge.classList.add('fluent-badge-warning');
                     break;
                 case 'error':
-                    badge.classList.add('bg-danger');
+                    badge.classList.add('fluent-badge-error');
                     break;
                 default: // disconnected
-                    badge.classList.add('bg-secondary');
+                    badge.classList.add('fluent-badge-secondary');
                     break;
             }
             
@@ -262,21 +262,21 @@ class BadgeStateManager {
             badge.textContent = state.badge;
             
             // Remove all status classes
-            badge.classList.remove('bg-secondary', 'bg-success', 'bg-warning', 'bg-danger', 'bg-primary');
+            badge.classList.remove('fluent-badge-secondary', 'fluent-badge-success', 'fluent-badge-warning', 'fluent-badge-error', 'fluent-badge-primary');
             
             // Add appropriate class based on status
             switch (state.status) {
                 case 'running':
-                    badge.classList.add('bg-warning');
+                    badge.classList.add('fluent-badge-warning');
                     break;
                 case 'completed':
-                    badge.classList.add('bg-success');
+                    badge.classList.add('fluent-badge-success');
                     break;
                 case 'error':
-                    badge.classList.add('bg-danger');
+                    badge.classList.add('fluent-badge-error');
                     break;
                 default: // ready
-                    badge.classList.add('bg-secondary');
+                    badge.classList.add('fluent-badge-secondary');
                     break;
             }
             

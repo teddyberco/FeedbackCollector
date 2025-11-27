@@ -589,35 +589,27 @@ class EnhancedCollectionManager {
     
     showProgress() {
         const drawerElement = document.getElementById('collectionProgressDrawer');
+        const backdropElement = document.getElementById('collectionProgressBackdrop');
+        
         if (drawerElement) {
-            // Use Bootstrap API if available
-            if (typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
-                const bsOffcanvas = bootstrap.Offcanvas.getInstance(drawerElement) || new bootstrap.Offcanvas(drawerElement);
-                bsOffcanvas.show();
-            } else {
-                // Fallback to manual class manipulation
-                drawerElement.style.display = 'block';
-                drawerElement.classList.add('show');
-            }
+            drawerElement.classList.add('is-open');
+        }
+        if (backdropElement) {
+            backdropElement.classList.add('is-open');
+            // Add click listener to close on backdrop click
+            backdropElement.onclick = () => this.hideProgress();
         }
     }
     
     hideProgress() {
         const drawerElement = document.getElementById('collectionProgressDrawer');
+        const backdropElement = document.getElementById('collectionProgressBackdrop');
+        
         if (drawerElement) {
-            // Use Bootstrap API if available
-            if (typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
-                const bsOffcanvas = bootstrap.Offcanvas.getInstance(drawerElement);
-                if (bsOffcanvas) {
-                    bsOffcanvas.hide();
-                }
-            } else {
-                // Fallback to manual class manipulation
-                drawerElement.classList.remove('show');
-                setTimeout(() => {
-                    drawerElement.style.display = 'none';
-                }, 300);
-            }
+            drawerElement.classList.remove('is-open');
+        }
+        if (backdropElement) {
+            backdropElement.classList.remove('is-open');
         }
     }
     
