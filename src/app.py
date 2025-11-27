@@ -54,6 +54,9 @@ def load_latest_feedback_from_csv():
         logger.info(f"Loading feedback from CSV: {filepath}")
         df = pd.read_csv(filepath, encoding='utf-8-sig')
         
+        # Replace NaN with None to avoid JSON serialization issues and sorting errors
+        df = df.where(pd.notnull(df), None)
+        
         # Convert DataFrame to list of dictionaries
         feedback_items = df.to_dict('records')
         
@@ -850,10 +853,14 @@ def feedback_viewer():
 
     # Get unique values for filter dropdowns from the originally loaded data
     if last_collected_feedback:
-        all_sources = sorted(list(set(item.get('Sources') or item.get('source') for item in last_collected_feedback if item.get('Sources') or item.get('source'))))
-        all_categories = sorted(list(set(item.get('Category') or item.get('category') for item in last_collected_feedback if item.get('Category') or item.get('category'))))
-        all_enhanced_categories = sorted(list(set(item.get('Enhanced_Category') or item.get('enhanced_category') for item in last_collected_feedback if item.get('Enhanced_Category') or item.get('enhanced_category'))))
-        all_subcategories = sorted(list(set(item.get('Subcategory') or item.get('subcategory') for item in last_collected_feedback if item.get('Subcategory') or item.get('subcategory'))))
+        # Helper to safely get string values for sorting
+        def safe_str(val):
+            return str(val) if val is not None else ""
+
+        all_sources = sorted(list(set(safe_str(item.get('Sources') or item.get('source')) for item in last_collected_feedback if item.get('Sources') or item.get('source'))))
+        all_categories = sorted(list(set(safe_str(item.get('Category') or item.get('category')) for item in last_collected_feedback if item.get('Category') or item.get('category'))))
+        all_enhanced_categories = sorted(list(set(safe_str(item.get('Enhanced_Category') or item.get('enhanced_category')) for item in last_collected_feedback if item.get('Enhanced_Category') or item.get('enhanced_category'))))
+        all_subcategories = sorted(list(set(safe_str(item.get('Subcategory') or item.get('subcategory')) for item in last_collected_feedback if item.get('Subcategory') or item.get('subcategory'))))
         
         # Group subcategories by feature area for organized display
         subcategories_by_feature_area = {}
@@ -865,14 +872,18 @@ def feedback_viewer():
                     subcategories_by_feature_area[feature_area] = set()
                 subcategories_by_feature_area[feature_area].add(subcategory)
         # Convert sets to sorted lists and sort by feature area
-        subcategories_by_feature_area = {k: sorted(v) for k, v in sorted(subcategories_by_feature_area.items())}
+        # Ensure safe sorting for both keys and values
+        subcategories_by_feature_area = {
+            k: sorted(list(v), key=safe_str) 
+            for k, v in sorted(subcategories_by_feature_area.items(), key=lambda x: safe_str(x[0]))
+        }
         
-        all_impact_types = sorted(list(set(item.get('Impacttype') or item.get('impacttype') for item in last_collected_feedback if item.get('Impacttype') or item.get('impacttype'))))
-        all_audiences = sorted(list(set(item.get('Audience') or item.get('audience') for item in last_collected_feedback if item.get('Audience') or item.get('audience'))))
+        all_impact_types = sorted(list(set(safe_str(item.get('Impacttype') or item.get('impacttype')) for item in last_collected_feedback if item.get('Impacttype') or item.get('impacttype'))))
+        all_audiences = sorted(list(set(safe_str(item.get('Audience') or item.get('audience')) for item in last_collected_feedback if item.get('Audience') or item.get('audience'))))
         all_priorities = ['critical', 'high', 'medium', 'low']
-        all_domains = sorted(list(set(item.get('Primary_Domain') or item.get('domain') for item in last_collected_feedback if item.get('Primary_Domain') or item.get('domain'))))
-        all_sentiments = sorted(list(set(item.get('Sentiment') or item.get('sentiment') for item in last_collected_feedback if item.get('Sentiment') or item.get('sentiment'))))
-        all_states = sorted(list(set(item.get('State') or item.get('state') for item in last_collected_feedback if item.get('State') or item.get('state'))))
+        all_domains = sorted(list(set(safe_str(item.get('Primary_Domain') or item.get('domain')) for item in last_collected_feedback if item.get('Primary_Domain') or item.get('domain'))))
+        all_sentiments = sorted(list(set(safe_str(item.get('Sentiment') or item.get('sentiment')) for item in last_collected_feedback if item.get('Sentiment') or item.get('sentiment'))))
+        all_states = sorted(list(set(safe_str(item.get('State') or item.get('state')) for item in last_collected_feedback if item.get('State') or item.get('state'))))
         
         # Debug logging for filter data
         logger.info(f"🔍 FILTER DEBUG: Sources: {len(all_sources)}, Domains: {len(all_domains)}, States: {len(all_states)}")
@@ -1529,8 +1540,12 @@ def extract_filter_options(feedback_data):
     if not feedback_data:
         return {}
     
+    # Helper to safely get string values for sorting
+    def safe_str(val):
+        return str(val) if val is not None else ""
+    
     # Get states currently in the data
-    data_states = set(item.get('State', 'NEW') for item in feedback_data)
+    data_states = set(safe_str(item.get('State', 'NEW')) for item in feedback_data)
     
     # Always include all possible states from config, regardless of what's in the data
     from config import FEEDBACK_STATES
@@ -1540,13 +1555,13 @@ def extract_filter_options(feedback_data):
     comprehensive_states = sorted(list(all_possible_states.union(data_states)))
     
     options = {
-        'sources': sorted(list(set(item.get('Source', '') for item in feedback_data if item.get('Source')))),
-        'audiences': sorted(list(set(item.get('Audience', '') for item in feedback_data if item.get('Audience')))),
-        'priorities': sorted(list(set(item.get('Priority', '') for item in feedback_data if item.get('Priority')))),
+        'sources': sorted(list(set(safe_str(item.get('Source', '')) for item in feedback_data if item.get('Source')))),
+        'audiences': sorted(list(set(safe_str(item.get('Audience', '')) for item in feedback_data if item.get('Audience')))),
+        'priorities': sorted(list(set(safe_str(item.get('Priority', '')) for item in feedback_data if item.get('Priority')))),
         'states': comprehensive_states,  # Always show all possible states
-        'domains': sorted(list(set(item.get('Enhanced_Domain', '') for item in feedback_data if item.get('Enhanced_Domain')))),
-        'sentiments': sorted(list(set(item.get('Sentiment', '') for item in feedback_data if item.get('Sentiment')))),
-        'enhanced_categories': sorted(list(set(item.get('Enhanced_Category', '') for item in feedback_data if item.get('Enhanced_Category'))))
+        'domains': sorted(list(set(safe_str(item.get('Enhanced_Domain', '')) for item in feedback_data if item.get('Enhanced_Domain')))),
+        'sentiments': sorted(list(set(safe_str(item.get('Sentiment', '')) for item in feedback_data if item.get('Sentiment')))),
+        'enhanced_categories': sorted(list(set(safe_str(item.get('Enhanced_Category', '')) for item in feedback_data if item.get('Enhanced_Category'))))
     }
     
     return options

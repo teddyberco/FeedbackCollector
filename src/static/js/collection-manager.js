@@ -588,20 +588,36 @@ class EnhancedCollectionManager {
     }
     
     showProgress() {
-        const drawer = document.getElementById('collectionProgressDrawer');
-        if (drawer) {
-            drawer.style.display = 'block';
-            drawer.classList.add('show');
+        const drawerElement = document.getElementById('collectionProgressDrawer');
+        if (drawerElement) {
+            // Use Bootstrap API if available
+            if (typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
+                const bsOffcanvas = bootstrap.Offcanvas.getInstance(drawerElement) || new bootstrap.Offcanvas(drawerElement);
+                bsOffcanvas.show();
+            } else {
+                // Fallback to manual class manipulation
+                drawerElement.style.display = 'block';
+                drawerElement.classList.add('show');
+            }
         }
     }
     
     hideProgress() {
-        const drawer = document.getElementById('collectionProgressDrawer');
-        if (drawer) {
-            drawer.classList.remove('show');
-            setTimeout(() => {
-                drawer.style.display = 'none';
-            }, 300);
+        const drawerElement = document.getElementById('collectionProgressDrawer');
+        if (drawerElement) {
+            // Use Bootstrap API if available
+            if (typeof bootstrap !== 'undefined' && bootstrap.Offcanvas) {
+                const bsOffcanvas = bootstrap.Offcanvas.getInstance(drawerElement);
+                if (bsOffcanvas) {
+                    bsOffcanvas.hide();
+                }
+            } else {
+                // Fallback to manual class manipulation
+                drawerElement.classList.remove('show');
+                setTimeout(() => {
+                    drawerElement.style.display = 'none';
+                }, 300);
+            }
         }
     }
     
@@ -696,8 +712,11 @@ class EnhancedCollectionManager {
         `;
         
         // Insert at the top of the main container
-        const container = document.querySelector('.fluent-container');
+        // Try .app-main first (new layout), then .fluent-container (legacy), then body
+        const container = document.querySelector('.app-main') || document.querySelector('.fluent-container') || document.body;
+        
         if (container) {
+            // If it's app-main, insert before the first child (usually page-header)
             container.insertBefore(alertDiv, container.firstChild);
             
             // Auto-remove after 5 seconds
