@@ -354,3 +354,75 @@ def update_feedback_state_in_sql(feedback_id: str, new_state: str, bearer_token:
         return False
         
     return update_feedback_field_in_sql(feedback_id, 'State', new_state, bearer_token)
+
+
+def update_feedback_category_in_sql(
+    feedback_id: str,
+    category_name: Optional[str],
+    subcategory_name: Optional[str],
+    feature_area: Optional[str],
+    domain_code: Optional[str] = None,
+) -> bool:
+    """Update enhanced category metadata for a feedback item."""
+    try:
+        import fabric_sql_writer
+
+        writer = fabric_sql_writer.FabricSQLWriter()
+        conn = writer.connect_interactive()
+
+        if not conn:
+            logger.error("Could not establish SQL connection to update category metadata")
+            return False
+
+        cursor = conn.cursor()
+
+        updates = ["User_Modified_Categorization = 1"]
+        params = []
+
+        updates.append("Enhanced_Category = ?")
+        params.append(category_name.strip() if category_name and category_name.strip() else None)
+
+        updates.append("Subcategory = ?")
+        params.append(subcategory_name.strip() if subcategory_name and subcategory_name.strip() else None)
+
+        updates.append("Feature_Area = ?")
+        params.append(feature_area.strip() if feature_area and feature_area.strip() else None)
+
+        if domain_code is not None:
+            updates.append("Primary_Domain = ?")
+            params.append(domain_code.strip() if domain_code and domain_code.strip() else None)
+
+        update_sql = f"UPDATE Feedback SET {', '.join(updates)} WHERE Feedback_ID = ?"
+        params.append(feedback_id)
+
+        cursor.execute(update_sql, params)
+        affected = cursor.rowcount
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        if affected > 0:
+            logger.info(
+                "✅ Updated category metadata for %s → Category='%s', Subcategory='%s', Feature_Area='%s'",
+                feedback_id,
+                category_name,
+                subcategory_name,
+                feature_area,
+                domain_code,
+            )
+            return True
+
+        logger.warning("No rows updated while changing category metadata for %s", feedback_id)
+        return False
+
+    except Exception as e:
+        logger.error(f"Error updating category metadata for feedback {feedback_id}: {e}")
+        try:
+            if 'cursor' in locals():
+                cursor.close()
+            if 'conn' in locals():
+                conn.close()
+        except Exception:
+            pass
+        return False

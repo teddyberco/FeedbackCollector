@@ -2364,6 +2364,61 @@ def update_domain_sql():
         logger.error(f"Error updating domain: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
+
+@app.route('/api/update_category_sql', methods=['POST'])
+def update_category_sql():
+    """Update feedback category/subcategory metadata directly in SQL."""
+    try:
+        from flask import session
+        stored_token = session.get('fabric_bearer_token')
+        has_bearer_token = stored_token and stored_token.strip() and stored_token != 'None'
+
+        if not has_bearer_token:
+            logger.warning("❌ CATEGORY UPDATE DENIED: No valid bearer token in session")
+            return jsonify({'success': False, 'message': 'Not connected to Fabric. Please sync with Fabric first.'}), 403
+
+        data = request.get_json() or {}
+        feedback_id = data.get('feedback_id')
+
+        if not feedback_id:
+            return jsonify({'success': False, 'message': 'Missing feedback_id'}), 400
+
+        def _clean(value):
+            if isinstance(value, str):
+                value = value.strip()
+                return value if value else None
+            return value
+
+        category_name = _clean(data.get('category_name'))
+        subcategory_name = _clean(data.get('subcategory_name'))
+        feature_area = _clean(data.get('feature_area'))
+        domain_code = _clean(data.get('domain_code'))
+
+        success = state_manager.update_feedback_category_in_sql(
+            feedback_id,
+            category_name,
+            subcategory_name,
+            feature_area,
+            domain_code
+        )
+
+        if success:
+            friendly_category = category_name or 'None'
+            message = f"Category updated to {friendly_category}"
+            if subcategory_name:
+                message += f" → {subcategory_name}"
+            if domain_code:
+                message += f" | Domain: {domain_code}"
+            return jsonify({'success': True, 'message': message})
+
+        logger.error(f"❌ Failed to update category metadata in database for {feedback_id}")
+        return jsonify({'success': False, 'message': 'Failed to update category in database'}), 500
+
+    except Exception as e:
+        logger.error(f"Error updating category metadata: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @app.route('/api/update_audience_sql', methods=['POST'])
 def update_audience_sql():
     """Update feedback audience directly in SQL database"""

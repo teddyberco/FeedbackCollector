@@ -508,6 +508,7 @@ def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = ""
     best_match = None
     best_score = 0
     total_keywords_found = 0
+    best_subcategory_keyword_count = 0
     
     # Analyze all categories and subcategories
     for category_id, category_info in ENHANCED_FEEDBACK_CATEGORIES.items():
@@ -540,19 +541,15 @@ def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = ""
                     'feature_area': subcategory_info['feature_area']
                 }
                 total_keywords_found = keywords_found
+                best_subcategory_keyword_count = len(subcategory_info['keywords'])
     
     # Update result if we found a good match
     if best_match and best_score > 0:
         result.update(best_match)
         
         # Calculate confidence based on keyword matches and context
-        max_possible_keywords = max([
-            len(subcategory['keywords'])
-            for category in ENHANCED_FEEDBACK_CATEGORIES.values()
-            for subcategory in category['subcategories'].values()
-        ])
-        
-        keyword_confidence = min(total_keywords_found / max(max_possible_keywords * 0.1, 1), 1.0)
+        # Use specific subcategory count instead of global max
+        keyword_confidence = min(total_keywords_found / max(best_subcategory_keyword_count * 0.2, 1), 1.0)
         context_confidence = 0.5 if audience != 'Unknown' else 0.2
         
         result['confidence'] = round((keyword_confidence + context_confidence) / 2, 2)

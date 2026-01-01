@@ -40,18 +40,71 @@
         .container-custom { /* Renamed from container-fluid to allow custom padding */
             padding: 20px;
         }
-        /* Card specific styles */
-        /*
-        .card {
-            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-            border: 1px solid rgba(0,0,0,.125); 
-        }
-        .card:hover:not(.dropdown-open) {
-            transform: translateY(-5px);
-            box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important; 
-        }
-        */
         
+        /* Card specific styles */
+        .card {
+            border: 1px solid #e1dfdd; /* fabric-gray-40 */
+            border-radius: 8px; /* border-radius-lg */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: all 0.2s ease;
+            height: 100%;
+            background-color: #ffffff;
+        }
+        .card:hover {
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+            border-color: #c8c6c4; /* fabric-gray-60 */
+        }
+        
+        .category-chip, .subcategory-chip, .domain-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            margin-right: 4px;
+            margin-bottom: 4px;
+            vertical-align: middle;
+        }
+        
+        .category-chip {
+            background-color: #e6f2fb; /* Light blue */
+            color: #0078d4; /* fabric-primary */
+            border: 1px solid transparent;
+        }
+        .category-chip:hover {
+            background-color: #cce4f7;
+            border-color: #0078d4;
+        }
+        
+        .subcategory-chip {
+            background-color: #f3f2f1; /* fabric-neutral-lighter */
+            color: #323130; /* fabric-neutral-dark */
+            border: 1px solid #e1dfdd;
+        }
+        .subcategory-chip:hover {
+            background-color: #edebe9;
+            border-color: #8a8886;
+        }
+        .subcategory-empty {
+            border-style: dashed;
+            color: #605e5c;
+        }
+        
+        .domain-badge {
+            /* Background color is set inline */
+            border: 1px solid transparent;
+            color: white !important;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .domain-badge:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+        }
+
         .card.dropdown-open {
             z-index: 1000;
             transform: none !important;
@@ -66,9 +119,17 @@
         .feedback-content {
             font-size: 0.9rem;
             line-height: 1.5;
-            max-height: 100px; /* Limit height and show overflow */
-            overflow-y: auto;  /* Allow scrolling for longer feedback */
-            margin-bottom: 1rem; /* Ensure space before buttons if content is short */
+            display: -webkit-box;
+            -webkit-line-clamp: 5;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            cursor: pointer;
+            transition: color 0.2s ease;
+            height: 7.5em; /* Force fixed height for 5 lines alignment */
+        }
+        .feedback-content:hover {
+            color: #0078d4 !important;
         }
         .card .badge { /* Style badges a bit */
             font-size: 0.75em;
@@ -415,6 +476,60 @@
             margin-right: 4px;
             color: white;
         }
+
+        .category-chip,
+        .subcategory-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: #edf2ff;
+            color: #364fc7;
+            border: 1px solid rgba(54, 79, 199, 0.15);
+        }
+
+        .category-chip:hover,
+        .subcategory-chip:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(54, 79, 199, 0.2);
+        }
+
+        .subcategory-chip {
+            background-color: #f1f5f9;
+            color: #0f172a;
+            border-color: rgba(15, 23, 42, 0.08);
+        }
+
+        .subcategory-chip.subcategory-empty {
+            background-color: #fff3cd;
+            color: #8a6d3b;
+            font-style: italic;
+            border-color: rgba(138, 109, 59, 0.15);
+        }
+
+        .feature-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            background-color: #e2e8f0;
+            color: #4a5568;
+            border: 1px solid rgba(74, 85, 104, 0.12);
+        }
+
+        .interactive-categories {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px;
+        }
         
         /* Hide duplicate domain displays - we should only use domain-badge */
         .domain-display {
@@ -461,35 +576,6 @@
             position: relative;
             display: inline-block;
         }
-        .actions-menu {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-            z-index: 1000;
-            min-width: 150px;
-            display: none;
-        }
-        .actions-menu.show {
-            display: block;
-        }
-        .actions-menu a {
-            display: block;
-            padding: 8px 12px;
-            text-decoration: none;
-            color: #333;
-            border-bottom: 1px solid #eee;
-        }
-        .actions-menu a:hover {
-            background-color: #f8f9fa;
-        }
-        .actions-menu a:last-child {
-            border-bottom: none;
-        }
-        
         .state-dropdown {
             position: absolute;
             background: white;
@@ -1182,84 +1268,57 @@
                         </div>
                         
                         <div class="fluent-card-body pt-2 flex-grow-1">
-                            <!-- Enhanced Categorization Info -->
-                            {% if item.Audience or item.Enhanced_Category or item.Priority %}
+                            <!-- Metadata Section: Audience, Priority, State -->
                             <div class="category-info mb-3">
-                                {% if item.Audience and item.Audience|trim != '' %}
-                                    <span class="audience-badge audience-{{ item.Audience|lower }}"
-                                          onclick="updateAudience('{{ item.Feedback_ID or '' }}', '{{ item.Audience }}')"
-                                          title="Click to update audience"
-                                          style="cursor: pointer;">
-                                        {% if item.Audience == 'Developer' %}🛠️ Developer
-                                        {% elif item.Audience == 'Customer' %}👤 Customer
-                                        {% elif item.Audience == 'ISV' %}🏢 ISV
-                                        {% else %}{{ item.Audience }}{% endif %}
-                                    </span>
-                                {% endif %}
-                                
-                                {% if item.Priority and item.Priority|trim != '' %}
-                                    <span class="priority-badge priority-{{ item.Priority|lower }}" title="Priority: {{ item.Priority|title }}">
-                                        {% if item.Priority|lower == 'critical' %}🔴 Critical
-                                        {% elif item.Priority|lower == 'high' %}🟠 High
-                                        {% elif item.Priority|lower == 'medium' %}🟡 Medium
-                                        {% elif item.Priority|lower == 'low' %}⚪ Low
-                                        {% else %}{{ item.Priority|title }}{% endif %}
-                                    </span>
-                               {% endif %}
-                           </div>
-                           
-                           <!-- State Management Section -->
-                           <div class="category-info mb-3">
-                               <div class="d-flex justify-content-between align-items-center">
-                                   <div>
-                                       <!-- State Badge (clickable) with dropdown inside -->
-                                       <span class="state-badge state-{{ (item.State or 'NEW')|lower }}"
-                                             data-feedback-id="{{ item.Feedback_ID or '' }}"
-                                             data-current-state="{{ item.State or 'NEW' }}"
-                                             onclick="toggleStateDropdown(this, event)"
-                                             title="Click to change state">
-                                           {% set state = item.State or 'NEW' %}
-                                           {% if state == 'NEW' %}🆕 New
-                                           {% elif state == 'TRIAGED' %}🔍 Triaged
-                                           {% elif state == 'CLOSED' %}✅ Closed
-                                           {% elif state == 'IRRELEVANT' %}❌ Irrelevant
-                                           {% else %}{{ state }}{% endif %}
-                                           
-                                           <!-- State Dropdown (inside state badge) -->
-                                           <div class="state-dropdown" data-feedback-id="{{ item.Feedback_ID or '' }}">
-                                               <div class="state-option" data-state="NEW">🆕 New</div>
-                                               <div class="state-option" data-state="TRIAGED">🔍 Triaged</div>
-                                               <div class="state-option" data-state="CLOSED">✅ Closed</div>
-                                               <div class="state-option" data-state="IRRELEVANT">❌ Irrelevant</div>
-                                           </div>
-                                       </span>
-                                       
-                                       <!-- Last Updated Info -->
-                                       {% if item.Last_Updated and item.Last_Updated|trim != '' %}
-                                           <small class="text-muted ms-2">
-                                               Updated: {{ item.Last_Updated.split('T')[0] }}
-                                               {% if item.Updated_By and item.Updated_By|trim != '' %}
-                                                   by {{ item.Updated_By }}
-                                               {% endif %}
-                                           </small>
-                                       {% endif %}
-                                   </div>
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    {% if item.Audience and item.Audience|trim != '' %}
+                                        <span class="audience-badge audience-{{ item.Audience|lower }}"
+                                              onclick="updateAudience('{{ item.Feedback_ID or '' }}', '{{ item.Audience }}')"
+                                              title="Click to update audience"
+                                              style="cursor: pointer;">
+                                            {% if item.Audience == 'Developer' %}🛠️ Developer
+                                            {% elif item.Audience == 'Customer' %}👤 Customer
+                                            {% elif item.Audience == 'ISV' %}🏢 ISV
+                                            {% else %}{{ item.Audience }}{% endif %}
+                                        </span>
+                                    {% endif %}
+                                    
+                                    {% if item.Priority and item.Priority|trim != '' %}
+                                        <span class="priority-badge priority-{{ item.Priority|lower }}" title="Priority: {{ item.Priority|title }}">
+                                            {% if item.Priority|lower == 'critical' %}🔴 Critical
+                                            {% elif item.Priority|lower == 'high' %}🟠 High
+                                            {% elif item.Priority|lower == 'medium' %}🟡 Medium
+                                            {% elif item.Priority|lower == 'low' %}⚪ Low
+                                            {% else %}{{ item.Priority|title }}{% endif %}
+                                        </span>
+                                   {% endif %}
                                    
-                                   <!-- Actions Menu -->
-                                   <div class="card-actions">
-                                       <button class="fluent-button-icon"
-                                               data-feedback-id="{{ item.Feedback_ID or '' }}"
-                                               onclick="toggleActionsMenu(this)"
-                                               title="More actions">
-                                           <i class="bi bi-three-dots"></i>
-                                       </button>
-                                       <div class="actions-menu shadow-sm border-0 rounded-2">
-                                           <a href="#" onclick="updateDomain('{{ item.Feedback_ID or '' }}', '{{ item.Primary_Domain or '' }}')">Update Domain</a>
-                                           <a href="#" onclick="updateNotes('{{ item.Feedback_ID or '' }}', '{{ item.Feedback_Notes or '' }}')">
-                                               {% if item.Feedback_Notes and item.Feedback_Notes|trim != '' %}Edit Note{% else %}Add Note{% endif %}
-                                           </a>
+                                   <!-- State Badge (clickable) with dropdown inside -->
+                                   <span class="state-badge state-{{ (item.State or 'NEW')|lower }}"
+                                         data-feedback-id="{{ item.Feedback_ID or '' }}"
+                                         data-current-state="{{ item.State or 'NEW' }}"
+                                         onclick="toggleStateDropdown(this, event)"
+                                         title="Click to change state">
+                                       {% set state = item.State or 'NEW' %}
+                                       {% if state == 'NEW' %}🆕 New
+                                       {% elif state == 'TRIAGED' %}🔍 Triaged
+                                       {% elif state == 'CLOSED' %}✅ Closed
+                                       {% elif state == 'IRRELEVANT' %}❌ Irrelevant
+                                       {% else %}{{ state }}{% endif %}
+                                       <div class="state-dropdown" data-feedback-id="{{ item.Feedback_ID or '' }}">
+                                           <div class="state-option" data-state="NEW">🆕 New</div>
+                                           <div class="state-option" data-state="TRIAGED">🔍 Triaged</div>
+                                           <div class="state-option" data-state="CLOSED">✅ Closed</div>
+                                           <div class="state-option" data-state="IRRELEVANT">❌ Irrelevant</div>
                                        </div>
-                                   </div>
+                                   </span>
+                                   
+                                   {% if item.Last_Updated and item.Last_Updated|trim != '' %}
+                                   <small class="text-muted">
+                                       Updated: {{ item.Last_Updated.split('T')[0] }}
+                                       {% if item.Updated_By and item.Updated_By|trim != '' %} by {{ item.Updated_By }}{% endif %}
+                                   </small>
+                                   {% endif %}
                                </div>
                            </div>
                            
@@ -1270,35 +1329,58 @@
                            </div>
                            {% endif %}
                            
-                           <div class="category-info mb-3 small text-muted">
-                               {% if item.Enhanced_Category and item.Enhanced_Category|trim != '' %}
-                               <strong>Category:</strong> {{ item.Enhanced_Category }}
-                               {% if item.Subcategory and item.Subcategory|trim != '' %}
-                                   → {{ item.Subcategory }}
-                               {% endif %}
-                               {% if item.Feature_Area and item.Feature_Area|trim != '' %}
-                                   <br><strong>Area:</strong> {{ item.Feature_Area }}
-                               {% endif %}
-                               {% else %}
-                               <strong>Category:</strong> <em>Uncategorized</em>
-                               {% endif %}
+                           <div class="category-info mb-3 small text-muted interactive-categories">
+                               <span class="text-uppercase fw-bold text-muted me-2" style="font-size: 0.65rem; letter-spacing: 1px;">Category</span>
                                {% if item.Categorization_Confidence %}
-                                   <span class="text-muted">({{ (item.Categorization_Confidence * 100)|round|int }}% confidence)</span>
+                                   <i class="bi bi-info-circle me-2 text-muted" style="font-size: 0.75rem; cursor: help;" title="Confidence: {{ (item.Categorization_Confidence * 100)|round|int }}%"></i>
                                {% endif %}
+                               <span class="category-chip"
+                                 data-category-feedback-id="{{ item.Feedback_ID or '' }}"
+                                     data-category-name="{{ (item.Enhanced_Category or '')|e }}"
+                                     data-subcategory-name="{{ (item.Subcategory or '')|e }}"
+                                     data-feature-area="{{ (item.Feature_Area or '')|e }}"
+                                     data-domain-code="{{ item.Primary_Domain or '' }}"
+                                     onclick="showCategoryPickerFromElement(this)"
+                                     title="Click to update category">
+                                   {% if item.Enhanced_Category and item.Enhanced_Category|trim != '' %}
+                                       {{ item.Enhanced_Category }}
+                                   {% else %}
+                                       Set category
+                                   {% endif %}
+                               </span>
+                             <span class="subcategory-chip{% if not item.Subcategory or item.Subcategory|trim == '' %} subcategory-empty{% endif %}"
+                                 data-category-feedback-id="{{ item.Feedback_ID or '' }}"
+                                     data-category-name="{{ (item.Enhanced_Category or '')|e }}"
+                                     data-subcategory-name="{{ (item.Subcategory or '')|e }}"
+                                     data-feature-area="{{ (item.Feature_Area or '')|e }}"
+                                     data-domain-code="{{ item.Primary_Domain or '' }}"
+                                     onclick="showCategoryPickerFromElement(this)"
+                                     title="Click to update subcategory">
+                                   {% if item.Subcategory and item.Subcategory|trim != '' %}
+                                       {{ item.Subcategory }}
+                                   {% else %}
+                                       Add subcategory
+                                   {% endif %}
+                               </span>
+                               {% set domain_code = item.Primary_Domain or '' %}
+                               {% set domain_display = domain_names.get(item.Primary_Domain, item.Primary_Domain) if domain_code else '❓ Uncategorized' %}
+                               <span class="domain-badge"
+                                     style="background-color: {{ domain_colors.get(domain_code, '#6c757d') }};"
+                                     title="Click to update domain"
+                                     data-domain-code="{{ domain_code }}"
+                                     data-domain-name="{{ domain_display }}"
+                                     data-category-feedback-id="{{ item.Feedback_ID or '' }}"
+                                     data-category-name="{{ (item.Enhanced_Category or '')|e }}"
+                                     data-subcategory-name="{{ (item.Subcategory or '')|e }}"
+                                     data-feature-area="{{ (item.Feature_Area or '')|e }}"
+                                     onclick="showCategoryPickerFromElement(this)">
+                                   {{ domain_display }}
+                               </span>
                            </div>
                            
-                           <!-- Domain Information -->
-                           <div class="category-info mb-3 small">
-                               <strong>Domain:</strong>
-                               {% if item.Primary_Domain and item.Primary_Domain|trim != '' %}
-                               <span class="domain-badge" style="background-color: {{ domain_colors.get(item.Primary_Domain, '#6c757d') }}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem;">{{ domain_names.get(item.Primary_Domain, item.Primary_Domain) }}</span>
-                               {% else %}
-                               <span class="domain-badge" style="background-color: #6c757d; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem;">❓ Uncategorized</span>
-                               {% endif %}
-                           </div>
-                           {% endif %}
-                            
-                            <p class="card-text feedback-content mb-auto text-secondary">
+                           <!-- Domain Information removed: domain badge now inline with category -->
+                           
+                            <p class="card-text feedback-content mb-auto text-secondary" onclick="showFeedbackDetail(this)" title="Click to read full feedback">
                                 {{ item.Feedback }}
                             </p>
                             <div class="mt-auto pt-3 d-flex align-items-center flex-wrap gap-2"> {# Push button to bottom #}
@@ -1306,10 +1388,7 @@
                                     <a href="{{ item.Url }}" class="fluent-button fluent-button-secondary" target="_blank" rel="noopener noreferrer" style="min-height: 32px; padding: 4px 12px;">View Source</a>
                                 {% endif %}
                                 {% if item.Tag and item.Tag|trim != '' %}
-                                    <span class="fluent-badge fluent-badge-secondary">{{ item.Tag }}</span>
-                                {% endif %}
-                                {% if item.Status and item.Status|trim != '' %}
-                                    <span class="fluent-badge fluent-badge-info">{{ item.Status }}</span>
+                                    <span class="fluent-badge fluent-badge-secondary" title="Source Tag: {{ item.Tag }}"><i class="bi bi-tag-fill me-1"></i>{{ item.Tag }}</span>
                                 {% endif %}
                                 {% if item.Sentiment and item.Sentiment|trim != '' %}
                                     {% if item.Sentiment == 'Positive' %}
@@ -2857,30 +2936,6 @@
         }
         
         // Toggle actions menu
-        function toggleActionsMenu(element) {
-            if (!stateManagementEnabled || !fabricConnected) {
-                alert('Please click "Sync with Fabric" first to connect to the SQL database and enable state management.');
-                return;
-            }
-            
-            // Close all other dropdowns
-            document.querySelectorAll('.state-dropdown').forEach(d => {
-                if (d && d.classList) {
-                    d.classList.remove('show');
-                }
-            });
-            document.querySelectorAll('.actions-menu').forEach(m => {
-                if (m && m.classList) {
-                    m.classList.remove('show');
-                }
-            });
-            
-            const menu = element.nextElementSibling;
-            if (menu && menu.classList) {
-                menu.classList.toggle('show');
-            }
-        }
-        
         // Update feedback state (cached)
         function updateState(feedbackId, newState, stateElement) {
             if (!stateManagementEnabled || !fabricConnected) {
@@ -3322,6 +3377,413 @@
                     }
                 }
             }
+        }
+
+        // --- Interactive category editor helpers ---
+        let categoryDataCache = null;
+        let activeCategoryFeedbackId = null;
+
+        async function fetchCategoryData() {
+            if (categoryDataCache) {
+                return categoryDataCache;
+            }
+
+            try {
+                const response = await fetch('/api/categories');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const payload = await response.json();
+                if (payload.status === 'success' && payload.categories) {
+                    categoryDataCache = payload.categories;
+                    return categoryDataCache;
+                }
+
+                throw new Error(payload.message || 'Unable to load categories');
+            } catch (error) {
+                console.error('❌ Category data load error:', error);
+                showMessage('Error loading categories. Please try again.', 'error');
+                throw error;
+            }
+        }
+
+        function showCategoryPickerFromElement(element) {
+            const feedbackId = element.getAttribute('data-category-feedback-id') || element.getAttribute('data-feedback-id');
+            const categoryName = element.getAttribute('data-category-name') || '';
+            const subcategoryName = element.getAttribute('data-subcategory-name') || '';
+            const featureArea = element.getAttribute('data-feature-area') || '';
+            const domainName = element.getAttribute('data-domain-code') || element.getAttribute('data-domain-name') || '';
+
+            showCategoryPicker(feedbackId, categoryName, subcategoryName, featureArea, domainName);
+        }
+
+        function findCategoryKeyByName(categories, displayName) {
+            if (!displayName) {
+                return '';
+            }
+            const normalized = displayName.trim().toLowerCase();
+            for (const [key, details] of Object.entries(categories)) {
+                const candidate = (details.name || key).trim().toLowerCase();
+                if (candidate === normalized) {
+                    return key;
+                }
+            }
+            return '';
+        }
+
+        function findSubcategoryKeyByName(subcategories, displayName) {
+            if (!displayName) {
+                return '';
+            }
+            const normalized = displayName.trim().toLowerCase();
+            for (const [key, details] of Object.entries(subcategories)) {
+                const candidate = (details.name || key).trim().toLowerCase();
+                if (candidate === normalized) {
+                    return key;
+                }
+            }
+            return '';
+        }
+
+        function populateSubcategoryOptions(selectElement, categoryId, categories, currentSubcategoryName, fallbackFeatureArea) {
+            selectElement.innerHTML = '';
+
+            const noneOption = document.createElement('option');
+            noneOption.value = '';
+            noneOption.textContent = 'None';
+            noneOption.dataset.displayName = '';
+            noneOption.dataset.featureArea = '';
+            selectElement.appendChild(noneOption);
+
+            if (!categoryId || !categories[categoryId] || categoryId === '__custom__') {
+                selectElement.disabled = true;
+                return;
+            }
+
+            selectElement.disabled = false;
+
+            const subcategories = categories[categoryId].subcategories || {};
+            const currentKey = findSubcategoryKeyByName(subcategories, currentSubcategoryName);
+
+            Object.entries(subcategories)
+                .sort((a, b) => ((a[1].name || a[0]).localeCompare(b[1].name || b[0])))
+                .forEach(([subKey, details]) => {
+                    const option = document.createElement('option');
+                    option.value = subKey;
+                    option.textContent = details.name || subKey;
+                    option.dataset.displayName = details.name || subKey;
+                    option.dataset.featureArea = details.feature_area || '';
+                    if (currentKey && subKey === currentKey) {
+                        option.selected = true;
+                    }
+                    selectElement.appendChild(option);
+                });
+
+            if (!currentKey && currentSubcategoryName) {
+                const customOption = document.createElement('option');
+                customOption.value = '__custom__';
+                customOption.textContent = `${currentSubcategoryName} (custom)`;
+                customOption.dataset.displayName = currentSubcategoryName;
+                customOption.dataset.featureArea = fallbackFeatureArea || '';
+                customOption.selected = true;
+                selectElement.appendChild(customOption);
+            }
+        }
+
+        function updateFeatureAreaHint(selectElement, hintElement) {
+            if (!hintElement) {
+                return;
+            }
+
+            const selectedOption = selectElement.options[selectElement.selectedIndex];
+            if (!selectedOption) {
+                hintElement.textContent = '';
+                return;
+            }
+
+            const featureArea = selectedOption.dataset ? (selectedOption.dataset.featureArea || '') : '';
+            const name = selectedOption.dataset ? (selectedOption.dataset.displayName || '') : '';
+
+            if (name && featureArea) {
+                hintElement.textContent = `Feature Area: ${featureArea}`;
+            } else if (name) {
+                hintElement.textContent = '';
+            } else {
+                hintElement.textContent = '';
+            }
+        }
+
+        async function showCategoryPicker(feedbackId, currentCategory, currentSubcategory, currentFeatureArea, currentDomainName = '') {
+            const urlParams = new URLSearchParams(window.location.search);
+            const hasStateData = window.fabricStateData && Object.keys(window.fabricStateData).length > 0;
+            const urlIndicatesConnection = urlParams.get('fabric_connected') === 'true';
+            const sessionToken = '{{ stored_token or "" }}';
+            const hasValidSession = sessionToken && sessionToken.trim() !== '' && sessionToken !== 'None';
+
+            if (!stateManagementEnabled && !hasStateData && !urlIndicatesConnection && !fabricConnected && !hasValidSession) {
+                alert('Please click "Sync with Fabric" first to connect to the SQL database and enable category updates.');
+                return;
+            }
+
+            try {
+                const categories = await fetchCategoryData();
+
+                const existingModal = document.getElementById('categoryModal');
+                if (existingModal) {
+                    existingModal.remove();
+                }
+
+                activeCategoryFeedbackId = feedbackId;
+
+                const modal = document.createElement('div');
+                modal.id = 'categoryModal';
+                modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+                modal.innerHTML = `
+                    <div class="bg-white rounded-3 shadow-lg" style="width: min(420px, 90vw); overflow: hidden;">
+                        <div class="d-flex justify-content-between align-items-center border-bottom px-4 py-3">
+                            <h6 class="mb-0">Update Category</h6>
+                            <button type="button" class="btn-close" aria-label="Close"></button>
+                        </div>
+                        <div class="px-4 py-3">
+                            <label class="form-label fw-semibold small text-muted" for="categorySelect">Category &amp; Domain</label>
+                            <select id="categorySelect" class="form-select form-select-sm mb-3"></select>
+                            <label class="form-label fw-semibold small text-muted" for="subcategorySelect">Subcategory</label>
+                            <select id="subcategorySelect" class="form-select form-select-sm mb-2"></select>
+                            <label class="form-label fw-semibold small text-muted" for="domainSelect">Domain</label>
+                            <select id="domainSelect" class="form-select form-select-sm mb-2"></select>
+                            <div id="featureAreaDisplay" class="small text-muted"></div>
+                        </div>
+                        <div class="d-flex justify-content-end gap-2 border-top px-4 py-3 bg-light">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="cancelCategoryBtn">Cancel</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="saveCategoryBtn">Save</button>
+                        </div>
+                    </div>
+                `;
+
+                document.body.appendChild(modal);
+
+                const categorySelect = modal.querySelector('#categorySelect');
+                const subcategorySelect = modal.querySelector('#subcategorySelect');
+                const featureAreaDisplay = modal.querySelector('#featureAreaDisplay');
+                const domainSelect = modal.querySelector('#domainSelect');
+
+                const placeholderOption = document.createElement('option');
+                placeholderOption.value = '';
+                placeholderOption.textContent = 'No category';
+                placeholderOption.dataset.displayName = '';
+                categorySelect.appendChild(placeholderOption);
+
+                const currentCategoryKey = findCategoryKeyByName(categories, currentCategory);
+
+                Object.entries(categories)
+                    .sort((a, b) => ((a[1].name || a[0]).localeCompare(b[1].name || b[0])))
+                    .forEach(([key, details]) => {
+                        const option = document.createElement('option');
+                        option.value = key;
+                        option.textContent = details.name || key;
+                        option.dataset.displayName = details.name || key;
+                        if (currentCategoryKey && key === currentCategoryKey) {
+                            option.selected = true;
+                        }
+                        categorySelect.appendChild(option);
+                    });
+
+                if (currentCategory && !currentCategoryKey) {
+                    const customOption = document.createElement('option');
+                    customOption.value = '__custom__';
+                    customOption.textContent = `${currentCategory} (custom)`;
+                    customOption.dataset.displayName = currentCategory;
+                    customOption.selected = true;
+                    categorySelect.appendChild(customOption);
+                }
+
+                populateSubcategoryOptions(subcategorySelect, categorySelect.value, categories, currentSubcategory, currentFeatureArea);
+                updateFeatureAreaHint(subcategorySelect, featureAreaDisplay);
+
+                categorySelect.addEventListener('change', () => {
+                    populateSubcategoryOptions(subcategorySelect, categorySelect.value, categories, '', '');
+                    if (subcategorySelect.disabled) {
+                        featureAreaDisplay.textContent = '';
+                    } else {
+                        updateFeatureAreaHint(subcategorySelect, featureAreaDisplay);
+                    }
+                });
+
+                subcategorySelect.addEventListener('change', () => {
+                    updateFeatureAreaHint(subcategorySelect, featureAreaDisplay);
+                });
+
+                const domainOptions = {
+                    'GETTING_STARTED': 'Getting Started',
+                    'GOVERNANCE': 'Governance',
+                    'USER_EXPERIENCE': 'User Experience',
+                    'AUTHENTICATION': 'Authentication & Security',
+                    'PERFORMANCE': 'Performance & Scalability',
+                    'INTEGRATION': 'Integration & APIs',
+                    'ANALYTICS': 'Analytics & Reporting'
+                };
+
+                const defaultDomainOption = document.createElement('option');
+                defaultDomainOption.value = '';
+                defaultDomainOption.textContent = 'Select domain';
+                domainSelect.appendChild(defaultDomainOption);
+
+                const currentDomainKey = Object.keys(domainOptions).find(key => domainOptions[key] === currentDomainName || key === currentDomainName);
+
+                Object.entries(domainOptions).forEach(([code, name]) => {
+                    const option = document.createElement('option');
+                    option.value = code;
+                    option.textContent = name;
+                    if (currentDomainKey && currentDomainKey === code) {
+                        option.selected = true;
+                    }
+                    domainSelect.appendChild(option);
+                });
+
+                modal.querySelector('.btn-close').addEventListener('click', closeCategoryModal);
+                modal.querySelector('#cancelCategoryBtn').addEventListener('click', closeCategoryModal);
+                modal.querySelector('#saveCategoryBtn').addEventListener('click', saveCategorySelection);
+
+                modal.addEventListener('click', (event) => {
+                    if (event.target === modal) {
+                        closeCategoryModal();
+                    }
+                });
+
+                document.addEventListener('keydown', handleCategoryEsc, { once: true });
+            } catch (error) {
+                console.error('❌ Unable to open category picker:', error);
+            }
+        }
+
+        function handleCategoryEsc(event) {
+            if (event.key === 'Escape') {
+                closeCategoryModal();
+            }
+        }
+
+        function closeCategoryModal() {
+            const modal = document.getElementById('categoryModal');
+            if (modal) {
+                modal.remove();
+            }
+            document.removeEventListener('keydown', handleCategoryEsc);
+            activeCategoryFeedbackId = null;
+        }
+
+        async function saveCategorySelection() {
+            const modal = document.getElementById('categoryModal');
+            if (!modal || !activeCategoryFeedbackId) {
+                return;
+            }
+
+            const categorySelect = modal.querySelector('#categorySelect');
+            const subcategorySelect = modal.querySelector('#subcategorySelect');
+            const domainSelect = modal.querySelector('#domainSelect');
+
+            const categoryValue = categorySelect.value;
+            const categoryOption = categorySelect.options[categorySelect.selectedIndex];
+            const categoryName = categoryOption ? (categoryOption.dataset.displayName || '') : '';
+
+            const subcategoryValue = subcategorySelect.disabled ? '' : subcategorySelect.value;
+            const subcategoryOption = subcategorySelect.disabled ? null : subcategorySelect.options[subcategorySelect.selectedIndex];
+            const subcategoryName = subcategoryOption ? (subcategoryOption.dataset.displayName || '') : '';
+            const featureArea = subcategoryOption ? (subcategoryOption.dataset.featureArea || '') : '';
+            const domainValue = domainSelect.value;
+            const domainName = domainSelect.options[domainSelect.selectedIndex] ? domainSelect.options[domainSelect.selectedIndex].textContent : '';
+
+            const payload = {
+                feedback_id: activeCategoryFeedbackId,
+                category_id: categoryValue && categoryValue !== '__custom__' ? categoryValue : null,
+                category_name: categoryName,
+                subcategory_id: subcategoryValue && subcategoryValue !== '__custom__' ? subcategoryValue : null,
+                subcategory_name: subcategoryName,
+                feature_area: featureArea,
+                domain_code: domainValue || null,
+                domain_name: domainName || null
+            };
+
+            try {
+                const response = await fetch('/api/update_category_sql', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    closeCategoryModal();
+                    updateCategoryDisplay(activeCategoryFeedbackId, categoryName, subcategoryName, featureArea, payload.domain_code, payload.domain_name);
+                    showMessage(data.message || 'Category updated successfully', 'success');
+                } else {
+                    console.error('❌ Category update failed:', data.message);
+                    showMessage(`Failed to update category: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                console.error('❌ Error updating category:', error);
+                showMessage('Error updating category. Please try again.', 'error');
+            }
+        }
+
+        function updateCategoryDisplay(feedbackId, categoryName, subcategoryName, featureArea, domainCode, domainName) {
+            const stateBadge = document.querySelector(`[data-feedback-id="${feedbackId}"][data-current-state]`);
+            const card = stateBadge ? stateBadge.closest('.fluent-card, .card') : null;
+            if (!card) {
+                return;
+            }
+
+            const categoryChip = card.querySelector('.category-chip');
+            if (categoryChip) {
+                if (categoryName) {
+                    categoryChip.textContent = categoryName;
+                } else {
+                    categoryChip.textContent = 'Set category';
+                }
+                categoryChip.setAttribute('data-category-name', categoryName || '');
+                categoryChip.setAttribute('data-subcategory-name', subcategoryName || '');
+                categoryChip.setAttribute('data-feature-area', featureArea || '');
+            }
+
+            const subcategoryChip = card.querySelector('.subcategory-chip');
+            if (subcategoryChip) {
+                if (subcategoryName) {
+                    subcategoryChip.textContent = subcategoryName;
+                    subcategoryChip.classList.remove('subcategory-empty');
+                } else {
+                    subcategoryChip.textContent = 'Add subcategory';
+                    subcategoryChip.classList.add('subcategory-empty');
+                }
+                subcategoryChip.setAttribute('data-category-name', categoryName || '');
+                subcategoryChip.setAttribute('data-subcategory-name', subcategoryName || '');
+                subcategoryChip.setAttribute('data-feature-area', featureArea || '');
+            }
+
+            const domainBadge = card.querySelector('.domain-badge');
+            if (domainBadge) {
+                domainBadge.textContent = domainName || (domainCode || '❓ Uncategorized');
+                domainBadge.style.backgroundColor = getDomainColor(domainCode);
+                domainBadge.setAttribute('data-domain-name', domainName || '');
+                domainBadge.setAttribute('data-domain-code', domainCode || '');
+                domainBadge.setAttribute('data-category-name', categoryName || '');
+                domainBadge.setAttribute('data-subcategory-name', subcategoryName || '');
+                domainBadge.setAttribute('data-feature-area', featureArea || '');
+            }
+        }
+
+        function getDomainColor(domainCode) {
+            const domainColors = {
+                'GETTING_STARTED': '#20c997',
+                'GOVERNANCE': '#6f42c1',
+                'USER_EXPERIENCE': '#28a745',
+                'AUTHENTICATION': '#dc3545',
+                'PERFORMANCE': '#fd7e14',
+                'INTEGRATION': '#17a2b8',
+                'ANALYTICS': '#ffc107'
+            };
+            return domainColors[domainCode] || '#6c757d';
         }
         
         // Close dropdowns when clicking outside
@@ -4435,10 +4897,15 @@
                     console.log(`✅ Domain updated successfully: ${newDomain}`);
                     
                     // Update the UI immediately
-                    const domainBadge = document.querySelector(`[data-feedback-id="${feedbackId}"]`).closest('.card').querySelector('.domain-badge');
-                    if (domainBadge) {
-                        domainBadge.textContent = domainNames[newDomain] || newDomain;
-                        domainBadge.style.backgroundColor = domainColors[newDomain] || '#6c757d';
+                    const badgeElement = document.querySelector(`[data-feedback-id="${feedbackId}"][data-current-state]`);
+                    const parentCard = badgeElement ? badgeElement.closest('.fluent-card, .card') : null;
+                    if (parentCard) {
+                        const domainBadge = parentCard.querySelector('.domain-badge');
+                        if (domainBadge) {
+                            domainBadge.textContent = domainNames[newDomain] || newDomain;
+                            domainBadge.style.backgroundColor = domainColors[newDomain] || '#6c757d';
+                            domainBadge.setAttribute('data-domain-code', newDomain);
+                        }
                     }
                     
                     // Show success message
@@ -4628,41 +5095,6 @@
         console.log('🔧 FINAL OVERRIDE - Functions registered on window object');
         
         // ALSO OVERRIDE toggleActionsMenu - this is where the early check is happening
-        window.toggleActionsMenu = function(button) {
-            console.log('🔧 FINAL OVERRIDE - toggleActionsMenu called');
-            
-            // Don't check connection here - just show/hide the menu
-            const feedbackId = button.getAttribute('data-feedback-id');
-            const actionsMenu = button.parentElement.querySelector('.actions-menu');
-            
-            if (!actionsMenu) {
-                console.error('Actions menu not found');
-                return;
-            }
-            
-            // Toggle menu visibility
-            if (actionsMenu.style.display === 'block') {
-                actionsMenu.style.display = 'none';
-                button.parentElement.classList.remove('actions-open');
-            } else {
-                // Hide all other menus first
-                document.querySelectorAll('.actions-menu').forEach(menu => {
-                    menu.style.display = 'none';
-                });
-                document.querySelectorAll('.card-actions').forEach(actions => {
-                    actions.classList.remove('actions-open');
-                });
-                
-                // Show this menu
-                actionsMenu.style.display = 'block';
-                button.parentElement.classList.add('actions-open');
-                
-                console.log(`✅ FINAL OVERRIDE - Actions menu opened for ${feedbackId}`);
-            }
-        };
-        
-        console.log('🔧 FINAL OVERRIDE - toggleActionsMenu also registered on window object');
-
     </script>
 
     <!-- Fabric Auth Drawer -->
@@ -4879,6 +5311,45 @@
             }
         `;
         document.head.appendChild(spinStyle);
+
+        // Feedback Detail Modal
+        function showFeedbackDetail(element) {
+            const fullText = element.textContent.trim();
+            
+            // Create modal if it doesn't exist
+            let modal = document.getElementById('feedbackDetailModal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'feedbackDetailModal';
+                modal.className = 'modal fade';
+                modal.setAttribute('tabindex', '-1');
+                modal.setAttribute('aria-hidden', 'true');
+                modal.innerHTML = `
+                    <div class="modal-dialog modal-dialog-centered modal-lg">
+                        <div class="modal-content" style="height: 70vh;">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Feedback Details</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body" style="overflow-y: auto;">
+                                <p id="feedbackDetailText" style="white-space: pre-wrap; font-size: 1rem; line-height: 1.6;"></p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+            }
+            
+            // Set content
+            document.getElementById('feedbackDetailText').textContent = fullText;
+            
+            // Show modal
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+        }
     </script>
 
 </body>

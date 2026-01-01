@@ -541,7 +541,7 @@ class ModernFilterSystem {
         
         const stateClass = state.toLowerCase();
         const stateBadge = this.getStateBadge(state);
-        const domainBadge = this.getDomainBadge(item.Primary_Domain);
+        const domainBadge = this.getDomainBadge(item.Primary_Domain, feedbackId);
         const sentimentBadge = this.getSentimentBadge(item.Sentiment, item);
         const audienceBadge = this.getAudienceBadge(item.Audience);
         const priorityBadge = this.getPriorityBadge(item.Priority);
@@ -572,55 +572,32 @@ class ModernFilterSystem {
                     </div>
                         
                     <div class="fluent-card-body pt-2 flex-grow-1">
-                        <!-- Enhanced Categorization Info -->
-                        ${(item.Audience || item.Enhanced_Category || item.Priority) ? `
+                        <!-- Metadata Section: Audience, Priority, State -->
                         <div class="category-info mb-3">
-                            ${audienceBadge}
-                            ${priorityBadge}
-                        </div>
-                        ` : ''}
-                        
-                        <!-- State Management Section -->
-                        <div class="category-info mb-3">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <span class="state-badge state-${stateClass}"
-                                          data-feedback-id="${feedbackId}"
-                                          data-current-state="${state}"
-                                          onclick="toggleStateDropdown(this, event)"
-                                          title="Click to change state">
-                                        ${stateBadge}
-                                        <div class="state-dropdown" data-feedback-id="${feedbackId}">
-                                            <div class="state-option" data-state="NEW">🆕 New</div>
-                                            <div class="state-option" data-state="TRIAGED">🔍 Triaged</div>
-                                            <div class="state-option" data-state="CLOSED">✅ Closed</div>
-                                            <div class="state-option" data-state="IRRELEVANT">❌ Irrelevant</div>
-                                        </div>
-                                    </span>
-                                    
-                                    ${(fabricStateData[feedbackId]?.last_updated || item.Last_Updated) && (fabricStateData[feedbackId]?.last_updated || item.Last_Updated).trim() ? `
-                                    <small class="text-muted ms-2">
-                                        Updated: ${(fabricStateData[feedbackId]?.last_updated || item.Last_Updated).split('T')[0]}
-                                        ${(fabricStateData[feedbackId]?.updated_by || item.Updated_By) && (fabricStateData[feedbackId]?.updated_by || item.Updated_By).trim() ? ` by ${fabricStateData[feedbackId]?.updated_by || item.Updated_By}` : ''}
-                                    </small>
-                                    ` : ''}
-                                </div>
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                ${audienceBadge}
+                                ${priorityBadge}
                                 
-                                <!-- Actions Menu -->
-                                <div class="card-actions">
-                                    <button class="fluent-button-icon"
-                                            data-feedback-id="${feedbackId}"
-                                            onclick="toggleActionsMenu(this)"
-                                            title="More actions">
-                                        <i class="bi bi-three-dots"></i>
-                                    </button>
-                                    <div class="actions-menu shadow-sm border-0 rounded-2">
-                                        <a href="#" onclick="updateDomain('${feedbackId}', '${item.Primary_Domain || ''}')">Update Domain</a>
-                                        <a href="#" onclick="updateNotes('${feedbackId}', '${fabricStateData[feedbackId]?.notes || item.Feedback_Notes || ''}')">
-                                            ${(fabricStateData[feedbackId]?.notes || item.Feedback_Notes) && (fabricStateData[feedbackId]?.notes || item.Feedback_Notes).trim() ? 'Edit Note' : 'Add Note'}
-                                        </a>
+                                <span class="state-badge state-${stateClass}"
+                                      data-feedback-id="${feedbackId}"
+                                      data-current-state="${state}"
+                                      onclick="toggleStateDropdown(this, event)"
+                                      title="Click to change state">
+                                    ${stateBadge}
+                                    <div class="state-dropdown" data-feedback-id="${feedbackId}">
+                                        <div class="state-option" data-state="NEW">🆕 New</div>
+                                        <div class="state-option" data-state="TRIAGED">🔍 Triaged</div>
+                                        <div class="state-option" data-state="CLOSED">✅ Closed</div>
+                                        <div class="state-option" data-state="IRRELEVANT">❌ Irrelevant</div>
                                     </div>
-                                </div>
+                                </span>
+                                
+                                ${(fabricStateData[feedbackId]?.last_updated || item.Last_Updated) && (fabricStateData[feedbackId]?.last_updated || item.Last_Updated).trim() ? `
+                                <small class="text-muted">
+                                    Updated: ${(fabricStateData[feedbackId]?.last_updated || item.Last_Updated).split('T')[0]}
+                                    ${(fabricStateData[feedbackId]?.updated_by || item.Updated_By) && (fabricStateData[feedbackId]?.updated_by || item.Updated_By).trim() ? ` by ${fabricStateData[feedbackId]?.updated_by || item.Updated_By}` : ''}
+                                </small>
+                                ` : ''}
                             </div>
                         </div>
                         
@@ -631,24 +608,44 @@ class ModernFilterSystem {
                         </div>
                         ` : ''}
                         
-                        <div class="category-info mb-3 small text-muted">
-                            ${item.Enhanced_Category && item.Enhanced_Category.trim() ? `
-                            <strong>Category:</strong> ${item.Enhanced_Category}
-                            ${item.Subcategory && item.Subcategory.trim() ? ` → ${item.Subcategory}` : ''}
-                            ${item.Feature_Area && item.Feature_Area.trim() ? `<br><strong>Area:</strong> ${item.Feature_Area}` : ''}
-                            ` : '<strong>Category:</strong> <em>Uncategorized</em>'}
-                            ${item.Categorization_Confidence ? `
-                                <span class="text-muted">(${Math.round(item.Categorization_Confidence * 100)}% confidence)</span>
-                            ` : ''}
+                        <div class="category-info mb-3 small text-muted interactive-categories">
+                            <span class="text-uppercase fw-bold text-muted me-2" style="font-size: 0.65rem; letter-spacing: 1px;">Category</span>
+                            ${item.Categorization_Confidence ? `<i class="bi bi-info-circle me-2 text-muted" style="font-size: 0.75rem; cursor: help;" title="Confidence: ${Math.round(item.Categorization_Confidence * 100)}%"></i>` : ''}
+                            <span class="category-chip"
+                                  data-category-feedback-id="${feedbackId}"
+                                  data-category-name="${this.escapeHtml(item.Enhanced_Category || '')}"
+                                  data-subcategory-name="${this.escapeHtml(item.Subcategory || '')}"
+                                  data-feature-area="${this.escapeHtml(item.Feature_Area || '')}"
+                                  data-domain-code="${domainBadge.code}"
+                                  onclick="showCategoryPickerFromElement(this)"
+                                  title="Click to update category">
+                                ${(item.Enhanced_Category && item.Enhanced_Category.trim()) ? this.escapeHtml(item.Enhanced_Category) : 'Set category'}
+                            </span>
+                            <span class="subcategory-chip${!(item.Subcategory && item.Subcategory.trim()) ? ' subcategory-empty' : ''}"
+                                  data-category-feedback-id="${feedbackId}"
+                                  data-category-name="${this.escapeHtml(item.Enhanced_Category || '')}"
+                                  data-subcategory-name="${this.escapeHtml(item.Subcategory || '')}"
+                                  data-feature-area="${this.escapeHtml(item.Feature_Area || '')}"
+                                  data-domain-code="${domainBadge.code}"
+                                  onclick="showCategoryPickerFromElement(this)"
+                                  title="Click to update subcategory">
+                                ${(item.Subcategory && item.Subcategory.trim()) ? this.escapeHtml(item.Subcategory) : 'Add subcategory'}
+                            </span>
+                                                        <span class="domain-badge"
+                                                                    style="background-color: ${domainBadge.color};"
+                                                                    data-domain-code="${domainBadge.code}"
+                                                                    data-domain-name="${domainBadge.display}"
+                                                                    data-category-feedback-id="${feedbackId}"
+                                                                    data-category-name="${this.escapeHtml(item.Enhanced_Category || '')}"
+                                                                    data-subcategory-name="${this.escapeHtml(item.Subcategory || '')}"
+                                                                    data-feature-area="${this.escapeHtml(item.Feature_Area || '')}"
+                                                                    onclick="showCategoryPickerFromElement(this)"
+                                                                    title="Click to update domain">
+                                                                ${domainBadge.display}
+                                                        </span>
                         </div>
                         
-                        <!-- Domain Information -->
-                        <div class="category-info mb-3 small">
-                            <strong>Domain:</strong>
-                            ${domainBadge || '<span class="domain-badge" style="background-color: #6c757d; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem;">❓ Uncategorized</span>'}
-                        </div>
-                        
-                        <p class="card-text feedback-content mb-auto text-secondary">
+                        <p class="card-text feedback-content mb-auto text-secondary" onclick="showFeedbackDetail(this)" title="Click to read full feedback">
                             ${this.escapeHtml(item.Feedback || 'No feedback content')}
                         </p>
                         
@@ -657,10 +654,7 @@ class ModernFilterSystem {
                                 <a href="${item.Url}" class="fluent-button fluent-button-secondary" target="_blank" rel="noopener noreferrer" style="min-height: 32px; padding: 4px 12px;">View Source</a>
                             ` : ''}
                             ${item.Tag && item.Tag.trim() ? `
-                                <span class="fluent-badge fluent-badge-secondary">${item.Tag}</span>
-                            ` : ''}
-                            ${item.Status && item.Status.trim() ? `
-                                <span class="fluent-badge fluent-badge-info">${item.Status}</span>
+                                <span class="fluent-badge fluent-badge-secondary" title="Source Tag: ${item.Tag}"><i class="bi bi-tag-fill me-1"></i>${item.Tag}</span>
                             ` : ''}
                             ${sentimentBadge ? sentimentBadge : ''}
                             ${this.getKeywordBadges(item.Matched_Keywords)}
@@ -681,8 +675,15 @@ class ModernFilterSystem {
         return badges[state] || '🆕 New';
     }
     
-    getDomainBadge(domain) {
-        if (!domain) return '';
+    getDomainBadge(domain, feedbackId) {
+        if (!domain) {
+            return {
+                html: `<span class="domain-badge" style="background-color: #6c757d;" data-domain-code="" data-domain-name="" onclick="showCategoryPickerFromElement(this)">❓ Uncategorized</span>`,
+                color: '#6c757d',
+                display: '❓ Uncategorized',
+                code: ''
+            };
+            }
         const domainNames = {
             'GETTING_STARTED': 'Getting Started',
             'GOVERNANCE': 'Governance',
@@ -705,7 +706,12 @@ class ModernFilterSystem {
         
         const displayName = domainNames[domain] || domain;
         const color = domainColors[domain] || '#6c757d';
-        return `<span class="domain-badge" style="background-color: ${color}; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem;">${displayName}</span>`;
+        return {
+            html: `<span class="domain-badge" style="background-color: ${color};" data-domain-code="${this.escapeHtml(domain)}" data-domain-name="${this.escapeHtml(displayName)}" data-category-feedback-id="${feedbackId}" onclick="showCategoryPickerFromElement(this)">${this.escapeHtml(displayName)}</span>`,
+            color,
+            display: displayName,
+            code: domain
+        };
     }
     
     getSentimentBadge(sentiment, item = null) {
