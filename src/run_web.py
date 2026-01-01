@@ -1,5 +1,10 @@
 from app import app
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 if __name__ == '__main__':
     # Ensure we're in the correct directory
@@ -16,7 +21,7 @@ if __name__ == '__main__':
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
         print(f"Created data directory at: {data_dir}")
-    
+        
     print("\nStarting web interface for Feedback Collector")
     print("===========================================")
     print("1. Access the interface at: http://localhost:5000")

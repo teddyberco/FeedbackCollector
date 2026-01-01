@@ -3456,7 +3456,7 @@
             noneOption.dataset.featureArea = '';
             selectElement.appendChild(noneOption);
 
-            if (!categoryId || !categories[categoryId] || categoryId === '__custom__') {
+            if (!categoryId || !categories[categoryId]) {
                 selectElement.disabled = true;
                 return;
             }
@@ -3479,16 +3479,6 @@
                     }
                     selectElement.appendChild(option);
                 });
-
-            if (!currentKey && currentSubcategoryName) {
-                const customOption = document.createElement('option');
-                customOption.value = '__custom__';
-                customOption.textContent = `${currentSubcategoryName} (custom)`;
-                customOption.dataset.displayName = currentSubcategoryName;
-                customOption.dataset.featureArea = fallbackFeatureArea || '';
-                customOption.selected = true;
-                selectElement.appendChild(customOption);
-            }
         }
 
         function updateFeatureAreaHint(selectElement, hintElement) {
@@ -3588,15 +3578,6 @@
                         }
                         categorySelect.appendChild(option);
                     });
-
-                if (currentCategory && !currentCategoryKey) {
-                    const customOption = document.createElement('option');
-                    customOption.value = '__custom__';
-                    customOption.textContent = `${currentCategory} (custom)`;
-                    customOption.dataset.displayName = currentCategory;
-                    customOption.selected = true;
-                    categorySelect.appendChild(customOption);
-                }
 
                 populateSubcategoryOptions(subcategorySelect, categorySelect.value, categories, currentSubcategory, currentFeatureArea);
                 updateFeatureAreaHint(subcategorySelect, featureAreaDisplay);
@@ -3715,8 +3696,9 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    closeCategoryModal();
+                    // Update display BEFORE closing modal (which clears activeCategoryFeedbackId)
                     updateCategoryDisplay(activeCategoryFeedbackId, categoryName, subcategoryName, featureArea, payload.domain_code, payload.domain_name);
+                    closeCategoryModal();
                     showMessage(data.message || 'Category updated successfully', 'success');
                 } else {
                     console.error('❌ Category update failed:', data.message);
@@ -3729,48 +3711,52 @@
         }
 
         function updateCategoryDisplay(feedbackId, categoryName, subcategoryName, featureArea, domainCode, domainName) {
-            const stateBadge = document.querySelector(`[data-feedback-id="${feedbackId}"][data-current-state]`);
-            const card = stateBadge ? stateBadge.closest('.fluent-card, .card') : null;
-            if (!card) {
-                return;
-            }
+            // Find ALL instances of this feedback item on the page (e.g. in list and potential duplicates)
+            const stateBadges = document.querySelectorAll(`[data-feedback-id="${feedbackId}"][data-current-state]`);
+            
+            stateBadges.forEach(stateBadge => {
+                const card = stateBadge.closest('.fluent-card, .card');
+                if (!card) return;
 
-            const categoryChip = card.querySelector('.category-chip');
-            if (categoryChip) {
-                if (categoryName) {
-                    categoryChip.textContent = categoryName;
-                } else {
-                    categoryChip.textContent = 'Set category';
+                const categoryChip = card.querySelector('.category-chip');
+                if (categoryChip) {
+                    if (categoryName) {
+                        categoryChip.textContent = categoryName;
+                    } else {
+                        categoryChip.textContent = 'Set category';
+                    }
+                    categoryChip.setAttribute('data-category-name', categoryName || '');
+                    categoryChip.setAttribute('data-subcategory-name', subcategoryName || '');
+                    categoryChip.setAttribute('data-feature-area', featureArea || '');
+                    categoryChip.setAttribute('data-domain-code', domainCode || '');
                 }
-                categoryChip.setAttribute('data-category-name', categoryName || '');
-                categoryChip.setAttribute('data-subcategory-name', subcategoryName || '');
-                categoryChip.setAttribute('data-feature-area', featureArea || '');
-            }
 
-            const subcategoryChip = card.querySelector('.subcategory-chip');
-            if (subcategoryChip) {
-                if (subcategoryName) {
-                    subcategoryChip.textContent = subcategoryName;
-                    subcategoryChip.classList.remove('subcategory-empty');
-                } else {
-                    subcategoryChip.textContent = 'Add subcategory';
-                    subcategoryChip.classList.add('subcategory-empty');
+                const subcategoryChip = card.querySelector('.subcategory-chip');
+                if (subcategoryChip) {
+                    if (subcategoryName) {
+                        subcategoryChip.textContent = subcategoryName;
+                        subcategoryChip.classList.remove('subcategory-empty');
+                    } else {
+                        subcategoryChip.textContent = 'Add subcategory';
+                        subcategoryChip.classList.add('subcategory-empty');
+                    }
+                    subcategoryChip.setAttribute('data-category-name', categoryName || '');
+                    subcategoryChip.setAttribute('data-subcategory-name', subcategoryName || '');
+                    subcategoryChip.setAttribute('data-feature-area', featureArea || '');
+                    subcategoryChip.setAttribute('data-domain-code', domainCode || '');
                 }
-                subcategoryChip.setAttribute('data-category-name', categoryName || '');
-                subcategoryChip.setAttribute('data-subcategory-name', subcategoryName || '');
-                subcategoryChip.setAttribute('data-feature-area', featureArea || '');
-            }
 
-            const domainBadge = card.querySelector('.domain-badge');
-            if (domainBadge) {
-                domainBadge.textContent = domainName || (domainCode || '❓ Uncategorized');
-                domainBadge.style.backgroundColor = getDomainColor(domainCode);
-                domainBadge.setAttribute('data-domain-name', domainName || '');
-                domainBadge.setAttribute('data-domain-code', domainCode || '');
-                domainBadge.setAttribute('data-category-name', categoryName || '');
-                domainBadge.setAttribute('data-subcategory-name', subcategoryName || '');
-                domainBadge.setAttribute('data-feature-area', featureArea || '');
-            }
+                const domainBadge = card.querySelector('.domain-badge');
+                if (domainBadge) {
+                    domainBadge.textContent = domainName || (domainCode || '❓ Uncategorized');
+                    domainBadge.style.backgroundColor = getDomainColor(domainCode);
+                    domainBadge.setAttribute('data-domain-name', domainName || '');
+                    domainBadge.setAttribute('data-domain-code', domainCode || '');
+                    domainBadge.setAttribute('data-category-name', categoryName || '');
+                    domainBadge.setAttribute('data-subcategory-name', subcategoryName || '');
+                    domainBadge.setAttribute('data-feature-area', featureArea || '');
+                }
+            });
         }
 
         function getDomainColor(domainCode) {

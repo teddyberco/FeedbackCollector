@@ -2199,6 +2199,12 @@ def update_feedback_domain():
         if not feedback_id or not new_domain:
             return jsonify({'status': 'error', 'message': 'feedback_id and domain are required'}), 400
         
+        # Resolve domain code to name if needed
+        if new_domain in config.DOMAIN_CATEGORIES:
+            resolved_domain = config.DOMAIN_CATEGORIES[new_domain]['name']
+            logger.info(f"Resolved domain code '{new_domain}' to name '{resolved_domain}'")
+            new_domain = resolved_domain
+        
         logger.info(f"🔄 Updating domain for feedback {feedback_id}: {new_domain}")
         
         # Import SQL writer and update immediately
@@ -2393,6 +2399,12 @@ def update_category_sql():
         subcategory_name = _clean(data.get('subcategory_name'))
         feature_area = _clean(data.get('feature_area'))
         domain_code = _clean(data.get('domain_code'))
+
+        # Resolve domain code to name if needed
+        if domain_code and domain_code in config.DOMAIN_CATEGORIES:
+            domain_name = config.DOMAIN_CATEGORIES[domain_code]['name']
+            logger.info(f"Resolved domain code '{domain_code}' to name '{domain_name}'")
+            domain_code = domain_name
 
         success = state_manager.update_feedback_category_in_sql(
             feedback_id,

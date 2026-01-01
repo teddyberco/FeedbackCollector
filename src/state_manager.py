@@ -205,7 +205,10 @@ def get_all_feedback_states() -> Dict[str, Dict[str, Any]]:
                 COALESCE(fs.Primary_Domain, f.Primary_Domain) as Primary_Domain,
                 fs.Feedback_Notes, 
                 fs.Last_Updated, 
-                fs.Updated_By
+                fs.Updated_By,
+                COALESCE(fs.Category, f.Category) as Category,
+                COALESCE(fs.Subcategory, f.Subcategory) as Subcategory,
+                COALESCE(fs.Feature_Area, f.Feature_Area) as Feature_Area
             FROM FeedbackState fs
             LEFT JOIN Feedback f ON fs.Feedback_ID = f.Feedback_ID
             WHERE fs.Feedback_ID IS NOT NULL AND fs.Feedback_ID != ''
@@ -224,7 +227,10 @@ def get_all_feedback_states() -> Dict[str, Dict[str, Any]]:
                 'domain': row[2],  # Primary_Domain
                 'notes': row[3],   # Feedback_Notes
                 'last_updated': row[4].isoformat() if row[4] else None,
-                'updated_by': row[5]
+                'updated_by': row[5],
+                'category': row[6],
+                'subcategory': row[7],
+                'feature_area': row[8]
             }
         
         logger.info(f"Loaded {len(state_data)} feedback states from FeedbackState table")
@@ -265,7 +271,7 @@ def update_feedback_field_in_sql(feedback_id: str, field_name: str, new_value: s
         cursor = conn.cursor()
         
         # Validate field name to prevent SQL injection
-        allowed_fields = ['Primary_Domain', 'Audience', 'State', 'Feedback_Notes']
+        allowed_fields = ['Primary_Domain', 'Audience', 'State', 'Feedback_Notes', 'Category', 'Subcategory', 'Feature_Area']
         if field_name not in allowed_fields:
             logger.error(f"Field {field_name} not allowed for updates")
             return False
@@ -273,10 +279,10 @@ def update_feedback_field_in_sql(feedback_id: str, field_name: str, new_value: s
         # Update the specific field in the appropriate table
         now = datetime.now().isoformat()
         
-        # For Primary_Domain, we need to update BOTH tables:
+        # For Primary_Domain and Category fields, we need to update BOTH tables:
         # 1. Feedback table (for data integrity and original categorization)
         # 2. FeedbackState table (for UI display and audit trail)
-        if field_name == 'Primary_Domain':
+        if field_name in ['Primary_Domain', 'Category', 'Subcategory', 'Feature_Area']:
             # Update main Feedback table
             feedback_query = f"UPDATE Feedback SET {field_name} = ? WHERE Feedback_ID = ?"
             cursor.execute(feedback_query, [new_value, feedback_id])
@@ -294,7 +300,7 @@ def update_feedback_field_in_sql(feedback_id: str, field_name: str, new_value: s
                 """
                 cursor.execute(state_insert_query, [feedback_id, new_value, now, 'user'])
                 
-            logger.info(f"✅ Updated Primary_Domain in both Feedback table ({feedback_rows_updated} rows) and FeedbackState table")
+            logger.info(f"✅ Updated {field_name} in both Feedback table ({feedback_rows_updated} rows) and FeedbackState table")
             
         elif field_name == 'Audience':
             # Audience only goes to main Feedback table (no audit trail needed)
@@ -366,6 +372,7 @@ def update_feedback_category_in_sql(
     """Update enhanced category metadata for a feedback item."""
     try:
         import fabric_sql_writer
+        from datetime import datetime
 
         writer = fabric_sql_writer.FabricSQLWriter()
         conn = writer.connect_interactive()
@@ -375,11 +382,17 @@ def update_feedback_category_in_sql(
             return False
 
         cursor = conn.cursor()
+        now = datetime.now().isoformat()
 
+        # 1. Update Feedback table
         updates = ["User_Modified_Categorization = 1"]
         params = []
 
+        # Update both Category and Enhanced_Category to keep them in sync
         updates.append("Enhanced_Category = ?")
+        params.append(category_name.strip() if category_name and category_name.strip() else None)
+        
+        updates.append("Category = ?")
         params.append(category_name.strip() if category_name and category_name.strip() else None)
 
         updates.append("Subcategory = ?")
@@ -396,20 +409,62 @@ def update_feedback_category_in_sql(
         params.append(feedback_id)
 
         cursor.execute(update_sql, params)
-        affected = cursor.rowcount
-        conn.commit()
+        feedback_rows = cursor.rowcount
+        
+        # 2. Update FeedbackState table (for UI consistency and audit)
+        # Check if record exists in FeedbackState
+        cursor.execute("SELECT COUNT(*) FROM FeedbackState WHERE Feedback_ID = ?", [feedback_id])
+        exists = cursor.fetchone()[0] > 0
+        
+        state_params = []
+        if exists:
+            state_updates = ["Last_Updated = ?", "Updated_By = ?"]
+            state_params.extend([now, 'user'])
+            
+            state_updates.append("Category = ?")
+            state_params.append(category_name.strip() if category_name and category_name.strip() else None)
+            
+            state_updates.append("Subcategory = ?")
+            state_params.append(subcategory_name.strip() if subcategory_name and subcategory_name.strip() else None)
+            
+            state_updates.append("Feature_Area = ?")
+            state_params.append(feature_area.strip() if feature_area and feature_area.strip() else None)
+            
+            if domain_code is not None:
+                state_updates.append("Primary_Domain = ?")
+                state_params.append(domain_code.strip() if domain_code and domain_code.strip() else None)
+                
+            state_params.append(feedback_id)
+            
+            state_sql = f"UPDATE FeedbackState SET {', '.join(state_updates)} WHERE Feedback_ID = ?"
+            cursor.execute(state_sql, state_params)
+            state_rows = cursor.rowcount
+        else:
+            # Insert new record
+            cols = ["Feedback_ID", "Last_Updated", "Updated_By", "Category", "Subcategory", "Feature_Area"]
+            vals = ["?", "?", "?", "?", "?", "?"]
+            state_params = [feedback_id, now, 'user', 
+                           category_name.strip() if category_name and category_name.strip() else None,
+                           subcategory_name.strip() if subcategory_name and subcategory_name.strip() else None,
+                           feature_area.strip() if feature_area and feature_area.strip() else None]
+            
+            if domain_code is not None:
+                cols.append("Primary_Domain")
+                vals.append("?")
+                state_params.append(domain_code.strip() if domain_code and domain_code.strip() else None)
+                
+            state_sql = f"INSERT INTO FeedbackState ({', '.join(cols)}) VALUES ({', '.join(vals)})"
+            cursor.execute(state_sql, state_params)
+            state_rows = cursor.rowcount
 
+        conn.commit()
         cursor.close()
         conn.close()
 
-        if affected > 0:
+        if feedback_rows > 0 or state_rows > 0:
             logger.info(
-                "✅ Updated category metadata for %s → Category='%s', Subcategory='%s', Feature_Area='%s'",
-                feedback_id,
-                category_name,
-                subcategory_name,
-                feature_area,
-                domain_code,
+                "✅ Updated category metadata for %s in Feedback (%d rows) and FeedbackState (%d rows)",
+                feedback_id, feedback_rows, state_rows
             )
             return True
 

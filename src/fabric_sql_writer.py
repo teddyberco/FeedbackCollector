@@ -134,6 +134,9 @@ class FabricSQLWriter:
                 State NVARCHAR(20),
                 Feedback_Notes NTEXT,
                 Primary_Domain NVARCHAR(100),
+                Category NVARCHAR(100),
+                Subcategory NVARCHAR(200),
+                Feature_Area NVARCHAR(200),
                 Last_Updated DATETIME2 DEFAULT GETDATE(),
                 Updated_By NVARCHAR(100)
             );
@@ -143,7 +146,42 @@ class FabricSQLWriter:
             conn.commit()
             logger.info("FeedbackState table created successfully")
         else:
-            logger.info("FeedbackState table already exists")
+            logger.info("FeedbackState table already exists - checking for missing columns...")
+            self.migrate_feedback_state_table(conn)
+
+    def migrate_feedback_state_table(self, conn):
+        """Add missing columns to existing FeedbackState table"""
+        cursor = conn.cursor()
+        
+        # List of new columns to add
+        new_columns = [
+            "Category NVARCHAR(100)",
+            "Subcategory NVARCHAR(200)",
+            "Feature_Area NVARCHAR(200)"
+        ]
+        
+        for column_def in new_columns:
+            column_name = column_def.split()[0]
+            try:
+                # Check if column exists
+                cursor.execute("""
+                    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_NAME = 'FeedbackState' AND COLUMN_NAME = ?
+                """, [column_name])
+                
+                column_exists = cursor.fetchone()[0] > 0
+                
+                if not column_exists:
+                    # Add the missing column
+                    alter_sql = f"ALTER TABLE FeedbackState ADD {column_def}"
+                    cursor.execute(alter_sql)
+                    conn.commit()
+                    logger.info(f"✅ Added missing column to FeedbackState: {column_name}")
+                else:
+                    logger.debug(f"Column {column_name} already exists in FeedbackState")
+                    
+            except Exception as e:
+                logger.error(f"❌ Error adding column {column_name} to FeedbackState: {e}")
     
     def get_current_user(self, conn):
         """Get the current authenticated user from SQL connection"""
@@ -388,8 +426,9 @@ class FabricSQLWriter:
             cursor = conn.cursor()
             
             # Get ALL existing feedback (ID, Title, Content hash) for comprehensive duplicate checking
+            # Optimize fetch: Only get what's needed for the hash (first 200 chars of content)
             cursor.execute("""
-                SELECT Feedback_ID, Title, Content
+                SELECT Feedback_ID, Title, CAST(LEFT(CAST(Content AS NVARCHAR(MAX)), 200) AS NVARCHAR(200))
                 FROM Feedback
             """)
             
@@ -410,6 +449,9 @@ class FabricSQLWriter:
             new_items = 0
             existing_items = 0
             id_regenerated = 0
+            
+            # Collect new items for bulk insert
+            new_items_params = []
             
             for feedback in feedback_data:
                 try:
@@ -522,16 +564,8 @@ class FabricSQLWriter:
                         except:
                             created_date = None
                     
-                    # Insert new record with all fields
-                    cursor.execute("""
-                        INSERT INTO Feedback (
-                            Feedback_ID, Title, Content, Source, Source_URL, Author,
-                            Created_Date, Sentiment, Primary_Category, Enhanced_Category,
-                            Audience, Priority, Feedback_Gist, Area, Impacttype, Scenario,
-                            Tag, Organization, Status, Created_by, Rawfeedback, Category,
-                            Subcategory, Feature_Area, Categorization_Confidence, Primary_Domain, Domains, Matched_Keywords
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, [
+                    # Add to batch params
+                    new_items_params.append([
                         deterministic_id, title, content, source, source_url, author,
                         created_date, sentiment, primary_category, enhanced_category,
                         audience, priority, feedback_gist, area, impacttype, scenario,
@@ -544,11 +578,25 @@ class FabricSQLWriter:
                     existing_content_hashes.add(content_sig)
                     
                     new_items += 1
-                    logger.debug(f"📝 Added new item: {deterministic_id}")
+                    logger.debug(f"📝 Added new item to batch: {deterministic_id}")
                     
                 except Exception as e:
                     logger.error(f"❌ Error processing feedback: {e}")
                     continue
+            
+            # Execute bulk insert if there are new items
+            if new_items_params:
+                logger.info(f"🚀 Executing bulk insert for {len(new_items_params)} items...")
+                cursor.executemany("""
+                    INSERT INTO Feedback (
+                        Feedback_ID, Title, Content, Source, Source_URL, Author,
+                        Created_Date, Sentiment, Primary_Category, Enhanced_Category,
+                        Audience, Priority, Feedback_Gist, Area, Impacttype, Scenario,
+                        Tag, Organization, Status, Created_by, Rawfeedback, Category,
+                        Subcategory, Feature_Area, Categorization_Confidence, Primary_Domain, Domains, Matched_Keywords
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, new_items_params)
+                logger.info("✅ Bulk insert completed")
             
             conn.commit()
             
@@ -744,6 +792,15 @@ class FabricSQLWriter:
                     
                     logger.info(f"Inserted new record for feedback_id: {feedback_id}")
                 
+                # Also update Primary_Domain in Feedback table if present to keep them in sync
+                if change.get('domain'):
+                    try:
+                        cursor.execute("UPDATE Feedback SET Primary_Domain = ? WHERE Feedback_ID = ?", 
+                                      [change.get('domain'), feedback_id])
+                        logger.info(f"Synced Primary_Domain to Feedback table for feedback_id: {feedback_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to sync Primary_Domain to Feedback table: {e}")
+
                 updated_count += 1
             
             # Commit all changes
