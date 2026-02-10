@@ -7,12 +7,10 @@ import requests
 import base64
 import logging
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 from typing import List, Dict, Any
 import config
 
-# Load .env from parent directory
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
+# .env is loaded centrally by config.py - no need to load again here
 
 logger = logging.getLogger(__name__)
 

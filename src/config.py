@@ -3,25 +3,15 @@ import sys
 from dotenv import load_dotenv
 import json # Ensure json is imported
 
-# Determine the correct path for .env file when frozen
+# Determine the correct path for .env file
 if getattr(sys, 'frozen', False):
-    # Running as compiled executable - PyInstaller extracts to _internal
-    # Try multiple locations
+    # Running as compiled executable - .env must be next to FeedbackCollector.exe
     application_path = os.path.dirname(sys.executable)
-    env_paths = [
-        os.path.join(sys._MEIPASS, '.env'),  # Inside _internal (PyInstaller temp dir)
-        os.path.join(application_path, '_internal', '.env'),  # Relative to exe
-        os.path.join(application_path, '.env'),  # Same dir as exe
-    ]
-    env_path = None
-    for path in env_paths:
-        if os.path.exists(path):
-            env_path = path
-            print(f"✅ Found .env file at: {path}")
-            break
-    if not env_path:
-        env_path = env_paths[0]  # Default to first option
-        print(f"⚠️ .env file not found. Tried: {env_paths}")
+    env_path = os.path.join(application_path, '.env')
+    if os.path.exists(env_path):
+        print(f"✅ Found .env file at: {env_path}")
+    else:
+        print(f"⚠️ .env file not found. Place your .env file next to FeedbackCollector.exe at: {env_path}")
 else:
     # Running in normal Python environment
     env_path = os.path.join(os.path.dirname(__file__), '.env')

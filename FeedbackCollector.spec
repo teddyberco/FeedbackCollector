@@ -2,17 +2,20 @@
 
 block_cipher = None
 
+import os
+SPEC_DIR = os.path.dirname(os.path.abspath(SPEC))
+
 a = Analysis(
-    ['src\\run_web.py'],
-    pathex=[],
+    [os.path.join(SPEC_DIR, 'src', 'run_web.py')],
+    pathex=[SPEC_DIR],
     binaries=[],
     datas=[
-        ('src\\templates', 'templates'),
-        ('src\\static', 'static'),
-        ('src\\categories.json', '.'),
-        ('src\\impact_types.json', '.'),
-        ('src\\keywords.json', '.'),
-        ('src\\.env', '.'),  # Include .env file in the build
+        (os.path.join(SPEC_DIR, 'src', 'templates'), 'templates'),
+        (os.path.join(SPEC_DIR, 'src', 'static'), 'static'),
+        (os.path.join(SPEC_DIR, 'src', 'categories.json'), '.'),
+        (os.path.join(SPEC_DIR, 'src', 'impact_types.json'), '.'),
+        (os.path.join(SPEC_DIR, 'src', 'keywords.json'), '.'),
+        # .env is NOT bundled - place it next to FeedbackCollector.exe after build
     ],
     hiddenimports=[
         'praw',
