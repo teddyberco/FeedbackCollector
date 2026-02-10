@@ -87,6 +87,7 @@ class SourceConfigManager {
         this.setupEventListeners();
         this.renderSourceCards();
         this.renderSettings();
+        this.updateActiveSourcesCount();
     }
     
     loadConfiguration() {
@@ -149,6 +150,17 @@ class SourceConfigManager {
             settings: this.settings
         };
         localStorage.setItem('feedbackCollectorConfig', JSON.stringify(config));
+    }
+    
+    updateActiveSourcesCount() {
+        // Count how many sources are enabled
+        const enabledCount = Object.values(this.sources).filter(source => source.enabled).length;
+        
+        // Update the dashboard stat
+        const statElement = document.getElementById('statActiveSources');
+        if (statElement) {
+            statElement.textContent = enabledCount;
+        }
     }
     
     setupEventListeners() {
@@ -374,6 +386,7 @@ class SourceConfigManager {
         sourceCard.classList.toggle('disabled', !toggle.checked);
         this.updateSourceStatus(sourceId);
         this.saveConfiguration();
+        this.updateActiveSourcesCount();
     }
     
     toggleSourceConfig(sourceCard) {

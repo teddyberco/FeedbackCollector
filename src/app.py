@@ -234,14 +234,14 @@ def collect_feedback_route():
     try:
         logger.info("Starting enhanced feedback collection process via API.")
         
-        # Get configuration from request
-        config = {}
+        # Get configuration from request (renamed to avoid shadowing config module)
+        request_config = {}
         if request.is_json:
-            config = request.get_json() or {}
+            request_config = request.get_json() or {}
         
         # Extract source configurations
-        source_configs = config.get('sources', {})
-        settings = config.get('settings', {})
+        source_configs = request_config.get('sources', {})
+        settings = request_config.get('settings', {})
         
         # Check if we're in online mode (connected to Fabric)
         from flask import session
@@ -455,7 +455,8 @@ def collect_feedback_route():
             collection_status['current_source'] = 'Azure DevOps'
             collection_status['message'] = 'Collecting from Azure DevOps...'
             ado_config = source_configs['ado']
-            parent_work_item_id = ado_config.get('parentWorkItem', config.get('ado_work_item_id', '1319103'))
+            # Use ado_config from frontend first, fallback to environment config (cfg module)
+            parent_work_item_id = ado_config.get('parentWorkItem') or cfg.ADO_PARENT_WORK_ITEM_ID or '1319103'
             logger.info(f"🔗 AZURE DEVOPS: Collecting children of work item {parent_work_item_id}")
             
             # Get work items using the working client
