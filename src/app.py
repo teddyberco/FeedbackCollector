@@ -166,6 +166,141 @@ def restore_default_categories_route():
         logger.error(f"Error restoring default categories: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': f'An internal error occurred: {str(e)}'}), 500
 
+@app.route('/api/categories/recategorize', methods=['POST'])
+def recategorize_feedback_route():
+    """
+    Re-categorize all feedback in the SQL database using current category definitions.
+    Requires an active Fabric SQL connection (bearer token in session).
+    Skips items where User_Modified_Categorization = 1.
+    Preserves any user-curated overrides from the FeedbackState table.
+    """
+    from flask import session
+    
+    # Check SQL connectivity first
+    stored_token = session.get('fabric_bearer_token')
+    if not stored_token or not stored_token.strip() or stored_token == 'None':
+        return jsonify({
+            'status': 'error',
+            'message': 'Not connected to Fabric SQL. Please authenticate first via Sources & Settings.'
+        }), 400
+    
+    try:
+        import fabric_sql_writer as fsw
+        writer = fsw.FabricSQLWriter(bearer_token=stored_token)
+        
+        # Connect
+        try:
+            conn = writer.connect_with_token(stored_token)
+        except Exception:
+            conn = writer.connect_interactive()
+        
+        cursor = conn.cursor()
+        
+        # Reload latest categories into memory
+        config.ENHANCED_FEEDBACK_CATEGORIES = config.load_categories()
+        
+        # Fetch feedback that hasn't been manually categorized,
+        # along with any FeedbackState overrides so we can preserve them
+        cursor.execute("""
+            SELECT f.Feedback_ID, f.Title, f.Content, f.Source, f.Scenario, f.Organization,
+                   fs.Primary_Domain AS State_Domain,
+                   fs.Category AS State_Category,
+                   fs.Subcategory AS State_Subcategory,
+                   fs.Feature_Area AS State_Feature_Area
+            FROM Feedback f
+            LEFT JOIN FeedbackState fs ON f.Feedback_ID = fs.Feedback_ID
+            WHERE f.User_Modified_Categorization IS NULL OR f.User_Modified_Categorization = 0
+        """)
+        
+        rows = cursor.fetchall()
+        logger.info(f"Re-categorizing {len(rows)} feedback items (preserving FeedbackState overrides)...")
+        
+        updated = 0
+        preserved = 0
+        errors = 0
+        
+        for row in rows:
+            try:
+                feedback_id = row[0]
+                title = row[1]
+                content = row[2]
+                source = row[3]
+                scenario = row[4]
+                organization = row[5]
+                state_domain = row[6]
+                state_category = row[7]
+                state_subcategory = row[8]
+                state_feature_area = row[9]
+                
+                text = f"{title or ''}\n\n{content or ''}"
+                
+                enhanced_cat = utils.enhanced_categorize_feedback(
+                    text,
+                    source=source or '',
+                    scenario=scenario or '',
+                    organization=organization or ''
+                )
+                
+                # Use FeedbackState values if present (user-curated takes priority)
+                final_domain = state_domain if state_domain else enhanced_cat.get('primary_domain', '')
+                final_category = state_category if state_category else enhanced_cat['legacy_category']
+                final_subcategory = state_subcategory if state_subcategory else enhanced_cat['subcategory']
+                final_feature_area = state_feature_area if state_feature_area else enhanced_cat['feature_area']
+                
+                has_state_overrides = any([state_domain, state_category, state_subcategory, state_feature_area])
+                if has_state_overrides:
+                    preserved += 1
+                
+                cursor.execute("""
+                    UPDATE Feedback
+                    SET Primary_Category = ?,
+                        Enhanced_Category = ?,
+                        Category = ?,
+                        Subcategory = ?,
+                        Audience = ?,
+                        Priority = ?,
+                        Feature_Area = ?,
+                        Categorization_Confidence = ?,
+                        Primary_Domain = ?,
+                        Domains = ?,
+                        Impacttype = ?,
+                        Auto_Recategorized_Date = GETDATE()
+                    WHERE Feedback_ID = ?
+                """, [
+                    enhanced_cat['primary_category'],
+                    enhanced_cat['primary_category'],
+                    final_category,
+                    final_subcategory,
+                    enhanced_cat['audience'],
+                    enhanced_cat['priority'],
+                    final_feature_area,
+                    enhanced_cat['confidence'],
+                    final_domain,
+                    str(enhanced_cat.get('domains', [])),
+                    enhanced_cat['impact_type'],
+                    feedback_id
+                ])
+                updated += 1
+            except Exception as item_error:
+                logger.warning(f"Error re-categorizing {feedback_id}: {item_error}")
+                errors += 1
+        
+        conn.commit()
+        conn.close()
+        
+        message = f"Re-categorized {updated} items."
+        if preserved:
+            message += f" {preserved} items had FeedbackState overrides preserved."
+        if errors:
+            message += f" {errors} errors."
+        
+        logger.info(f"Re-categorization complete: {message}")
+        return jsonify({'status': 'success', 'message': message, 'updated': updated, 'preserved': preserved, 'errors': errors})
+    
+    except Exception as e:
+        logger.error(f"Error during re-categorization: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': f'Re-categorization failed: {str(e)}'}), 500
+
 @app.route('/api/impact-types', methods=['GET', 'POST'])
 def manage_impact_types_route():
     """API endpoint for managing impact types."""

@@ -300,6 +300,9 @@
                             <button class="fluent-button fluent-button-secondary" onclick="restoreDefaultCategories()">
                                 <i class="bi bi-arrow-clockwise"></i> Restore Defaults
                             </button>
+                            <button class="fluent-button fluent-button-warning" onclick="recategorizeAll()" id="recategorizeBtn" title="Re-categorize all feedback in the SQL database using current category definitions">
+                                <i class="bi bi-arrow-repeat"></i> Re-categorize All
+                            </button>
                         </div>
                         
                         <div id="categoriesStatus" class="status-message"></div>
@@ -979,7 +982,7 @@
             fetch('/api/categories', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ categories: currentCategories })
+                body: JSON.stringify(currentCategories)
             })
             .then(response => response.json())
             .then(data => {
@@ -1024,7 +1027,51 @@
             statusDiv.style.display = 'block';
             setTimeout(() => {
                 statusDiv.style.display = 'none';
-            }, 3000);
+            }, 5000);
+        }
+
+        // Re-categorize all feedback in SQL using current categories
+        function recategorizeAll() {
+            // First check if connected to SQL
+            fetch('/api/session_state')
+                .then(response => response.json())
+                .then(state => {
+                    if (!state.fabric_sql_connected) {
+                        showCategoriesStatus('Not connected to Fabric SQL. Please authenticate first via Sources & Settings.', true);
+                        return;
+                    }
+                    
+                    if (!confirm('This will re-categorize ALL feedback in the SQL database using the current category definitions.\n\nItems you manually categorized will be skipped.\n\nContinue?')) {
+                        return;
+                    }
+                    
+                    const btn = document.getElementById('recategorizeBtn');
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Re-categorizing...';
+                    showCategoriesStatus('Re-categorizing feedback... This may take a moment.');
+                    
+                    fetch('/api/categories/recategorize', { method: 'POST' })
+                        .then(response => response.json())
+                        .then(data => {
+                            btn.disabled = false;
+                            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Re-categorize All';
+                            if (data.status === 'success') {
+                                showCategoriesStatus(data.message);
+                            } else {
+                                showCategoriesStatus(data.message || 'Error during re-categorization.', true);
+                            }
+                        })
+                        .catch(error => {
+                            btn.disabled = false;
+                            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Re-categorize All';
+                            console.error('Error:', error);
+                            showCategoriesStatus('Error during re-categorization.', true);
+                        });
+                })
+                .catch(error => {
+                    console.error('Error checking session state:', error);
+                    showCategoriesStatus('Could not verify SQL connection status.', true);
+                });
         }
 
         // ==================== Impact Type Management ====================
@@ -1714,9 +1761,114 @@
             // Restore progress state from localStorage
             restoreProgressState();
             
-            // Resume collection progress if it was in progress
-            resumeCollectionProgress();
+            // Start persistent collection status polling (works across all views)
+            startCollectionStatusPolling();
         });
+        
+        // ==================== Persistent Collection Status Polling ====================
+        let collectionStatusPollInterval = null;
+        let lastKnownCollectionStatus = 'ready';
+        
+        function startCollectionStatusPolling() {
+            // Poll immediately on start
+            pollCollectionStatus();
+            
+            // Then poll every 2 seconds
+            if (collectionStatusPollInterval) clearInterval(collectionStatusPollInterval);
+            collectionStatusPollInterval = setInterval(pollCollectionStatus, 2000);
+        }
+        
+        function pollCollectionStatus() {
+            fetch('/api/collection_status')
+                .then(response => response.json())
+                .then(data => {
+                    const prevStatus = lastKnownCollectionStatus;
+                    lastKnownCollectionStatus = data.status;
+                    
+                    // Update progress badge
+                    const progressBadge = document.getElementById('progressBadge');
+                    if (!progressBadge) return;
+                    
+                    if (data.status === 'running') {
+                        const progress = Math.round(data.progress || 0);
+                        progressBadge.textContent = `${progress}%`;
+                        progressBadge.className = 'fluent-badge fluent-badge-primary ms-auto';
+                        
+                        // Update progress drawer UI with real server data
+                        updateCollectionProgress(
+                            progress, 
+                            data.message || 'Collecting...', 
+                            data.current_source || 'Processing...',
+                            data.source_counts || {}
+                        );
+                        
+                        // Show spinner
+                        const spinner = document.getElementById('collectionSpinner');
+                        if (spinner) spinner.style.display = 'inline-block';
+                        const currentSourceDiv = document.getElementById('currentCollectionSource');
+                        if (currentSourceDiv) currentSourceDiv.className = 'alert alert-info d-flex align-items-center';
+                        
+                        // If we just detected a running collection (e.g. after page load), log it
+                        if (prevStatus !== 'running') {
+                            addCollectionLog('🔄 Collection in progress...', 'info');
+                            collectionInProgress = true;
+                            collectionStartTime = data.start_time ? new Date(data.start_time).getTime() : Date.now();
+                        }
+                        
+                    } else if (data.status === 'completed') {
+                        progressBadge.textContent = 'Complete';
+                        progressBadge.className = 'fluent-badge fluent-badge-success ms-auto';
+                        
+                        // If transitioning from running to completed, finalize the UI
+                        if (prevStatus === 'running') {
+                            collectionInProgress = false;
+                            localStorage.removeItem('collectionInProgress');
+                            localStorage.removeItem('collectionStartTime');
+                            
+                            completeCollectionOperation(
+                                true, 
+                                `Collection completed with ${data.total_items || 0} items`,
+                                data.source_counts || {}
+                            );
+                            addCollectionLog(`✅ Collection completed! Total: ${data.total_items || 0} items`, 'success');
+                            
+                            // Log source counts
+                            if (data.source_counts) {
+                                const counts = Object.entries(data.source_counts)
+                                    .map(([k, v]) => `${k}: ${v}`)
+                                    .join(', ');
+                                addCollectionLog(`📊 ${counts}`, 'info');
+                            }
+                        }
+                        
+                    } else if (data.status === 'error') {
+                        progressBadge.textContent = 'Error';
+                        progressBadge.className = 'fluent-badge fluent-badge-error ms-auto';
+                        
+                        if (prevStatus === 'running') {
+                            collectionInProgress = false;
+                            localStorage.removeItem('collectionInProgress');
+                            localStorage.removeItem('collectionStartTime');
+                            completeCollectionOperation(false, data.error_message || 'Collection failed');
+                            addCollectionLog(`❌ ${data.error_message || 'Collection failed'}`, 'danger');
+                        }
+                        
+                    } else {
+                        // ready state — only update badge if not showing a recent completion
+                        if (prevStatus === 'ready') {
+                            progressBadge.textContent = 'Ready';
+                            progressBadge.className = 'fluent-badge fluent-badge-secondary ms-auto';
+                        }
+                    }
+                    
+                    // Save progress state for restore
+                    saveProgressState();
+                })
+                .catch(error => {
+                    // Silent failure — don't spam errors on network issues
+                    console.debug('Collection status poll failed:', error);
+                });
+        }
         
         // Save progress state to localStorage
         function saveProgressState() {

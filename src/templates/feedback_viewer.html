@@ -3964,28 +3964,43 @@
             }
         }
 
-        // Sync collection progress status from home page
+        // Sync collection progress status from home page (with continuous polling)
+        let feedbackPagePollInterval = null;
+        let feedbackPageLastStatus = 'ready';
+        
         function syncCollectionProgressStatus() {
-            console.log('🔧 DEBUG: syncCollectionProgressStatus called');
-            // Check for ongoing collection operation
+            // Poll immediately, then every 2 seconds
+            pollCollectionStatusFeedbackPage();
+            if (feedbackPagePollInterval) clearInterval(feedbackPagePollInterval);
+            feedbackPagePollInterval = setInterval(pollCollectionStatusFeedbackPage, 2000);
+        }
+        
+        function pollCollectionStatusFeedbackPage() {
             fetch('/api/collection_status')
-                .then(response => {
-                    console.log('🔧 DEBUG: Collection status response:', response);
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
-                    console.log('🔧 DEBUG: Collection status data:', data);
+                    const prevStatus = feedbackPageLastStatus;
+                    feedbackPageLastStatus = data.status;
+                    
                     if (data.status === 'running') {
-                        updateProgressBadge('Running', 'warning');
+                        const progress = Math.round(data.progress || 0);
+                        updateProgressBadge(`${progress}%`, 'primary');
                     } else if (data.status === 'completed') {
                         updateProgressBadge('Completed', 'success');
+                        // If just transitioned, show a brief notification
+                        if (prevStatus === 'running') {
+                            console.log(`Collection completed with ${data.total_items || 0} items`);
+                        }
+                    } else if (data.status === 'error') {
+                        updateProgressBadge('Error', 'danger');
                     } else {
-                        updateProgressBadge('Ready', 'secondary');
+                        if (prevStatus === 'ready') {
+                            updateProgressBadge('Ready', 'secondary');
+                        }
                     }
                 })
                 .catch(error => {
-                    console.error('🔧 DEBUG: Collection status check failed:', error);
-                    updateProgressBadge('Ready', 'secondary');
+                    console.debug('Collection status poll failed:', error);
                 });
         }
 

@@ -458,23 +458,42 @@
         }
     });
 
-    // Sync collection progress status from home page
+    // Sync collection progress status (with continuous polling)
+    let insightsPagePollInterval = null;
+    let insightsPageLastStatus = 'ready';
+    
     function syncCollectionProgressStatus() {
-        // Check for ongoing collection operation
+        // Poll immediately, then every 2 seconds
+        pollCollectionStatusInsightsPage();
+        if (insightsPagePollInterval) clearInterval(insightsPagePollInterval);
+        insightsPagePollInterval = setInterval(pollCollectionStatusInsightsPage, 2000);
+    }
+    
+    function pollCollectionStatusInsightsPage() {
         fetch('/api/collection_status')
             .then(response => response.json())
             .then(data => {
+                const prevStatus = insightsPageLastStatus;
+                insightsPageLastStatus = data.status;
+                
                 if (data.status === 'running') {
-                    updateProgressBadge('Running', 'warning');
+                    const progress = Math.round(data.progress || 0);
+                    updateProgressBadge(`${progress}%`, 'primary');
                 } else if (data.status === 'completed') {
                     updateProgressBadge('Completed', 'success');
+                    if (prevStatus === 'running') {
+                        console.log(`Collection completed with ${data.total_items || 0} items`);
+                    }
+                } else if (data.status === 'error') {
+                    updateProgressBadge('Error', 'danger');
                 } else {
-                    updateProgressBadge('Ready', 'secondary');
+                    if (prevStatus === 'ready') {
+                        updateProgressBadge('Ready', 'secondary');
+                    }
                 }
             })
             .catch(error => {
-                console.log('Collection status check failed:', error);
-                updateProgressBadge('Ready', 'secondary');
+                console.debug('Collection status poll failed:', error);
             });
     }
 

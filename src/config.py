@@ -112,6 +112,23 @@ DEFAULT_ENHANCED_FEEDBACK_CATEGORIES = {
                 ],
                 'priority': 'medium',
                 'feature_area': 'Development Experience'
+            },
+            'AGENTIC_EXPERIENCES': {
+                'name': 'Agentic Experiences',
+                'keywords': [
+                    'copilot', 'knowledge base', 'instructions', 'instruction',
+                    'agent', 'agentic', 'ai agent', 'autonomous agent', 'multi-agent',
+                    'grounding', 'rag', 'retrieval augmented',
+                    'system prompt', 'prompt engineering', 'orchestration',
+                    'function calling', 'tool use',
+                    'generative ai', 'gen ai', 'model endpoint',
+                    'ai assumed', 'ai guidance', 'ai instruction',
+                    'ai coding', 'ai implementation',
+                    'hallucinate', 'hallucination',
+                    'guidance to ai', 'questions to ask'
+                ],
+                'priority': 'high',
+                'feature_area': 'Agentic AI'
             }
         }
     },
