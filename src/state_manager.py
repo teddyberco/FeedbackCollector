@@ -140,6 +140,14 @@ def format_state_for_display(state: str) -> Dict[str, str]:
         'description': state_info.get('description', '')
     }
 
+def _get_active_db_config():
+    """Get database config from the active project, if any."""
+    try:
+        import config as cfg
+        return cfg.get_active_db_config()
+    except Exception:
+        return None
+
 def get_stored_feedback_ids() -> List[str]:
     """
     Get all Feedback_IDs that are stored in the Fabric SQL database.
@@ -149,7 +157,7 @@ def get_stored_feedback_ids() -> List[str]:
         import fabric_sql_writer
         
         # Create SQL writer and get connection
-        writer = fabric_sql_writer.FabricSQLWriter()
+        writer = fabric_sql_writer.FabricSQLWriter(db_config=_get_active_db_config())
         conn = writer.connect_interactive()
         
         if not conn:
@@ -187,7 +195,7 @@ def get_all_feedback_states() -> Dict[str, Dict[str, Any]]:
         import fabric_sql_writer
         
         # Create SQL writer and get connection
-        writer = fabric_sql_writer.FabricSQLWriter()
+        writer = fabric_sql_writer.FabricSQLWriter(db_config=_get_active_db_config())
         conn = writer.connect_interactive()
         
         if not conn:
@@ -261,7 +269,7 @@ def update_feedback_field_in_sql(feedback_id: str, field_name: str, new_value: s
         import fabric_sql_writer
         
         # Create SQL writer and get connection
-        writer = fabric_sql_writer.FabricSQLWriter()
+        writer = fabric_sql_writer.FabricSQLWriter(db_config=_get_active_db_config())
         conn = writer.connect_interactive()
         
         if not conn:
@@ -374,7 +382,7 @@ def update_feedback_category_in_sql(
         import fabric_sql_writer
         from datetime import datetime
 
-        writer = fabric_sql_writer.FabricSQLWriter()
+        writer = fabric_sql_writer.FabricSQLWriter(db_config=_get_active_db_config())
         conn = writer.connect_interactive()
 
         if not conn:
@@ -385,13 +393,10 @@ def update_feedback_category_in_sql(
         now = datetime.now().isoformat()
 
         # 1. Update Feedback table
-        updates = ["User_Modified_Categorization = 1"]
+        updates = []
         params = []
 
-        # Update both Category and Enhanced_Category to keep them in sync
-        updates.append("Enhanced_Category = ?")
-        params.append(category_name.strip() if category_name and category_name.strip() else None)
-        
+        # Update Category column (was Enhanced_Category in v1)
         updates.append("Category = ?")
         params.append(category_name.strip() if category_name and category_name.strip() else None)
 

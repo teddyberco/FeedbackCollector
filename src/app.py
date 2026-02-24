@@ -12,12 +12,111 @@ from ado_client import get_working_ado_items
 import config
 import utils
 import state_manager
+import project_manager
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = 'feedback_collector_secret_key_2025'  # For session management
+
+
+@app.template_filter('clean_title')
+def clean_title_filter(text):
+    """Strip leading truncation artefacts from search-result titles/gists.
+    
+    Community search results often cut titles mid-word, producing text like
+    'icenses) view the BI report...' or '...pplication (outside Fabric UI)'.
+    This filter removes the leading fragment so displayed text starts cleanly.
+    """
+    if not text or not isinstance(text, str):
+        return text or ''
+    import re as _re
+    # Strip leading ellipsis / dots
+    text = _re.sub(r'^[\s.…]+', '', text).strip()
+    # If the text starts with a lowercase letter or orphan closing punctuation
+    # like ')' or ']', it's a truncated fragment – remove up to the first space
+    if text and (text[0].islower() or text[0] in ')]}>,;:'):
+        # Remove the leading partial word (up to the next space)
+        idx = text.find(' ')
+        if idx != -1 and idx < 30:
+            text = text[idx:].strip()
+            # Clean any remaining orphan punctuation at the new start
+            text = _re.sub(r'^[)\]}>.,;:\s]+', '', text).strip()
+    # Capitalize first letter if lowercase after cleanup
+    if text and text[0].islower():
+        text = text[0].upper() + text[1:]
+    return text
+
+
+def _title_from_url_slug(url):
+    """Extract a clean title from a Fabric Community URL slug.
+    
+    URL pattern: .../Title-Words-Here/m-p/12345
+    Returns the slug converted to readable text, or None.
+    """
+    if not url or not isinstance(url, str):
+        return None
+    import re as _re
+    m = _re.search(r'/([A-Za-z0-9][^/]{5,})/m-p/\d+', url)
+    if m:
+        slug = m.group(1).replace('-', ' ').strip()
+        # Title-case but keep known acronyms uppercase
+        if slug:
+            return slug[0].upper() + slug[1:]
+    return None
+
+
+@app.template_filter('display_title')
+def display_title_filter(item):
+    """Pick the best available title for a feedback card.
+    
+    Priority: Title field → URL slug → cleaned Feedback_Gist → fallback.
+    Handles truncated search-result titles by recovering from URL slugs.
+    """
+    import re as _re
+
+    # 1. Try the Title field
+    title = (item.get('Title') or '') if isinstance(item, dict) else ''
+    title = title.strip() if isinstance(title, str) else ''
+
+    # 2. Check if title looks good (not truncated)
+    if title and not title.endswith('...') and not title.endswith('…'):
+        cleaned = clean_title_filter(title)
+        if cleaned and len(cleaned) > 5:
+            return cleaned
+
+    # 3. Try URL slug (most reliable for community posts)
+    url = (item.get('Url') or '') if isinstance(item, dict) else ''
+    slug_title = _title_from_url_slug(url)
+
+    # If we have a truncated title, use slug if it's more complete
+    if slug_title:
+        if not title or title.endswith('...') or title.endswith('…') or len(slug_title) > len(title):
+            return slug_title
+
+    # 4. If title exists but is merely truncated, still prefer it over gist
+    if title:
+        cleaned = clean_title_filter(title)
+        if cleaned and len(cleaned) > 5:
+            return cleaned
+
+    # 5. Fall back to Feedback_Gist
+    gist = (item.get('Feedback_Gist') or '') if isinstance(item, dict) else ''
+    if gist and gist.strip() and gist.lower() not in ('no content', 'summary unavailable', 'empty feedback'):
+        # Try URL slug first even for gist fallback
+        if slug_title and len(slug_title) > len(gist):
+            return slug_title
+        return clean_title_filter(gist)
+
+    # 6. Final fallback
+    source = (item.get('Sources') or 'N/A') if isinstance(item, dict) else 'N/A'
+    return f'Feedback from {source}'
+
+
+def _get_db_config():
+    """Get database config for the active project (or legacy env vars)."""
+    return config.get_active_db_config()
 
 last_collected_feedback = []
 last_collection_summary = {"reddit": 0, "fabric": 0, "github": 0, "github_issues": 0, "total": 0}
@@ -94,8 +193,8 @@ def insights_page():
 @app.route('/api/keywords', methods=['GET', 'POST'])
 def manage_keywords_route():
     if request.method == 'GET':
-        keywords = config.load_keywords()
-        return jsonify(keywords)
+        # If a project is active, return project keywords (already in config.KEYWORDS)
+        return jsonify(config.KEYWORDS)
     elif request.method == 'POST':
         try:
             data = request.get_json()
@@ -104,7 +203,13 @@ def manage_keywords_route():
             
             valid_keywords = [str(k).strip() for k in data['keywords'] if str(k).strip()]
             
-            config.save_keywords(valid_keywords)
+            # Save to project or global config
+            active_project = config.get_active_project_id()
+            if active_project:
+                project_manager.save_project_keywords(active_project, valid_keywords)
+            else:
+                config.save_keywords(valid_keywords)
+            
             config.KEYWORDS = valid_keywords.copy() 
             logger.info(f"Keywords updated and saved: {valid_keywords}")
             return jsonify({'status': 'success', 'keywords': valid_keywords, 'message': 'Keywords saved successfully.'})
@@ -128,8 +233,7 @@ def restore_default_keywords_route():
 def manage_categories_route():
     """API endpoint for managing feedback categories."""
     if request.method == 'GET':
-        categories = config.load_categories()
-        return jsonify({'status': 'success', 'categories': categories})
+        return jsonify({'status': 'success', 'categories': config.ENHANCED_FEEDBACK_CATEGORIES})
     elif request.method == 'POST':
         try:
             data = request.get_json()
@@ -145,7 +249,13 @@ def manage_categories_route():
                 if not isinstance(category_data['subcategories'], dict):
                     return jsonify({'status': 'error', 'message': f'Subcategories for {category_id} must be a dictionary.'}), 400
             
-            config.save_categories(data)
+            # Save to project or global config
+            active_project = config.get_active_project_id()
+            if active_project:
+                project_manager.save_project_categories(active_project, data)
+            else:
+                config.save_categories(data)
+            
             config.ENHANCED_FEEDBACK_CATEGORIES = data.copy()
             logger.info(f"Categories updated and saved with {len(data)} categories")
             return jsonify({'status': 'success', 'categories': data, 'message': 'Categories saved successfully.'})
@@ -171,7 +281,7 @@ def recategorize_feedback_route():
     """
     Re-categorize all feedback in the SQL database using current category definitions.
     Requires an active Fabric SQL connection (bearer token in session).
-    Skips items where User_Modified_Categorization = 1.
+    Skips items where FeedbackState has a user-set Category.
     Preserves any user-curated overrides from the FeedbackState table.
     """
     from flask import session
@@ -186,7 +296,7 @@ def recategorize_feedback_route():
     
     try:
         import fabric_sql_writer as fsw
-        writer = fsw.FabricSQLWriter(bearer_token=stored_token)
+        writer = fsw.FabricSQLWriter(bearer_token=stored_token, db_config=_get_db_config())
         
         # Connect
         try:
@@ -199,18 +309,31 @@ def recategorize_feedback_route():
         # Reload latest categories into memory
         config.ENHANCED_FEEDBACK_CATEGORIES = config.load_categories()
         
-        # Fetch feedback that hasn't been manually categorized,
-        # along with any FeedbackState overrides so we can preserve them
-        cursor.execute("""
-            SELECT f.Feedback_ID, f.Title, f.Content, f.Source, f.Scenario, f.Organization,
-                   fs.Primary_Domain AS State_Domain,
-                   fs.Category AS State_Category,
-                   fs.Subcategory AS State_Subcategory,
-                   fs.Feature_Area AS State_Feature_Area
-            FROM Feedback f
-            LEFT JOIN FeedbackState fs ON f.Feedback_ID = fs.Feedback_ID
-            WHERE f.User_Modified_Categorization IS NULL OR f.User_Modified_Categorization = 0
-        """)
+        # Fetch ALL feedback items for re-categorization.
+        # FeedbackState overrides for category/domain/subcategory are preserved,
+        # but auto-detected fields (Audience, Priority, Confidence, etc.) are
+        # always refreshed using the latest taxonomy and audience config.
+        try:
+            cursor.execute("""
+                SELECT f.Feedback_ID, f.Title, CAST(f.Feedback AS NVARCHAR(MAX)), f.Source, f.Scenario, f.Organization,
+                       fs.Primary_Domain AS State_Domain,
+                       fs.Category AS State_Category,
+                       fs.Subcategory AS State_Subcategory,
+                       fs.Feature_Area AS State_Feature_Area
+                FROM Feedback f
+                LEFT JOIN FeedbackState fs ON f.Feedback_ID = fs.Feedback_ID
+            """)
+        except Exception:
+            # Fallback for old schema with Content column
+            cursor.execute("""
+                SELECT f.Feedback_ID, f.Title, CAST(f.Content AS NVARCHAR(MAX)), f.Source, f.Scenario, f.Organization,
+                       fs.Primary_Domain AS State_Domain,
+                       fs.Category AS State_Category,
+                       fs.Subcategory AS State_Subcategory,
+                       fs.Feature_Area AS State_Feature_Area
+                FROM Feedback f
+                LEFT JOIN FeedbackState fs ON f.Feedback_ID = fs.Feedback_ID
+            """)
         
         rows = cursor.fetchall()
         logger.info(f"Re-categorizing {len(rows)} feedback items (preserving FeedbackState overrides)...")
@@ -253,22 +376,16 @@ def recategorize_feedback_route():
                 
                 cursor.execute("""
                     UPDATE Feedback
-                    SET Primary_Category = ?,
-                        Enhanced_Category = ?,
-                        Category = ?,
+                    SET Category = ?,
                         Subcategory = ?,
                         Audience = ?,
                         Priority = ?,
                         Feature_Area = ?,
                         Categorization_Confidence = ?,
                         Primary_Domain = ?,
-                        Domains = ?,
-                        Impacttype = ?,
-                        Auto_Recategorized_Date = GETDATE()
+                        Impacttype = ?
                     WHERE Feedback_ID = ?
                 """, [
-                    enhanced_cat['primary_category'],
-                    enhanced_cat['primary_category'],
                     final_category,
                     final_subcategory,
                     enhanced_cat['audience'],
@@ -276,7 +393,6 @@ def recategorize_feedback_route():
                     final_feature_area,
                     enhanced_cat['confidence'],
                     final_domain,
-                    str(enhanced_cat.get('domains', [])),
                     enhanced_cat['impact_type'],
                     feedback_id
                 ])
@@ -305,8 +421,7 @@ def recategorize_feedback_route():
 def manage_impact_types_route():
     """API endpoint for managing impact types."""
     if request.method == 'GET':
-        impact_types = config.load_impact_types()
-        return jsonify({'status': 'success', 'impact_types': impact_types})
+        return jsonify({'status': 'success', 'impact_types': config.IMPACT_TYPES_CONFIG})
     elif request.method == 'POST':
         try:
             data = request.get_json()
@@ -322,7 +437,13 @@ def manage_impact_types_route():
                 if not isinstance(impact_data['keywords'], list):
                     return jsonify({'status': 'error', 'message': f'Keywords for {impact_id} must be a list.'}), 400
             
-            config.save_impact_types(data)
+            # Save to project or global config
+            active_project = config.get_active_project_id()
+            if active_project:
+                project_manager.save_project_impact_types(active_project, data)
+            else:
+                config.save_impact_types(data)
+            
             config.IMPACT_TYPES_CONFIG = data.copy()
             logger.info(f"Impact types updated and saved with {len(data)} types")
             return jsonify({'status': 'success', 'impact_types': data, 'message': 'Impact types saved successfully.'})
@@ -342,6 +463,247 @@ def restore_default_impact_types_route():
     except Exception as e:
         logger.error(f"Error restoring default impact types: {e}", exc_info=True)
         return jsonify({'status': 'error', 'message': f'An internal error occurred: {str(e)}'}), 500
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Project Management API Endpoints
+# ═══════════════════════════════════════════════════════════════════
+
+@app.route('/api/projects', methods=['GET'])
+def list_projects_route():
+    """List all available project profiles."""
+    try:
+        projects = project_manager.list_projects()
+        active_id = config.get_active_project_id()
+        return jsonify({
+            'status': 'success',
+            'projects': projects,
+            'active_project_id': active_id
+        })
+    except Exception as e:
+        logger.error(f"Error listing projects: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/projects/<project_id>', methods=['GET'])
+def get_project_route(project_id):
+    """Get full project configuration including taxonomy."""
+    try:
+        project_data = project_manager.load_project(project_id)
+        return jsonify({'status': 'success', **project_data})
+    except FileNotFoundError:
+        return jsonify({'status': 'error', 'message': f'Project {project_id} not found'}), 404
+    except Exception as e:
+        logger.error(f"Error loading project {project_id}: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/projects/activate', methods=['POST'])
+def activate_project_route():
+    """Switch the active project. Reloads taxonomy and database config."""
+    try:
+        data = request.get_json()
+        project_id = data.get('project_id')  # None = legacy mode
+        
+        config.set_active_project(project_id)
+        
+        active_name = 'Legacy Mode'
+        if project_id:
+            project_data = project_manager.load_project(project_id)
+            active_name = project_data['project'].get('name', project_id)
+        
+        # Clear session SQL state since DB target has changed
+        from flask import session
+        session.pop('states_loaded', None)
+        session.pop('sql_data_applied', None)
+        
+        return jsonify({
+            'status': 'success',
+            'active_project_id': project_id,
+            'active_project_name': active_name,
+            'keywords_count': len(config.KEYWORDS),
+            'categories_count': len(config.ENHANCED_FEEDBACK_CATEGORIES),
+            'message': f'Switched to project: {active_name}'
+        })
+    except Exception as e:
+        logger.error(f"Error activating project: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/projects/<project_id>/categories', methods=['GET', 'POST'])
+def project_categories_route(project_id):
+    """Get or update categories for a specific project."""
+    if request.method == 'GET':
+        try:
+            project_data = project_manager.load_project(project_id)
+            return jsonify({'status': 'success', 'categories': project_data['categories']})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+    else:
+        try:
+            categories = request.get_json()
+            project_manager.save_project_categories(project_id, categories)
+            # If this is the active project, reload into runtime config
+            if config.get_active_project_id() == project_id:
+                config.ENHANCED_FEEDBACK_CATEGORIES = categories
+            return jsonify({'status': 'success', 'message': 'Categories saved.'})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/projects/<project_id>/keywords', methods=['GET', 'POST'])
+def project_keywords_route(project_id):
+    """Get or update keywords for a specific project."""
+    if request.method == 'GET':
+        try:
+            project_data = project_manager.load_project(project_id)
+            return jsonify({'status': 'success', 'keywords': project_data['keywords']})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+    else:
+        try:
+            data = request.get_json()
+            keywords = data if isinstance(data, list) else data.get('keywords', [])
+            project_manager.save_project_keywords(project_id, keywords)
+            if config.get_active_project_id() == project_id:
+                config.KEYWORDS = keywords
+            return jsonify({'status': 'success', 'keywords': keywords, 'message': 'Keywords saved.'})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/projects/<project_id>/impact-types', methods=['GET', 'POST'])
+def project_impact_types_route(project_id):
+    """Get or update impact types for a specific project."""
+    if request.method == 'GET':
+        try:
+            project_data = project_manager.load_project(project_id)
+            return jsonify({'status': 'success', 'impact_types': project_data['impact_types']})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+    else:
+        try:
+            impact_types = request.get_json()
+            project_manager.save_project_impact_types(project_id, impact_types)
+            if config.get_active_project_id() == project_id:
+                config.IMPACT_TYPES_CONFIG = impact_types
+            return jsonify({'status': 'success', 'message': 'Impact types saved.'})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/projects/<project_id>/sources', methods=['GET', 'POST'])
+def project_sources_route(project_id):
+    """Get or update source configuration for a specific project."""
+    if request.method == 'GET':
+        try:
+            sources = project_manager.get_project_sources(project_id)
+            return jsonify({'status': 'success', 'sources': sources})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+    else:
+        try:
+            sources = request.get_json()
+            project_manager.update_project_sources(project_id, sources)
+            return jsonify({'status': 'success', 'message': 'Sources saved.'})
+        except Exception as e:
+            return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/projects/<project_id>/db-config', methods=['GET'])
+def project_db_config_route(project_id):
+    """Get database configuration for a project (server/db name, not secrets)."""
+    try:
+        db_config = project_manager.get_project_db_config(project_id)
+        # Mask connection string for display
+        safe_config = {
+            'server': db_config.get('server', ''),
+            'database_name': db_config.get('database_name', ''),
+            'authentication': db_config.get('authentication', ''),
+            'has_connection_string': bool(db_config.get('connection_string', ''))
+        }
+        return jsonify({'status': 'success', 'db_config': safe_config})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/projects/create', methods=['POST'])
+def create_project_route():
+    """Create a new project profile."""
+    try:
+        data = request.get_json()
+        project_id = data.get('id', '').strip().lower().replace(' ', '_')
+        name = data.get('name', '').strip()
+        
+        if not project_id or not name:
+            return jsonify({'status': 'error', 'message': 'Project ID and name are required.'}), 400
+        
+        project_data = project_manager.create_project(
+            project_id=project_id,
+            name=name,
+            description=data.get('description', ''),
+            icon=data.get('icon', 'bi-folder'),
+            color=data.get('color', '#0078d4'),
+            db_server=data.get('db_server', ''),
+            db_name=data.get('db_name', ''),
+            db_auth=data.get('db_auth', 'ActiveDirectoryInteractive'),
+            db_connection_string=data.get('db_connection_string', '')
+        )
+        
+        return jsonify({'status': 'success', 'project': project_data, 'message': f'Project "{name}" created.'})
+    except FileExistsError:
+        return jsonify({'status': 'error', 'message': 'A project with this ID already exists.'}), 409
+    except Exception as e:
+        logger.error(f"Error creating project: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/projects/<project_id>/delete', methods=['POST'])
+def delete_project_route(project_id):
+    """Delete a project profile."""
+    try:
+        # Can't delete the active project
+        if config.get_active_project_id() == project_id:
+            return jsonify({'status': 'error', 'message': 'Cannot delete the active project. Switch to another project first.'}), 400
+        
+        if project_manager.delete_project(project_id):
+            return jsonify({'status': 'success', 'message': f'Project {project_id} deleted.'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Project not found.'}), 404
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/active-config', methods=['GET'])
+def get_active_config_route():
+    """Get the current active configuration summary."""
+    active_id = config.get_active_project_id()
+    result = {
+        'active_project_id': active_id,
+        'keywords_count': len(config.KEYWORDS),
+        'categories_count': len(config.ENHANCED_FEEDBACK_CATEGORIES),
+        'impact_types_count': len(config.IMPACT_TYPES_CONFIG),
+    }
+    
+    if active_id:
+        try:
+            project_data = project_manager.load_project(active_id)
+            result['project_name'] = project_data['project'].get('name', active_id)
+            result['project_icon'] = project_data['project'].get('icon', 'bi-folder')
+            result['project_color'] = project_data['project'].get('color', '#0078d4')
+            db_config = project_manager.get_project_db_config(active_id)
+            result['db_server'] = db_config.get('server', '')
+            result['db_name'] = db_config.get('database_name', '')
+        except Exception:
+            pass
+    else:
+        result['project_name'] = 'Legacy Mode'
+        result['project_icon'] = 'bi-gear'
+        result['project_color'] = '#6c757d'
+        result['db_server'] = config.FABRIC_SQL_SERVER or ''
+        result['db_name'] = config.FABRIC_SQL_DATABASE or ''
+    
+    return jsonify({'status': 'success', **result})
 
 @app.route('/api/collect', methods=['POST'])
 def collect_feedback_route():
@@ -401,13 +763,30 @@ def collect_feedback_route():
         
         logger.info(f"📋 COLLECTION CONFIG: {total_sources} sources enabled: {enabled_sources}")
         
-        # Reload keywords, categories, and impact types from files before collection
-        # This ensures we use the latest configuration set via the web UI
+        # Reload keywords, categories, and impact types before collection
+        # If a project is active, reload from project files; otherwise from global files
         import config as cfg
-        cfg.KEYWORDS = cfg.load_keywords()
-        cfg.ENHANCED_FEEDBACK_CATEGORIES = cfg.load_categories()
-        cfg.IMPACT_TYPES_CONFIG = cfg.load_impact_types()
-        logger.info(f"🔄 Reloaded config - Keywords: {len(cfg.KEYWORDS)}, Categories: {len(cfg.ENHANCED_FEEDBACK_CATEGORIES)}, Impact Types: {len(cfg.IMPACT_TYPES_CONFIG)}")
+        active_project = cfg.get_active_project_id()
+        if active_project:
+            # Re-apply project config to ensure latest project taxonomy is loaded
+            cfg.set_active_project(active_project)
+            logger.info(f"🔄 Reloaded project config '{active_project}' - Keywords: {len(cfg.KEYWORDS)}, Categories: {len(cfg.ENHANCED_FEEDBACK_CATEGORIES)}, Impact Types: {len(cfg.IMPACT_TYPES_CONFIG)}")
+            
+            # If no source_configs came from the request, use the project's configured sources
+            if not source_configs:
+                source_configs = cfg.get_active_sources() or {}
+                logger.info(f"📋 Using project source configs: {list(source_configs.keys())}")
+        else:
+            # Legacy mode: reload from global files, mutating in-place
+            cfg.KEYWORDS.clear()
+            cfg.KEYWORDS.extend(cfg.load_keywords())
+            new_cats = cfg.load_categories()
+            cfg.ENHANCED_FEEDBACK_CATEGORIES.clear()
+            cfg.ENHANCED_FEEDBACK_CATEGORIES.update(new_cats)
+            new_impact = cfg.load_impact_types()
+            cfg.IMPACT_TYPES_CONFIG.clear()
+            cfg.IMPACT_TYPES_CONFIG.update(new_impact)
+            logger.info(f"🔄 Reloaded global config - Keywords: {len(cfg.KEYWORDS)}, Categories: {len(cfg.ENHANCED_FEEDBACK_CATEGORIES)}, Impact Types: {len(cfg.IMPACT_TYPES_CONFIG)}")
         logger.info(f"📝 Current keywords: {cfg.KEYWORDS}")
         
         all_feedback = []
@@ -460,9 +839,23 @@ def collect_feedback_route():
             
             # Pass configuration to collector if it supports it
             if hasattr(fabric_collector, 'configure'):
-                fabric_collector.configure({
+                collector_settings = {
                     'max_items': fabric_config.get('maxItems', 200)
-                })
+                }
+                # Pass forums list from project config if available
+                if 'forums' in fabric_config:
+                    collector_settings['forums'] = fabric_config['forums']
+                elif config.get_active_project_id():
+                    # Try to load forums from active project sources
+                    try:
+                        project_sources = config.get_active_sources()
+                        if project_sources and 'fabricCommunity' in project_sources:
+                            project_forums = project_sources['fabricCommunity'].get('forums', [])
+                            if project_forums:
+                                collector_settings['forums'] = project_forums
+                    except Exception as e:
+                        logger.warning(f"Could not load project forums: {e}")
+                fabric_collector.configure(collector_settings)
             
             fabric_feedback = fabric_collector.collect()
             logger.info(f"Fabric Community collector found {len(fabric_feedback)} items.")
@@ -706,21 +1099,15 @@ def collect_feedback_route():
         # No need to combine again as it would lose the items
         logger.info(f"Final feedback counts: Reddit={len(reddit_feedback)}, Fabric={len(fabric_feedback)}, GitHub Discussions={len(github_feedback)}, GitHub Issues={len(github_issues_feedback)}, ADO={len(ado_feedback)}, Total={len(all_feedback)}")
         
-        # Generate deterministic IDs for all feedback items BEFORE state initialization
+        # Assign feedback IDs — source-specific IDs are set by collectors,
+        # fall back to deterministic content hash for any items missing an ID
         from id_generator import FeedbackIDGenerator
         for feedback_item in all_feedback:
-            if 'Feedback_ID' not in feedback_item or not feedback_item.get('Feedback_ID'):
+            if not feedback_item.get('Feedback_ID'):
                 feedback_item['Feedback_ID'] = FeedbackIDGenerator.generate_id_from_feedback_dict(feedback_item)
-                logger.info(f"Generated deterministic ID for item: {feedback_item['Feedback_ID']}")
-                # Use the actual field names from collectors
-                title = feedback_item.get('Feedback_Gist') or feedback_item.get('Title', 'N/A')
-                content = feedback_item.get('Feedback') or feedback_item.get('Content', 'N/A')
-                source = feedback_item.get('Sources') or feedback_item.get('Source', 'N/A')
-                author = feedback_item.get('Customer') or feedback_item.get('Author', 'N/A')
-                logger.info(f"  Title: {title}")
-                logger.info(f"  Content: {str(content)[:100]}...")
-                logger.info(f"  Source: {source}")
-                logger.info(f"  Author: {author}")
+                logger.info(f"Generated fallback content-hash ID: {feedback_item['Feedback_ID']}")
+            else:
+                logger.info(f"Using source ID: {feedback_item['Feedback_ID']}")
         
         # Check if we're in online mode (connected to Fabric)
         from flask import session
@@ -847,6 +1234,7 @@ def feedback_viewer():
     audience_filters = parse_filter_param('audience')
     priority_filters = parse_filter_param('priority')
     domain_filters = parse_filter_param('domain')
+    workload_filters = parse_filter_param('workload')
     sentiment_filters = parse_filter_param('sentiment')
     state_filters = parse_filter_param('state')
     
@@ -857,6 +1245,7 @@ def feedback_viewer():
     audience_filter = request.args.get('audience', 'All')
     priority_filter = request.args.get('priority', 'All')
     domain_filter = request.args.get('domain', 'All')
+    workload_filter = request.args.get('workload', 'All')
     sentiment_filter = request.args.get('sentiment', 'All')
     state_filter = request.args.get('state', 'All')
     sort_by = request.args.get('sort', 'newest')
@@ -964,6 +1353,8 @@ def feedback_viewer():
         feedback_to_display = [f for f in feedback_to_display if (f.get('Priority') or f.get('priority')) == priority_filter]
     if domain_filter != 'All' and not domain_filters:
         feedback_to_display = [f for f in feedback_to_display if (f.get('Primary_Domain') or f.get('domain')) == domain_filter]
+    if workload_filter != 'All' and not workload_filters:
+        feedback_to_display = [f for f in feedback_to_display if (f.get('Primary_Workload') or f.get('workload')) == workload_filter]
     if sentiment_filter != 'All' and not sentiment_filters:
         feedback_to_display = [f for f in feedback_to_display if (f.get('Sentiment') or f.get('sentiment')) == sentiment_filter]
     if state_filter != 'All' and not state_filters:
@@ -973,10 +1364,29 @@ def feedback_viewer():
     if show_only_stored:
         feedback_to_display = [f for f in feedback_to_display if f.get('is_stored_in_sql', False)]
 
-    # Handle repeating feedback
+    # Handle repeating feedback - deduplicate by normalized URL
     if not show_repeating:
-        # This logic needs to be robust
-        pass
+        from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
+        def _normalize_url(url):
+            parsed = urlparse(url)
+            qs = {k: v for k, v in parse_qs(parsed.query).items()
+                  if k not in ('search-action-id', 'search-result-uid')}
+            return urlunparse(parsed._replace(query=urlencode(qs, doseq=True)))
+
+        seen_keys = set()
+        deduped = []
+        for f in feedback_to_display:
+            url = (f.get('Url') or f.get('url') or '').strip()
+            if url:
+                url = _normalize_url(url)
+            title = (f.get('Title') or f.get('Feedback_Gist') or '').strip()
+            dedup_key = url if url else title
+            if dedup_key and dedup_key in seen_keys:
+                continue
+            if dedup_key:
+                seen_keys.add(dedup_key)
+            deduped.append(f)
+        feedback_to_display = deduped
 
     # Sorting
     if sort_by == 'newest':
@@ -1018,16 +1428,18 @@ def feedback_viewer():
         all_audiences = sorted(list(set(safe_str(item.get('Audience') or item.get('audience')) for item in last_collected_feedback if item.get('Audience') or item.get('audience'))))
         all_priorities = ['critical', 'high', 'medium', 'low']
         all_domains = sorted(list(set(safe_str(item.get('Primary_Domain') or item.get('domain')) for item in last_collected_feedback if item.get('Primary_Domain') or item.get('domain'))))
+        all_workloads = sorted(list(set(safe_str(item.get('Primary_Workload') or item.get('workload')) for item in last_collected_feedback if item.get('Primary_Workload') or item.get('workload'))))
         all_sentiments = sorted(list(set(safe_str(item.get('Sentiment') or item.get('sentiment')) for item in last_collected_feedback if item.get('Sentiment') or item.get('sentiment'))))
         all_states = sorted(list(set(safe_str(item.get('State') or item.get('state')) for item in last_collected_feedback if item.get('State') or item.get('state'))))
         
         # Debug logging for filter data
-        logger.info(f"🔍 FILTER DEBUG: Sources: {len(all_sources)}, Domains: {len(all_domains)}, States: {len(all_states)}")
-        logger.info(f"🔍 DOMAINS FOUND: {all_domains[:10]}")  # Show first 10 domains
+        logger.info(f"🔍 FILTER DEBUG: Sources: {len(all_sources)}, Domains: {len(all_domains)}, Workloads: {len(all_workloads)}, States: {len(all_states)}")
+        logger.info(f"🔍 DOMAINS FOUND: {all_domains[:10]}")
+        logger.info(f"🔍 WORKLOADS FOUND: {all_workloads[:10]}")  # Show first 10 domains
         logger.info(f"🔍 STATES FOUND: {all_states}")
         logger.info(f"🔍 AUDIENCES FOUND: {all_audiences}")
     else:
-        all_sources, all_categories, all_enhanced_categories, all_subcategories, all_impact_types, all_audiences, all_priorities, all_domains, all_sentiments, all_states = [], [], [], [], [], [], [], [], [], []
+        all_sources, all_categories, all_enhanced_categories, all_subcategories, all_impact_types, all_audiences, all_priorities, all_domains, all_workloads, all_sentiments, all_states = [], [], [], [], [], [], [], [], [], [], []
         subcategories_by_feature_area = {}
         logger.warning("⚠️ NO FEEDBACK DATA: No last_collected_feedback available for filters")
 
@@ -1048,6 +1460,7 @@ def feedback_viewer():
                            all_audiences=all_audiences,
                            all_priorities=all_priorities,
                            all_domains=all_domains,
+                           all_workloads=all_workloads,
                            all_sentiments=all_sentiments,
                            all_states=all_states,
                            source_filter=source_filter,
@@ -1056,6 +1469,7 @@ def feedback_viewer():
                            audience_filter=audience_filter,
                            priority_filter=priority_filter,
                            domain_filter=domain_filter,
+                           workload_filter=workload_filter,
                            sentiment_filter=sentiment_filter,
                            state_filter=state_filter,
                            source_filters=source_filters,
@@ -1063,6 +1477,7 @@ def feedback_viewer():
                            audience_filters=audience_filters,
                            priority_filters=priority_filters,
                            domain_filters=domain_filters,
+                           workload_filters=workload_filters,
                            sentiment_filters=sentiment_filters,
                            state_filters=state_filters,
                            # Add selected filter variables for template compatibility
@@ -1071,6 +1486,7 @@ def feedback_viewer():
                            selected_audiences=audience_filters,
                            selected_priorities=priority_filters,
                            selected_domains=domain_filters,
+                           selected_workloads=workload_filters,
                            selected_sentiments=sentiment_filters,
                            selected_states=state_filters,
                            fabric_sql_connected=fabric_sql_connected,
@@ -1154,7 +1570,7 @@ def write_to_fabric_route():
         
         # Write to SQL database
         try:
-            writer = FabricSQLWriter(bearer_token=fabric_token)
+            writer = FabricSQLWriter(bearer_token=fabric_token, db_config=_get_db_config())
             result = writer.bulletproof_sync_with_deduplication(filtered_feedback)
             
             new_items = result.get('new_items', 0)
@@ -1240,7 +1656,7 @@ def write_to_fabric_async_endpoint():
                     'type': 'info'
                 })
                 
-                writer = FabricSQLWriter(bearer_token=fabric_token)
+                writer = FabricSQLWriter(bearer_token=fabric_token, db_config=_get_db_config())
                 result = writer.bulletproof_sync_with_deduplication(filtered_feedback)
                 
                 new_items = result.get('new_items', 0)
@@ -1430,6 +1846,7 @@ def get_filtered_feedback():
         priority_filters = [p.strip() for p in request.args.get('priority', '').split(',') if p.strip()]
         state_filters = [s.strip() for s in request.args.get('state', '').split(',') if s.strip()]
         domain_filters = [d.strip() for d in request.args.get('domain', '').split(',') if d.strip()]
+        workload_filters = [w.strip() for w in request.args.get('workload', '').split(',') if w.strip()]
         sentiment_filters = [s.strip() for s in request.args.get('sentiment', '').split(',') if s.strip()]
         enhanced_category_filters = [c.strip() for c in request.args.get('enhanced_category', '').split(',') if c.strip()]
         subcategory_filters = [s.strip() for s in request.args.get('subcategory', '').split(',') if s.strip()]
@@ -1481,6 +1898,7 @@ def get_filtered_feedback():
             priority_filters=priority_filters,
             state_filters=state_filters,
             domain_filters=domain_filters,
+            workload_filters=workload_filters,
             sentiment_filters=sentiment_filters,
             enhanced_category_filters=enhanced_category_filters,
             subcategory_filters=subcategory_filters,
@@ -1514,10 +1932,10 @@ def get_filtered_feedback():
         fabric_state_data = {}
         try:
             if is_online_mode:
-                # Try to load current state from Fabric if connected
-                from fabric_state_writer import FabricStateWriter
-                fabric_writer = FabricStateWriter(stored_token)
-                fabric_state_data = fabric_writer.load_state_data()
+                # Use FabricSQLWriter to load state data from SQL database
+                from fabric_sql_writer import FabricSQLWriter
+                sql_writer = FabricSQLWriter(bearer_token=stored_token, db_config=_get_db_config())
+                fabric_state_data = sql_writer.load_feedback_states()
                 logger.info(f"Loaded {len(fabric_state_data)} state records for AJAX response")
         except Exception as e:
             logger.warning(f"Could not load Fabric state data for AJAX: {e}")
@@ -1541,6 +1959,7 @@ def get_filtered_feedback():
                 'priority': priority_filters,
                 'state': state_filters,
                 'domain': domain_filters,
+                'workload': workload_filters,
                 'sentiment': sentiment_filters,
                 'enhanced_category': enhanced_category_filters,
                 'search': search_query,
@@ -1559,6 +1978,7 @@ def get_filtered_feedback():
 
 def apply_filters_to_feedback(feedback_data, source_filters=None, audience_filters=None, 
                             priority_filters=None, state_filters=None, domain_filters=None,
+                            workload_filters=None,
                             sentiment_filters=None, enhanced_category_filters=None, 
                             subcategory_filters=None, impacttype_filters=None,
                             search_query='', show_repeating=False, show_only_stored=False, 
@@ -1624,6 +2044,13 @@ def apply_filters_to_feedback(feedback_data, source_filters=None, audience_filte
                 item for item in filtered_feedback
                 if item.get('Primary_Domain') in domain_filters
             ]
+    
+    # Apply workload filter
+    if workload_filters:
+        filtered_feedback = [
+            item for item in filtered_feedback
+            if item.get('Primary_Workload') in workload_filters
+        ]
     
     # Apply sentiment filter
     if sentiment_filters:
@@ -1696,6 +2123,7 @@ def extract_filter_options(feedback_data):
         'priorities': sorted(list(set(safe_str(item.get('Priority', '')) for item in feedback_data if item.get('Priority')))),
         'states': comprehensive_states,  # Always show all possible states
         'domains': sorted(list(set(safe_str(item.get('Enhanced_Domain', '')) for item in feedback_data if item.get('Enhanced_Domain')))),
+        'workloads': sorted(list(set(safe_str(item.get('Primary_Workload', '')) for item in feedback_data if item.get('Primary_Workload')))),
         'sentiments': sorted(list(set(safe_str(item.get('Sentiment', '')) for item in feedback_data if item.get('Sentiment')))),
         'enhanced_categories': sorted(list(set(safe_str(item.get('Enhanced_Category', '')) for item in feedback_data if item.get('Enhanced_Category'))))
     }
@@ -1889,7 +2317,7 @@ def validate_fabric_token():
         from fabric_sql_writer import FabricSQLWriter
         
         try:
-            writer = FabricSQLWriter(bearer_token=token)
+            writer = FabricSQLWriter(bearer_token=token, db_config=_get_db_config())
             conn = writer.connect_with_token(token)
             
             if conn:
@@ -2105,7 +2533,7 @@ def sync_with_fabric():
         import fabric_sql_writer
         
         # Test SQL connection and create writer
-        writer = fabric_sql_writer.FabricSQLWriter()
+        writer = fabric_sql_writer.FabricSQLWriter(db_config=_get_db_config())
         
         # Try to connect to SQL database (will prompt for Azure AD auth)
         try:
@@ -2286,7 +2714,7 @@ def update_feedback_state_sql():
         logger.info(f"🔄 Updating state for feedback {feedback_id}: {state_change}")
         
         # Write to SQL database immediately
-        writer = fabric_sql_writer.FabricSQLWriter()
+        writer = fabric_sql_writer.FabricSQLWriter(db_config=_get_db_config())
         success = writer.update_feedback_states([state_change], use_token=False)
         
         if success:
@@ -2356,7 +2784,7 @@ def update_feedback_domain():
         logger.info(f"🔄 Updating domain for feedback {feedback_id}: {state_change}")
         
         # Write to SQL database immediately
-        writer = fabric_sql_writer.FabricSQLWriter()
+        writer = fabric_sql_writer.FabricSQLWriter(db_config=_get_db_config())
         success = writer.update_feedback_states([state_change], use_token=False)
         
         if success:
@@ -2425,7 +2853,7 @@ def update_feedback_notes():
         logger.info(f"🔄 Updating notes for feedback {feedback_id}: {state_change}")
         
         # Write to SQL database immediately
-        writer = fabric_sql_writer.FabricSQLWriter()
+        writer = fabric_sql_writer.FabricSQLWriter(db_config=_get_db_config())
         success = writer.update_feedback_states([state_change], use_token=False)
         
         if success:
@@ -2798,7 +3226,7 @@ def sync_domains_from_state():
         import fabric_sql_writer
         
         # Create writer and sync domains
-        writer = fabric_sql_writer.FabricSQLWriter()
+        writer = fabric_sql_writer.FabricSQLWriter(db_config=_get_db_config())
         updated_count = writer.sync_domains_from_state(use_token=False)
         
         if updated_count > 0:
@@ -2867,3 +3295,39 @@ def download_csv(filename):
     except Exception as e:
         logger.error(f"Error serving CSV file {filename}: {e}")
         return jsonify({'error': 'Error serving file'}), 500
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Auto-activate last project on startup
+# ═══════════════════════════════════════════════════════════════════
+def _auto_activate_project():
+    """Activate the default project on startup.
+    
+    Uses ACTIVE_PROJECT_ID from config if set, otherwise falls back
+    to the first available project.
+    """
+    try:
+        default_id = config.ACTIVE_PROJECT_ID
+        projects = project_manager.list_projects()
+        if not projects:
+            logger.info("No projects found, starting in legacy mode")
+            return
+
+        # If a default is configured AND exists in the project list, use it
+        if default_id:
+            project_ids = [p['id'] for p in projects]
+            if default_id in project_ids:
+                config.set_active_project(default_id)
+                logger.info(f"🚀 Auto-activated default project: {default_id}")
+                return
+            else:
+                logger.warning(f"Default project '{default_id}' not found, falling back")
+
+        # Fallback: activate the first project
+        first_project = projects[0]
+        config.set_active_project(first_project['id'])
+        logger.info(f"🚀 Auto-activated project: {first_project['name']}")
+    except Exception as e:
+        logger.warning(f"Could not auto-activate project: {e}")
+
+_auto_activate_project()

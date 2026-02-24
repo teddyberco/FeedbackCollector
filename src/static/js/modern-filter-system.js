@@ -157,7 +157,7 @@ class ModernFilterSystem {
         // Parse current URL parameters into active filters
         const urlParams = new URLSearchParams(window.location.search);
         
-        const filterTypes = ['source', 'audience', 'priority', 'state', 'domain', 'sentiment', 'enhanced_category'];
+        const filterTypes = ['source', 'audience', 'priority', 'state', 'domain', 'workload', 'sentiment', 'enhanced_category'];
         filterTypes.forEach(filterType => {
             const value = urlParams.get(filterType);
             if (value && value !== 'All') {
@@ -212,7 +212,7 @@ class ModernFilterSystem {
         this.activeFilters.clear();
         
         // Collect all active filters from UI
-        const filterTypes = ['source', 'audience', 'priority', 'state', 'domain', 'sentiment', 'enhanced_category', 'subcategory', 'impacttype'];
+        const filterTypes = ['source', 'audience', 'priority', 'state', 'domain', 'workload', 'sentiment', 'enhanced_category', 'subcategory', 'impacttype'];
         
         filterTypes.forEach(filterType => {
             const allCheckbox = document.getElementById(filterType + '_all');
@@ -542,21 +542,13 @@ class ModernFilterSystem {
         const stateClass = state.toLowerCase();
         const stateBadge = this.getStateBadge(state);
         const domainBadge = this.getDomainBadge(item.Primary_Domain, feedbackId);
+        const workloadBadge = this.getWorkloadBadge(item.Primary_Workload);
         const sentimentBadge = this.getSentimentBadge(item.Sentiment, item);
         const audienceBadge = this.getAudienceBadge(item.Audience);
         const priorityBadge = this.getPriorityBadge(item.Priority);
         
-        // Get the proper title - use Feedback_Gist, fallback to Title, then fallback to source info
-        let cardTitle = 'Untitled';
-        if (item.Feedback_Gist && item.Feedback_Gist.trim() && 
-            item.Feedback_Gist.toLowerCase() !== 'no content' && 
-            item.Feedback_Gist.toLowerCase() !== 'summary unavailable') {
-            cardTitle = item.Feedback_Gist;
-        } else if (item.Title && item.Title.trim()) {
-            cardTitle = item.Title;
-        } else if (item.Sources) {
-            cardTitle = `Feedback from ${item.Sources}`;
-        }
+        // Get the best display title using URL slug recovery
+        const cardTitle = this.getDisplayTitle(item);
         
         return `
             <div class="col">
@@ -643,10 +635,11 @@ class ModernFilterSystem {
                                                                     title="Click to update domain">
                                                                 ${domainBadge.display}
                                                         </span>
+                                                        ${workloadBadge}
                         </div>
                         
-                        <p class="card-text feedback-content mb-auto text-secondary" onclick="showFeedbackDetail(this)" title="Click to read full feedback">
-                            ${this.escapeHtml(item.Feedback || 'No feedback content')}
+                        <p class="card-text feedback-content mb-auto text-secondary" data-feedback-id="${feedbackId}" onclick="showFeedbackDetail(this)" title="Click to read full feedback">
+                            ${this.escapeHtml(this.cleanTruncatedText(item.Feedback) || 'No feedback content')}
                         </p>
                         
                         <div class="mt-auto pt-3 d-flex align-items-center flex-wrap gap-2">
@@ -712,6 +705,28 @@ class ModernFilterSystem {
             display: displayName,
             code: domain
         };
+    }
+    
+    getWorkloadBadge(workload) {
+        if (!workload) return '';
+        
+        const workloadColors = {
+            'Power BI': '#F2C811',
+            'Data Engineering': '#0078D4',
+            'Data Factory': '#4CA6A8',
+            'Data Science': '#E8488B',
+            'Data Warehouse': '#5B5FC7',
+            'Databases': '#2E86AB',
+            'Graph': '#2D9B83',
+            'Industry Solutions': '#4B8BBE',
+            'IQ': '#7B68EE',
+            'Real-Time Intelligence': '#FF6F61'
+        };
+        
+        const color = workloadColors[workload] || '#6c757d';
+        // Use dark text for light backgrounds
+        const textColor = ['#F2C811'].includes(color) ? '#333' : '#fff';
+        return `<span class="workload-badge" style="background-color: ${color}; color: ${textColor};" title="Workload: ${this.escapeHtml(workload)}">${this.escapeHtml(workload)}</span>`;
     }
     
     getSentimentBadge(sentiment, item = null) {
@@ -1070,7 +1085,7 @@ class ModernFilterSystem {
      */
     updateAllFilterButtonTexts() {
         console.log('🔧 FILTER BUTTON: Updating all filter button texts');
-        ['domain', 'source', 'state', 'audience', 'priority', 'sentiment', 'enhanced_category', 'subcategory', 'impacttype'].forEach(filterType => {
+        ['domain', 'workload', 'source', 'state', 'audience', 'priority', 'sentiment', 'enhanced_category', 'subcategory', 'impacttype'].forEach(filterType => {
             this.updateFilterButtonText(filterType);
         });
     }
@@ -1094,7 +1109,7 @@ class ModernFilterSystem {
         console.log('🔧 SYNC UI: Syncing UI with active filters');
         
         // Update checkboxes to match active filters
-        const filterTypes = ['source', 'audience', 'priority', 'state', 'domain', 'sentiment', 'enhanced_category'];
+        const filterTypes = ['source', 'audience', 'priority', 'state', 'domain', 'workload', 'sentiment', 'enhanced_category'];
         filterTypes.forEach(filterType => {
             const activeValues = this.activeFilters.get(filterType) || [];
             
@@ -1265,6 +1280,82 @@ class ModernFilterSystem {
         }
     }
     
+    /**
+     * Extract a clean title from a Fabric Community URL slug.
+     * URL pattern: .../Title-Words-Here/m-p/12345
+     */
+    titleFromUrlSlug(url) {
+        if (!url) return null;
+        const m = url.match(/\/([A-Za-z0-9][^\/]{5,})\/m-p\/\d+/);
+        if (m) {
+            const slug = m[1].replace(/-/g, ' ').trim();
+            return slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : null;
+        }
+        return null;
+    }
+
+    /**
+     * Clean leading truncation artefacts from text.
+     * Strips leading ellipsis, orphan closing punctuation, and partial words.
+     */
+    cleanTruncatedText(text) {
+        if (!text || typeof text !== 'string') return text || '';
+        // Strip leading ellipsis / dots
+        text = text.replace(/^[\s.\u2026]+/, '').trim();
+        // If starts with lowercase or orphan punctuation, remove leading partial word
+        if (text && (/^[a-z]/.test(text) || /^[)\]}>,:;]/.test(text))) {
+            const idx = text.indexOf(' ');
+            if (idx !== -1 && idx < 30) {
+                text = text.substring(idx).trim();
+                text = text.replace(/^[)\]}>.,;:\s]+/, '').trim();
+            }
+        }
+        // Capitalize first letter
+        if (text && /^[a-z]/.test(text)) {
+            text = text.charAt(0).toUpperCase() + text.slice(1);
+        }
+        return text;
+    }
+
+    /**
+     * Pick the best display title for a feedback card.
+     * Priority: clean Title → URL slug → cleaned Feedback_Gist → fallback.
+     */
+    getDisplayTitle(item) {
+        const title = (item.Title || '').trim();
+        const gist = (item.Feedback_Gist || '').trim();
+        const url = (item.Url || '').trim();
+        const slugTitle = this.titleFromUrlSlug(url);
+
+        // 1. Title exists and not truncated → use it
+        if (title && !title.endsWith('...') && !title.endsWith('\u2026')) {
+            const cleaned = this.cleanTruncatedText(title);
+            if (cleaned && cleaned.length > 5) return cleaned;
+        }
+
+        // 2. URL slug (most reliable for community posts)
+        if (slugTitle) {
+            if (!title || title.endsWith('...') || title.endsWith('\u2026') || slugTitle.length > title.length) {
+                return slugTitle;
+            }
+        }
+
+        // 3. Title exists but truncated — still better than gist
+        if (title) {
+            const cleaned = this.cleanTruncatedText(title);
+            if (cleaned && cleaned.length > 5) return cleaned;
+        }
+
+        // 4. Feedback_Gist fallback
+        if (gist && gist.toLowerCase() !== 'no content' && gist.toLowerCase() !== 'summary unavailable' && gist.toLowerCase() !== 'empty feedback') {
+            if (slugTitle && slugTitle.length > gist.length) return slugTitle;
+            return this.cleanTruncatedText(gist);
+        }
+
+        // 5. Final fallback
+        return `Feedback from ${item.Sources || 'N/A'}`;
+    }
+
     // Utility functions
     escapeHtml(text) {
         if (!text) return '';

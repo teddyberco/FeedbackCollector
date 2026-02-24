@@ -392,7 +392,8 @@ DOMAIN_CATEGORIES = {
         'keywords': [
             'governance', 'compliance', 'policy', 'policies', 'regulation', 'regulatory',
             'audit', 'auditing', 'data governance', 'data lineage', 'gdpr', 'privacy',
-            'retention', 'classification', 'data classification', 'metadata', 'catalog'
+            'retention', 'classification', 'data classification', 'metadata', 'catalog',
+            'purview', 'unified catalog', 'data steward', 'data owner'
         ],
         'color': '#6f42c1'  # Purple
     },
@@ -400,7 +401,7 @@ DOMAIN_CATEGORIES = {
         'name': 'User Experience',
         'description': 'UI/UX design, usability, accessibility, user workflows',
         'keywords': [
-            'user experience', 'ux', 'ui', 'interface', 'usability', 'accessibility',
+            'user experience', 'ux', 'interface', 'usability', 'accessibility',
             'design', 'layout', 'navigation', 'workflow', 'user journey', 'intuitive',
             'confusing', 'hard to use', 'easy to use', 'user-friendly', 'responsive'
         ],
@@ -412,7 +413,8 @@ DOMAIN_CATEGORIES = {
         'keywords': [
             'authentication', 'auth', 'login', 'sso', 'single sign-on', 'identity',
             'access control', 'permissions', 'rbac', 'security', 'authorization',
-            'token', 'oauth', 'saml', 'azure ad', 'active directory', 'mfa'
+            'token', 'oauth', 'saml', 'azure ad', 'active directory', 'mfa',
+            'row level security', 'rls', 'cls', 'object level security'
         ],
         'color': '#dc3545'  # Red
     },
@@ -422,7 +424,7 @@ DOMAIN_CATEGORIES = {
         'keywords': [
             'performance', 'speed', 'slow', 'fast', 'scalability', 'scale', 'optimization',
             'latency', 'response time', 'throughput', 'memory', 'cpu', 'resource',
-            'timeout', 'lag', 'delay', 'bottleneck', 'capacity', 'load'
+            'timeout', 'lag', 'delay', 'bottleneck'
         ],
         'color': '#fd7e14'  # Orange
     },
@@ -430,27 +432,261 @@ DOMAIN_CATEGORIES = {
         'name': 'Integration & APIs',
         'description': 'APIs, connectors, third-party integrations, data flow',
         'keywords': [
-            'api', 'integration', 'connector', 'connect', 'third-party', 'external',
-            'webhook', 'rest', 'graphql', 'endpoint', 'data flow', 'etl', 'pipeline',
-            'sync', 'synchronization', 'import', 'export', 'federation'
+            'api', 'integration', 'connector', 'third-party', 'external',
+            'webhook', 'rest api', 'graphql', 'endpoint', 'data flow',
+            'sync', 'synchronization', 'federation', 'sharepoint', 'teams'
         ],
         'color': '#17a2b8'  # Cyan
     },
-    'ANALYTICS': {
-        'name': 'Analytics & Reporting',
-        'description': 'Business intelligence, reporting, dashboards, metrics, insights',
+    'POWER_BI': {
+        'name': 'Power BI',
+        'description': 'Power BI reports, semantic models, DAX, Direct Lake, visuals, embedding',
         'keywords': [
-            'analytics', 'reporting', 'report', 'dashboard', 'visualization', 'chart',
-            'metric', 'kpi', 'insight', 'business intelligence', 'bi', 'data analysis',
-            'trending', 'statistics', 'aggregation', 'summary', 'drill-down'
+            'power bi', 'pbi', 'semantic model', 'direct lake', 'dax', 'measure',
+            'report', 'dashboard', 'visual', 'visualization', 'pbip', 'tmdl',
+            'tabular editor', 'report builder', 'paginated', 'embed', 'embedding',
+            'power bi copilot', 'copilot visual', 'smart narrative', 'q&a'
         ],
         'color': '#ffc107'  # Yellow
+    },
+    'DEVTOOLS': {
+        'name': 'Developer Tooling',
+        'description': 'VS Code extensions, IDE integrations, Fabric CLI, notebooks-as-code, dbt',
+        'keywords': [
+            'vs code', 'vscode', 'ide', 'fabric extension', 'fabric cli',
+            'notebook vs code', 'live edit', 'local development', 'devcontainer',
+            'dbt', 'dbt fabric', 'spark job definition', 'user data function',
+            'fabric data engineering extension', 'synapse extension',
+            'visual studio', 'intellisense', 'debugging', 'breakpoint'
+        ],
+        'color': '#007bff'  # Blue
+    },
+    'CICD': {
+        'name': 'CI/CD & Deployment',
+        'description': 'Deployment pipelines, Azure DevOps, GitHub Actions, fabric-cicd, git integration',
+        'keywords': [
+            'ci/cd', 'cicd', 'deployment pipeline', 'azure devops', 'ado',
+            'github actions', 'fabric-cicd', 'fabric cicd', 'git integration',
+            'git sync', 'source control', 'version control', 'yaml pipeline',
+            'deployment', 'release pipeline', 'build pipeline', 'continuous integration',
+            'continuous deployment', 'automated deployment'
+        ],
+        'color': '#a45b91'  # Magenta
+    },
+    'LICENSING': {
+        'name': 'Licensing & Cost',
+        'description': 'Pricing, capacity sizing, SKUs, PAYG, Pro/Free licensing, cost management',
+        'keywords': [
+            'pricing', 'cost', 'license', 'licensing', 'sku', 'capacity',
+            'pay as you go', 'payg', 'f2', 'f4', 'f8', 'f16', 'f32', 'f64',
+            'pro license', 'free license', 'premium', 'ppu',
+            'billing', 'meter', 'cu', 'compute unit', 'cost management',
+            'cost analysis', 'cost allocation', 'budget'
+        ],
+        'color': '#6c757d'  # Gray
+    },
+    'DATA_PLATFORM': {
+        'name': 'Data Platform',
+        'description': 'Lakehouse, Warehouse, OneLake, Spark, Delta, medallion architecture, data engineering',
+        'keywords': [
+            'lakehouse', 'warehouse', 'onelake', 'delta lake', 'delta table',
+            'spark', 'pyspark', 'medallion', 'bronze', 'silver', 'gold',
+            'data engineering', 'data pipeline', 'etl', 'elt', 'dataflow',
+            'eventstream', 'eventhouse', 'kql', 'real-time intelligence',
+            'shortcut', 'mirroring', 'sql analytics endpoint'
+        ],
+        'color': '#60919f'  # Slate
+    }
+}
+
+# Workload Categories - official Microsoft Fabric workloads
+WORKLOAD_CATEGORIES = {
+    'POWER_BI': {
+        'name': 'Power BI',
+        'description': 'Find insights, track progress, and make decisions faster using rich visualizations',
+        'keywords': [
+            'power bi', 'pbi', 'semantic model', 'dataset', 'direct lake',
+            'dax', 'measure', 'calculated column', 'report', 'dashboard',
+            'visual', 'visualization', 'chart', 'slicer', 'filter',
+            'paginated report', 'report builder', 'pbix', 'pbip', 'tmdl',
+            'tabular editor', 'embed', 'embedding', 'power bi service',
+            'power bi desktop', 'power bi copilot', 'copilot visual',
+            'smart narrative', 'q&a', 'decomposition tree',
+            'import mode', 'directquery', 'composite model',
+            'row level security', 'rls', 'power bi gateway',
+            'power bi premium', 'power bi pro', 'power bi free',
+            'power bi mobile', 'power bi app', 'power bi workspace',
+            'datamart'
+        ],
+        'color': '#F2C811'  # Power BI Yellow
+    },
+    'DATA_ENGINEERING': {
+        'name': 'Data Engineering',
+        'description': 'Create a lakehouse and operationalize your workflow to build, transform, and share your data estate',
+        'keywords': [
+            'lakehouse', 'notebook', 'spark', 'pyspark', 'delta lake',
+            'delta table', 'medallion', 'bronze', 'silver', 'gold',
+            'data engineering', 'spark job', 'spark job definition',
+            'v-order', 'optimize', 'vacuum', 'merge', 'z-order',
+            'spark session', 'spark pool', 'spark cluster',
+            'scala', 'spark sql', 'spark streaming',
+            'lakehouse sql endpoint', 'table maintenance',
+            'user data function', 'udf',
+            'onelake', 'shortcut', 'mirroring',
+            'onelake file explorer', 'onelake storage',
+            'delta', 'parquet', 'iceberg'
+        ],
+        'color': '#0078D4'  # Azure Blue
+    },
+    'DATA_FACTORY': {
+        'name': 'Data Factory',
+        'description': 'Solve complex data ingestion, transformation, and orchestration scenarios using cloud-scale data movement and transformation services',
+        'keywords': [
+            'data factory', 'pipeline', 'dataflow', 'dataflow gen2',
+            'copy activity', 'data orchestration', 'data integration',
+            'for each', 'foreach', 'lookup activity', 'web activity',
+            'get metadata', 'if condition', 'switch activity',
+            'data movement', 'copy job', 'pipeline run',
+            'pipeline schedule', 'trigger', 'tumbling window',
+            'incremental refresh', 'incremental load', 'watermark',
+            'connector', 'on-premises data gateway', 'gateway',
+            'etl', 'elt', 'data flow'
+        ],
+        'color': '#4CA6A8'  # Factory Teal
+    },
+    'DATA_SCIENCE': {
+        'name': 'Data Science',
+        'description': 'Unlock powerful insights using AI and machine learning technology',
+        'keywords': [
+            'data science', 'machine learning', 'ml model', 'mlflow',
+            'experiment', 'prediction', 'training', 'inference',
+            'scikit-learn', 'sklearn', 'synapseml', 'model registry',
+            'model deployment', 'batch prediction', 'feature engineering',
+            'automl', 'deep learning', 'neural network', 'pytorch',
+            'tensorflow', 'model scoring', 'predict'
+        ],
+        'color': '#E8488B'  # Science Pink
+    },
+    'DATA_WAREHOUSE': {
+        'name': 'Data Warehouse',
+        'description': 'Scale up your insights by storing and analyzing data in a secure SQL warehouse with top-tier performance at petabyte scale in an open-data format',
+        'keywords': [
+            'data warehouse', 'warehouse', 'synapse warehouse',
+            't-sql', 'tsql', 'sql endpoint', 'sql analytics endpoint',
+            'cross-database', 'cross database query', 'stored procedure',
+            'table clone', 'ingestion', 'ctas', 'insert into',
+            'warehouse performance', 'warehouse capacity',
+            'ingest', 'warehouse table', 'warehouse schema',
+            'data warehousing', 'dw', 'star schema', 'fact table',
+            'dimension table'
+        ],
+        'color': '#5B5FC7'  # Warehouse Purple
+    },
+    'DATABASES': {
+        'name': 'Databases',
+        'description': 'Create operational databases seamlessly for transactional workloads',
+        'keywords': [
+            'sql database', 'fabric sql database', 'sql db',
+            'mirrored database', 'mirrored cosmos', 'mirrored sql',
+            'mirrored snowflake', 'mirrored postgres',
+            'cosmos db', 'postgresql', 'mysql', 'snowflake mirror',
+            'database mirroring', 'azure sql', 'sql server',
+            'fabric database', 'operational database', 'transactional',
+            'oltp'
+        ],
+        'color': '#2E86AB'  # Database Blue
+    },
+    'GRAPH': {
+        'name': 'Graph',
+        'description': 'Visualize your data with a Graph to drive deeper insights and reveal richer context at lightning speed',
+        'keywords': [
+            'graph', 'graph database', 'knowledge graph', 'graph analytics',
+            'graph visualization', 'graph query', 'graph model',
+            'graph insight', 'graph context', 'relationship graph',
+            'node', 'edge', 'graph traversal', 'cypher',
+            'fabric graph', 'graph workload'
+        ],
+        'color': '#2D9B83'  # Graph Green
+    },
+    'INDUSTRY_SOLUTIONS': {
+        'name': 'Industry Solutions',
+        'description': 'Use out-of-the-box industry data solutions and resources',
+        'keywords': [
+            'industry solution', 'industry solutions', 'industry data',
+            'healthcare', 'retail', 'financial services', 'sustainability',
+            'manufacturing', 'energy', 'supply chain',
+            'industry template', 'out-of-the-box', 'industry accelerator',
+            'vertical solution', 'industry vertical',
+            'fabric industry', 'prebuilt solution'
+        ],
+        'color': '#4B8BBE'  # Industry Blue
+    },
+    'IQ': {
+        'name': 'IQ',
+        'description': 'Create a unified semantic layer that organizes your core business concepts and rules, connects them to OneLake data and existing semantic models',
+        'keywords': [
+            'fabric iq', 'iq', 'unified semantic layer', 'business concept',
+            'business rule', 'semantic layer', 'business glossary',
+            'data mesh', 'domain model', 'business ontology'
+        ],
+        'color': '#7B68EE'  # IQ Medium Slate Blue
+    },
+    'COPILOT_AI': {
+        'name': 'Copilot & AI',
+        'description': 'AI-powered experiences across Fabric including Copilot, Data Agents, AI Skills, and foundational AI infrastructure',
+        'keywords': [
+            'copilot', 'copilot for fabric', 'fabric copilot',
+            'copilot notebook', 'copilot sql', 'copilot dax', 'copilot report',
+            'copilot visual', 'copilot chat',
+            'data agent', 'fabric data agent', 'ai agent',
+            'foundry agent', 'ai foundry',
+            'ai skill', 'ai skills',
+            'text to sql', 'text-to-sql', 'natural language query',
+            'natural language', 'ai assistant', 'ai chat',
+            'llm', 'gpt', 'azure openai', 'openai', 'prompt', 'ai-powered',
+            'mcp', 'model context protocol', 'mcp server',
+            'fabric mcp', 'power bi mcp'
+        ],
+        'color': '#9B59B6'  # AI Purple
+    },
+    'FABRIC_PLATFORM': {
+        'name': 'Fabric Platform',
+        'description': 'Core Fabric platform capabilities including capacity management, administration, governance, and lifecycle management',
+        'keywords': [
+            'fabric platform', 'fabric admin', 'admin portal',
+            'capacity', 'capacity unit', 'capacity units', 'fabric capacity',
+            'f sku', 'tenant', 'tenant settings',
+            'governance', 'purview', 'information protection', 'sensitivity label',
+            'monitoring hub', 'capacity metrics', 'billing', 'cost management',
+            'pricing', 'license', 'licensing', 'fabric trial', 'trial capacity',
+            'git integration', 'deployment pipeline', 'cicd', 'ci/cd',
+            'lifecycle management', 'alm', 'domains', 'endorsement',
+            'lineage', 'impact analysis', 'fabric rest api', 'rest api',
+            'workspace settings', 'workspace identity', 'managed identity',
+            'fabric api', 'fabric sdk'
+        ],
+        'color': '#1A1A2E'  # Platform Dark Navy
+    },
+    'REAL_TIME_INTELLIGENCE': {
+        'name': 'Real-Time Intelligence',
+        'description': 'Discover insights from your streaming data. Quickly ingest, index, and partition any data source or format, then query the data and create visualizations',
+        'keywords': [
+            'real-time intelligence', 'real time intelligence', 'rti',
+            'eventhouse', 'kql', 'kusto', 'kql database', 'kql queryset',
+            'eventstream', 'event stream', 'real-time hub', 'real time hub',
+            'data activator', 'reflex', 'real-time dashboard',
+            'real-time analytics', 'streaming', 'event processing',
+            'kafka', 'event hub', 'eventhub', 'iot', 'time series',
+            'kql function', 'materialized view'
+        ],
+        'color': '#FF6F61'  # Coral Red
     }
 }
 
 # Table Schema
 TABLE_COLUMNS = [
     'Feedback_ID',  # NEW: Unique identifier for each feedback item
+    'Title',  # Thread/post title (preserved from source)
     'Feedback_Gist',
     'Feedback',
     'Area',
@@ -466,6 +702,8 @@ TABLE_COLUMNS = [
     'Categorization_Confidence',  # Confidence score for categorization
     'Domains',  # Cross-cutting domain concerns (JSON array)
     'Primary_Domain',  # Primary domain classification
+    'Workloads',  # Fabric workloads addressed by this feedback (JSON array)
+    'Primary_Workload',  # Primary Fabric workload classification
     'Matched_Keywords',  # Keywords that matched this feedback (JSON array)
     'State',  # NEW: Current state of feedback (New, Triaged, Closed, Irrelevant)
     'Feedback_Notes',  # NEW: Notes about the feedback
@@ -679,3 +917,107 @@ DEFAULT_FEEDBACK_STATE = 'NEW'
 MAX_ITEMS_PER_RUN = 500
 DEFAULT_STATUS = "New"
 SYSTEM_USER = "FeedbackCollector"
+
+# ─── Active Project Configuration ───────────────────────────────
+# The active project ID controls which taxonomy, keywords, and database are used.
+# Changed at runtime via API or UI project switcher.
+ACTIVE_PROJECT_ID = 'copilot_ai_experiences'  # Default project: Copilot & AI Experiences
+
+def get_active_project_id():
+    """Get the currently active project ID."""
+    return ACTIVE_PROJECT_ID
+
+def set_active_project(project_id):
+    """Switch the active project, reloading taxonomy into global config variables.
+    
+    IMPORTANT: We mutate lists/dicts in-place rather than reassigning, because
+    other modules (e.g. utils.py) hold references obtained via 'from config import X'.
+    Reassigning would leave those modules with stale references.
+    
+    Args:
+        project_id: Project ID to activate, or None for legacy mode.
+    """
+    global ACTIVE_PROJECT_ID
+    
+    if project_id is None:
+        # Revert to legacy mode
+        ACTIVE_PROJECT_ID = None
+        KEYWORDS.clear()
+        KEYWORDS.extend(load_keywords())
+        ENHANCED_FEEDBACK_CATEGORIES.clear()
+        ENHANCED_FEEDBACK_CATEGORIES.update(load_categories())
+        IMPACT_TYPES_CONFIG.clear()
+        IMPACT_TYPES_CONFIG.update(load_impact_types())
+        print(f"🔄 Switched to legacy mode (global config)")
+        return
+    
+    import project_manager as pm
+    try:
+        project_data = pm.load_project(project_id)
+        
+        ACTIVE_PROJECT_ID = project_id
+        KEYWORDS.clear()
+        KEYWORDS.extend(project_data['keywords'])
+        ENHANCED_FEEDBACK_CATEGORIES.clear()
+        ENHANCED_FEEDBACK_CATEGORIES.update(project_data['categories'])
+        IMPACT_TYPES_CONFIG.clear()
+        IMPACT_TYPES_CONFIG.update(project_data['impact_types'])
+        
+        # Apply per-project audience config if available
+        audience_cfg = project_data.get('audience_config')
+        if audience_cfg and 'audiences' in audience_cfg:
+            AUDIENCE_DETECTION_KEYWORDS.clear()
+            AUDIENCE_DETECTION_KEYWORDS.update(audience_cfg['audiences'])
+            print(f"   Audience config: {list(AUDIENCE_DETECTION_KEYWORDS.keys())} (project-specific)")
+        else:
+            # Reset to default audience keywords
+            AUDIENCE_DETECTION_KEYWORDS.clear()
+            AUDIENCE_DETECTION_KEYWORDS.update({
+                'Developer': [
+                    'wdk', 'sdk', 'development kit', 'api', 'develop', 'developing', 'developer',
+                    'code', 'programming', 'build', 'compile', 'debug', 'visual studio', 'ide',
+                    'git', 'version control', 'deployment', 'testing', 'unit test',
+                    'devgateway', 'dev gateway', 'developer gateway', 'dev portal', 'developer portal',
+                    'dev tools', 'developer tools', 'development tools', 'cicd', 'ci/cd',
+                    'continuous integration', 'continuous deployment', 'azure devops', 'ado',
+                    'github', 'source control', 'npm', 'nuget', 'package manager', 'maven',
+                    'gradle', 'pip', 'conda', 'frontend', 'backend',
+                    'workload development sample', 'fabric wdk', 'quickstart'
+                ],
+                'Customer': [
+                    'workload hub', 'marketplace', 'install', 'using', 'user', 'customer',
+                    'browse', 'discover', 'find workloads', 'workload gallery', 'end user',
+                    'business user', 'analyst', 'report', 'dashboard'
+                ],
+                'ISV': [
+                    'isv', 'independent software vendor', 'partner', 'publish', 'publishing',
+                    'certification', 'monetize', 'sell', 'distribute', 'listing', 'multi-tenant',
+                    'tenant', 'saas', 'software as a service', 'reseller', 'vendor'
+                ]
+            })
+        
+        print(f"🔄 Switched to project: {project_id} "
+              f"({len(KEYWORDS)} keywords, {len(ENHANCED_FEEDBACK_CATEGORIES)} categories)")
+    except Exception as e:
+        print(f"❌ Error switching to project {project_id}: {e}")
+        raise
+
+def get_active_db_config():
+    """Get database config for the active project, or fallback to env vars."""
+    if ACTIVE_PROJECT_ID:
+        import project_manager as pm
+        return pm.get_project_db_config(ACTIVE_PROJECT_ID)
+    
+    # Legacy mode - use env vars
+    return {
+        'server': FABRIC_SQL_SERVER,
+        'database_name': FABRIC_SQL_DATABASE,
+        'authentication': FABRIC_SQL_AUTHENTICATION,
+    }
+
+def get_active_sources():
+    """Get source configuration for the active project, or None for legacy."""
+    if ACTIVE_PROJECT_ID:
+        import project_manager as pm
+        return pm.get_project_sources(ACTIVE_PROJECT_ID)
+    return None

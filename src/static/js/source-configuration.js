@@ -1,7 +1,9 @@
 // Source Configuration Manager
 class SourceConfigManager {
     constructor() {
-        this.sources = {
+        this.activeProjectId = null;
+        
+        this.defaultSources = {
             reddit: {
                 enabled: true,
                 subreddit: 'MicrosoftFabric',
@@ -58,6 +60,7 @@ class SourceConfigManager {
             },
             fabricCommunity: {
                 enabled: true,
+                forums: [],
                 maxItems: 5
             },
             ado: {
@@ -68,6 +71,8 @@ class SourceConfigManager {
                 maxItems: 5
             }
         };
+
+        this.sources = JSON.parse(JSON.stringify(this.defaultSources));
         
         this.settings = {
             timeRangeMonths: 6,
@@ -83,8 +88,59 @@ class SourceConfigManager {
     }
     
     init() {
+        this.loadActiveProject();
         this.loadConfiguration();
         this.setupEventListeners();
+        this.renderSourceCards();
+        this.renderSettings();
+        this.updateActiveSourcesCount();
+    }
+    
+    async loadActiveProject() {
+        try {
+            const response = await fetch('/api/active-config');
+            const data = await response.json();
+            if (data.status === 'success' && data.active_project_id) {
+                this.activeProjectId = data.active_project_id;
+                // Load project-specific sources
+                await this.loadProjectSources(data.active_project_id);
+            }
+        } catch (e) {
+            console.error('Error loading active project:', e);
+        }
+    }
+    
+    async loadProjectSources(projectId) {
+        try {
+            const response = await fetch(`/api/projects/${projectId}/sources`);
+            const data = await response.json();
+            if (data.status === 'success' && data.sources) {
+                // Merge project sources with defaults (to ensure all fields exist)
+                Object.keys(data.sources).forEach(sourceId => {
+                    if (this.sources[sourceId]) {
+                        this.sources[sourceId] = { ...this.sources[sourceId], ...data.sources[sourceId] };
+                    } else {
+                        this.sources[sourceId] = data.sources[sourceId];
+                    }
+                });
+                this.renderSourceCards();
+                this.updateActiveSourcesCount();
+            }
+        } catch (e) {
+            console.error('Error loading project sources:', e);
+        }
+    }
+    
+    async applyProjectConfig(projectId) {
+        // Apply a project's source configuration to the UI
+        this.activeProjectId = projectId;
+        if (projectId) {
+            await this.loadProjectSources(projectId);
+        } else {
+            // Reset to defaults for legacy mode
+            this.sources = JSON.parse(JSON.stringify(this.defaultSources));
+            this.loadConfiguration();  // Load from localStorage
+        }
         this.renderSourceCards();
         this.renderSettings();
         this.updateActiveSourcesCount();
@@ -150,6 +206,15 @@ class SourceConfigManager {
             settings: this.settings
         };
         localStorage.setItem('feedbackCollectorConfig', JSON.stringify(config));
+        
+        // Also save to the active project on the server
+        if (this.activeProjectId) {
+            fetch(`/api/projects/${this.activeProjectId}/sources`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.sources)
+            }).catch(e => console.error('Error saving project sources:', e));
+        }
     }
     
     updateActiveSourcesCount() {
@@ -200,6 +265,18 @@ class SourceConfigManager {
                 const repoIndex = parseInt(button.dataset.repoIndex);
                 this.handleRemoveGithubRepository(repoIndex);
             }
+            
+            // Community Forum - Add forum button
+            if (e.target.matches('.btn-add-forum') || e.target.closest('.btn-add-forum')) {
+                this.handleAddForum();
+            }
+            
+            // Community Forum - Remove forum button
+            if (e.target.matches('.btn-remove-forum') || e.target.closest('.btn-remove-forum')) {
+                const button = e.target.closest('.btn-remove-forum');
+                const forumIndex = parseInt(button.dataset.forumIndex);
+                this.handleRemoveForum(forumIndex);
+            }
         });
         
         // Input change listeners
@@ -223,6 +300,15 @@ class SourceConfigManager {
             // GitHub repo toggle listeners
             if (e.target.matches('.github-repo-toggle')) {
                 this.handleGithubRepoToggle(e.target);
+            }
+            
+            // Forum toggle listeners
+            if (e.target.matches('.forum-toggle')) {
+                const forumIndex = parseInt(e.target.dataset.forumIndex);
+                if (this.sources.fabricCommunity.forums && this.sources.fabricCommunity.forums[forumIndex]) {
+                    this.sources.fabricCommunity.forums[forumIndex].enabled = e.target.checked;
+                    this.saveConfiguration();
+                }
             }
         });
     }
@@ -375,6 +461,64 @@ class SourceConfigManager {
         this.sources.github.repositories[repoIndex].enabled = toggle.checked;
         this.updateSourceStatus('github');
         this.saveConfiguration();
+    }
+    
+    handleAddForum() {
+        const nameInput = document.getElementById('newForumName');
+        const urlInput = document.getElementById('newForumUrl');
+        
+        const name = nameInput ? nameInput.value.trim() : '';
+        const url = urlInput ? urlInput.value.trim() : '';
+        
+        if (!name || !url) {
+            alert('Please enter both forum name and URL');
+            return;
+        }
+        
+        if (!this.sources.fabricCommunity.forums) {
+            this.sources.fabricCommunity.forums = [];
+        }
+        
+        // Check for duplicates
+        const isDuplicate = this.sources.fabricCommunity.forums.some(f => f.url === url);
+        if (isDuplicate) {
+            alert('This forum URL is already in the list');
+            return;
+        }
+        
+        this.sources.fabricCommunity.forums.push({
+            name: name,
+            url: url,
+            enabled: true
+        });
+        
+        this.renderSourceCards();
+        this.saveConfiguration();
+        
+        // Re-open the config panel
+        setTimeout(() => {
+            const card = document.querySelector('[data-source="fabricCommunity"]');
+            if (card) {
+                const configDiv = card.querySelector('.source-config');
+                configDiv.classList.add('expanded');
+            }
+        }, 100);
+    }
+    
+    handleRemoveForum(forumIndex) {
+        if (!confirm('Are you sure you want to remove this forum?')) return;
+        
+        this.sources.fabricCommunity.forums.splice(forumIndex, 1);
+        this.renderSourceCards();
+        this.saveConfiguration();
+        
+        setTimeout(() => {
+            const card = document.querySelector('[data-source="fabricCommunity"]');
+            if (card) {
+                const configDiv = card.querySelector('.source-config');
+                configDiv.classList.add('expanded');
+            }
+        }, 100);
     }
     
     handleSourceToggle(toggle) {
@@ -755,19 +899,57 @@ class SourceConfigManager {
                 `;
                 
             case 'fabricCommunity':
+                const forums = source.forums || [];
+                const forumList = forums.map((forum, index) => `
+                    <div class="repo-item" data-forum-index="${index}">
+                        <div class="config-field-row" style="align-items: center;">
+                            <label class="fluent-toggle" style="margin: 0;">
+                                <input type="checkbox" class="forum-toggle" 
+                                       data-forum-index="${index}" ${forum.enabled !== false ? 'checked' : ''}>
+                                <span class="fluent-toggle-slider"></span>
+                            </label>
+                            <div style="flex: 1;">
+                                <strong>${forum.name || 'Community Forum'}</strong>
+                                <div style="font-size: 0.8em; color: var(--text-secondary); word-break: break-all;">${forum.url || ''}</div>
+                            </div>
+                            <button class="fluent-button-icon btn-remove-forum" 
+                                    data-forum-index="${index}" 
+                                    aria-label="Remove forum"
+                                    style="color: var(--error-color);">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                
                 return `
+                    <div class="config-field">
+                        <label class="fluent-label">Community Forums:</label>
+                        <div class="repo-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+                            ${forumList || '<div class="fluent-alert fluent-alert-info"><i class="bi bi-info-circle"></i><div>Using default Fabric Platform Forum. Add more forums below.</div></div>'}
+                        </div>
+                    </div>
+                    
+                    <div class="config-field" style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                        <label class="fluent-label">Add Community Forum:</label>
+                        <div class="config-field-row">
+                            <input type="text" class="fluent-input" 
+                                   id="newForumName" placeholder="Forum Name (e.g., Data Science)">
+                            <input type="text" class="fluent-input" 
+                                   id="newForumUrl" placeholder="Forum URL">
+                            <button class="fluent-button fluent-button-primary btn-add-forum">
+                                <i class="bi bi-plus"></i> Add
+                            </button>
+                        </div>
+                    </div>
+                    
                     <div class="config-field">
                         <label class="fluent-label">Max Items:</label>
                         <input type="number" class="fluent-input source-input" 
                                data-field="maxItems" value="${source.maxItems}" min="1" max="1000">
                     </div>
-                    <div class="fluent-alert fluent-alert-info">
-                        <i class="bi bi-info-circle"></i>
-                        <div>This source uses default Microsoft Fabric Community forums configuration.</div>
-                    </div>
                     <div class="source-info">
-                        <span>Last collected: Never</span>
-                        <span>Items found: 0</span>
+                        <span>Forums: ${forums.filter(f => f.enabled !== false).length} enabled / ${forums.length} total</span>
                     </div>
                 `;
                 

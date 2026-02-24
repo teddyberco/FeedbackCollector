@@ -1,0 +1,168 @@
+{
+  "DEVELOPER_REQUESTS": {
+    "name": "Developer Experience Requests",
+    "audience": "Developer",
+    "description": "Feedback related to workload development using WDK/SDK",
+    "subcategories": {
+      "WDK_FEATURES": {
+        "name": "WDK Enhancement",
+        "keywords": [
+          "wdk", "workload development kit", "development kit", "build", "compile", "debug",
+          "testing framework", "unit test", "deployment", "packaging", "manifest", "workload project",
+          "fet", "fabric extensibility toolkit"
+        ],
+        "priority": "high",
+        "feature_area": "Workload Development"
+      },
+      "SDK_FEATURES": {
+        "name": "SDK Enhancement",
+        "keywords": [
+          "sdk", "software development kit", "api", "connector", "authentication", "data source",
+          "data connection", "rest api", "graphql", "oauth", "service principal", "token",
+          "fet", "fabric extensibility toolkit"
+        ],
+        "priority": "high",
+        "feature_area": "Workload Development"
+      },
+      "DEV_TOOLS": {
+        "name": "Development Tools",
+        "keywords": [
+          "ide", "visual studio", "vs code", "intellisense", "git", "version control",
+          "source control", "debugging", "breakpoint", "profiling", "local development"
+        ],
+        "priority": "medium",
+        "feature_area": "Development Experience"
+      },
+      "DEV_DOCUMENTATION": {
+        "name": "Developer Documentation",
+        "keywords": [
+          "developer docs", "api documentation", "sample code", "code samples", "tutorial",
+          "developer guide", "how to develop", "best practices", "reference", "sdk docs"
+        ],
+        "priority": "medium",
+        "feature_area": "Documentation"
+      },
+      "DEV_EXPERIENCE": {
+        "name": "Development Experience",
+        "keywords": [
+          "developer experience", "dx", "workflow", "productivity", "automation",
+          "ci/cd", "continuous integration", "testing automation", "build pipeline"
+        ],
+        "priority": "medium",
+        "feature_area": "Development Experience"
+      },
+      "AGENTIC_EXPERIENCES": {
+        "name": "Agentic Experiences",
+        "keywords": [
+          "copilot", "knowledge base", "instructions", "instruction",
+          "agent", "agentic", "ai agent", "autonomous agent", "multi-agent",
+          "grounding", "rag", "retrieval augmented",
+          "system prompt", "prompt engineering", "orchestration",
+          "function calling", "tool use",
+          "generative ai", "gen ai", "model endpoint",
+          "ai assumed", "ai guidance", "ai instruction",
+          "ai coding", "ai implementation",
+          "hallucinate", "hallucination",
+          "guidance to ai", "questions to ask"
+        ],
+        "priority": "high",
+        "feature_area": "Agentic AI"
+      }
+    }
+  },
+  "CUSTOMER_REQUESTS": {
+    "name": "Customer Experience Requests",
+    "audience": "Customer",
+    "description": "Feedback related to using workloads from Workload Hub/Marketplace",
+    "subcategories": {
+      "WORKLOAD_HUB": {
+        "name": "Workload Hub Experience",
+        "keywords": [
+          "workload hub", "hub", "browse workloads", "discover workloads", "find workloads",
+          "workload gallery", "workload store", "search workloads", "filter workloads"
+        ],
+        "priority": "high",
+        "feature_area": "Workload Discovery"
+      },
+      "MARKETPLACE": {
+        "name": "Marketplace Features",
+        "keywords": [
+          "marketplace", "publish workload", "workload publishing", "certification",
+          "workload approval", "listing", "pricing", "billing", "monetization"
+        ],
+        "priority": "high",
+        "feature_area": "Workload Publishing"
+      },
+      "INSTALLATION": {
+        "name": "Installation & Setup",
+        "keywords": [
+          "install workload", "installation", "setup", "configure", "deployment",
+          "getting started", "onboarding", "first time setup", "workload configuration"
+        ],
+        "priority": "high",
+        "feature_area": "Workload Usage"
+      },
+      "WORKLOAD_USAGE": {
+        "name": "Workload Usage Experience",
+        "keywords": [
+          "using workload", "workload performance", "workload ui", "workload interface",
+          "workload features", "workload functionality", "user experience", "usability"
+        ],
+        "priority": "high",
+        "feature_area": "Workload Usage"
+      },
+      "CUSTOMER_SUPPORT": {
+        "name": "Customer Support & Help",
+        "keywords": [
+          "help", "support", "customer support", "documentation", "user guide",
+          "how to use", "tutorial", "faq", "troubleshooting", "knowledge base"
+        ],
+        "priority": "medium",
+        "feature_area": "Support"
+      }
+    }
+  },
+  "PLATFORM_REQUESTS": {
+    "name": "Platform & Infrastructure Requests",
+    "audience": "Platform",
+    "description": "Feedback related to platform-level features and infrastructure",
+    "subcategories": {
+      "INFRASTRUCTURE": {
+        "name": "Infrastructure & Scaling",
+        "keywords": [
+          "infrastructure", "scaling", "scale", "capacity", "resources", "multi-tenant",
+          "regional", "availability", "reliability", "uptime", "disaster recovery"
+        ],
+        "priority": "high",
+        "feature_area": "Platform Infrastructure"
+      },
+      "SECURITY": {
+        "name": "Security & Compliance",
+        "keywords": [
+          "security", "vulnerability", "exploit", "permission", "access control", "rbac",
+          "authentication", "authorization", "compliance", "gdpr", "privacy", "audit"
+        ],
+        "priority": "critical",
+        "feature_area": "Security"
+      },
+      "MONITORING": {
+        "name": "Monitoring & Analytics",
+        "keywords": [
+          "monitoring", "analytics", "metrics", "telemetry", "logging", "diagnostics",
+          "performance monitoring", "usage analytics", "business intelligence", "reporting"
+        ],
+        "priority": "medium",
+        "feature_area": "Platform Services"
+      },
+      "INTEGRATION": {
+        "name": "Platform Integration",
+        "keywords": [
+          "integration", "fabric integration", "power bi", "teams", "office", "azure",
+          "third-party", "connector", "api integration", "service integration"
+        ],
+        "priority": "medium",
+        "feature_area": "Platform Integration"
+      }
+    }
+  }
+}

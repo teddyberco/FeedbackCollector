@@ -961,7 +961,8 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   word-break: break-word;
-  height: 2.8em; /* Force fixed height for 2 lines */
+  min-height: 1.4em;
+  max-height: 2.8em;
 }
 
 /* Dense Grid Mode */

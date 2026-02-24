@@ -5,7 +5,7 @@ import re
 from config import (
     FEEDBACK_CATEGORIES_WITH_KEYWORDS, DEFAULT_CATEGORY,
     ENHANCED_FEEDBACK_CATEGORIES, AUDIENCE_DETECTION_KEYWORDS, PRIORITY_LEVELS,
-    DOMAIN_CATEGORIES, IMPACT_TYPES_CONFIG
+    DOMAIN_CATEGORIES, IMPACT_TYPES_CONFIG, WORKLOAD_CATEGORIES
 )
 
 # Configure logging
@@ -169,12 +169,162 @@ def clean_feedback_text(text: str) -> str:
     
     return text.strip()
 
+def _detect_feedback_intent(text_lower: str) -> str:
+    """
+    Detect the primary intent/type of the feedback using pattern matching.
+    Returns a short intent label like 'Bug', 'Feature Request', 'Question', etc.
+    """
+    # Order matters: check more specific patterns first
+    intent_patterns = [
+        ('Bug', [
+            r'\b(bug|crash|exception|error|broken|not working|fails?|failed|failing|defect|regression)\b',
+            r'\b(throws?\s+(?:an?\s+)?error|stack\s*trace|unexpected\s+(?:behavior|result))\b',
+            r'\b(stopped\s+working|doesn\'t\s+work|does\s+not\s+work|can\'t\s+(?:open|access|use|load|connect))\b',
+        ]),
+        ('Feature Request', [
+            r'\b(feature\s+request|enhancement|suggest(?:ion)?|would\s+(?:be\s+)?(?:great|nice|helpful)\s+(?:if|to))\b',
+            r'\b(please\s+add|need\s+(?:a\s+)?(?:way|option|ability)|should\s+(?:have|support|allow|provide))\b',
+            r'\b(wish(?:list)?|improve|improvement|missing\s+(?:feature|capability|support))\b',
+            r'\b(it\s+would\s+be|can\s+(?:you|we)\s+(?:add|get|have)|requesting)\b',
+        ]),
+        ('Performance', [
+            r'\b(slow|performance|latency|lag|timeout|hang|freeze|speed|optimization|throughput)\b',
+            r'\b(takes?\s+(?:too\s+)?long|response\s+time|high\s+(?:cpu|memory|resource))\b',
+        ]),
+        ('Question', [
+            r'\b(how\s+(?:to|do|can|does)|what\s+(?:is|are|does)|is\s+(?:it|there)\s+(?:possible|a\s+way))\b',
+            r'\b(can\s+(?:someone|anyone|I)|does\s+(?:anyone|somebody)\s+know|looking\s+for\s+(?:help|guidance))\b',
+            r'(?:^|\n)[^\n]*\?(?:\s|$)',
+        ]),
+        ('Discussion', [
+            r'\b(thoughts?\s+on|opinions?\s+on|what\s+do\s+you\s+think|anyone\s+(?:else|using|tried))\b',
+            r'\b(best\s+practice|approach|strategy|recommendation|comparison|vs\.?|versus)\b',
+            r'\b(share|sharing|experience|journey|story|blog|article|demo)\b',
+        ]),
+    ]
+    
+    for intent, patterns in intent_patterns:
+        for pattern in patterns:
+            if re.search(pattern, text_lower):
+                return intent
+    
+    return 'Feedback'
+
+
+def _extract_core_ask(text: str) -> str | None:
+    """
+    Extract the core 'ask' or key statement from feedback text.
+    Looks for sentences that express a need, want, request, problem, or question.
+    Returns the best candidate sentence, or None.
+    """
+    # Split into sentences, preserving question marks
+    sentences = re.split(r'(?<=[.!?])\s+|\n\n+|\n(?=[A-Z])', text)
+    sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 15]
+    
+    if not sentences:
+        return None
+    
+    # Patterns that indicate the "core ask" — ranked by specificity
+    ask_patterns = [
+        # Direct requests / needs (highest value)
+        (5, r'\b(?:need|want|require|request(?:ing)?|looking\s+for)\b.*\b(?:way|ability|option|feature|support|tool)\b'),
+        (5, r'\b(?:please|can\s+you|could\s+you)\b.*\b(?:add|fix|provide|enable|support|implement|create)\b'),
+        (5, r'\b(?:should|must|ought\s+to)\b.*\b(?:support|allow|enable|provide|have|include)\b'),
+        # Problem statements
+        (4, r'\b(?:(?:it|this)\s+)?(?:crashes?|fails?|throws?|errors?|breaks?|doesn\'t\s+work|does\s+not\s+work|not\s+working)\b'),
+        (4, r'\b(?:getting|receiving|seeing|encountering)\s+(?:an?\s+)?(?:error|exception|issue|problem)\b'),
+        (4, r'\b(?:unable|impossible|cannot|can\'t)\s+(?:to\s+)?\b'),
+        # Strong opinion / value statements
+        (3, r'\b(?:would\s+be\s+(?:great|nice|helpful|useful)|it\s+would\s+help|this\s+would)\b'),
+        (3, r'\b(?:the\s+(?:main|key|core|primary|biggest)\s+(?:issue|problem|challenge|concern|blocker))\b'),
+        # Questions with technical substance
+        (2, r'\b(?:how\s+(?:to|do\s+(?:I|we)|can\s+(?:I|we)))\b.*\b(?:fabric|workload|api|sdk|pipeline|lakehouse)\b'),
+        (2, r'\b(?:is\s+(?:it|there)\s+(?:possible|a\s+way)\s+to)\b'),
+    ]
+    
+    best_sentence = None
+    best_score = 0
+    
+    for sentence in sentences[:8]:  # Check first 8 sentences
+        sentence_lower = sentence.lower()
+        score = 0
+        
+        # Score by ask patterns
+        for weight, pattern in ask_patterns:
+            if re.search(pattern, sentence_lower):
+                score += weight
+        
+        # Bonus for technical terms
+        tech_terms = re.findall(
+            r'\b(?:fabric|workload|wdk|sdk|api|pipeline|lakehouse|warehouse|notebook|'
+            r'connector|power\s*bi|azure|sql|workspace|tenant|spark|delta|copilot|'
+            r'agent|mcp|authentication|oauth|token|deployment|capacity)\b',
+            sentence_lower
+        )
+        score += min(len(tech_terms), 3)  # Cap at 3 bonus points
+        
+        # Penalize greetings and filler
+        if re.match(r'^(?:hey|hi|hello|thanks|thank\s+you|dear|good\s+(?:morning|afternoon|evening))', sentence_lower):
+            score -= 5
+        # Penalize overly short sentences  
+        if len(sentence) < 25:
+            score -= 1
+        # Penalize enormously long sentences (probably not a good gist)
+        if len(sentence) > 200:
+            score -= 2
+            
+        if score > best_score:
+            best_score = score
+            best_sentence = sentence
+    
+    if best_sentence and best_score >= 2:
+        return best_sentence
+    
+    return None
+
+
+def _clean_gist_text(text: str) -> str:
+    """Clean and normalize text for use as a gist."""
+    # Remove markdown formatting
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)  # [text](url) -> text
+    text = re.sub(r'!\[[^\]]*\]\([^)]+\)', '', text)  # Remove images
+    text = re.sub(r'[*_]{1,3}([^*_]+)[*_]{1,3}', r'\1', text)  # Bold/italic
+    text = re.sub(r'`([^`]+)`', r'\1', text)  # Inline code
+    text = re.sub(r'^#+\s*', '', text, flags=re.MULTILINE)  # Headers
+    text = re.sub(r'^[-*]\s+', '', text, flags=re.MULTILINE)  # List bullets
+    text = re.sub(r'https?://\S+', '', text)  # URLs
+    # Remove common prefixes/brackets
+    text = re.sub(r'^\s*(?:\{[^}]*\}|\[[^\]]*\])\s*', '', text)  # {Blog}, [Discussion], etc.
+    # Collapse whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def _smart_truncate(text: str, max_length: int) -> str:
+    """Truncate text at a word boundary, adding ellipsis if needed."""
+    if len(text) <= max_length:
+        return text
+    # Find the last space before the limit
+    truncated = text[:max_length - 3]
+    last_space = truncated.rfind(' ')
+    if last_space > max_length * 0.5:  # Don't cut too aggressively
+        truncated = truncated[:last_space]
+    return truncated.rstrip('.,;:!? ') + "..."
+
+
 def generate_feedback_gist(text: str, max_length: int = 150, num_phrases: int = 3) -> str:
     """
-    Generates a concise, informative gist from feedback text using multiple strategies.
+    Generates a concise, informative gist from feedback text.
+    
+    Produces gists in the format: "[Intent] Core summary of the feedback"
+    Uses a multi-strategy approach:
+      1. Extract and refine the title line (if it's substantive, not just echoed)
+      2. Find the "core ask" — the sentence that best captures what the user wants
+      3. Build a descriptive summary from intent + key technical terms
+      4. Meaningful word extraction fallback
     
     Args:
-        text: The feedback text.
+        text: The feedback text (often title + body combined).
         max_length: The maximum desired length for the gist.
         num_phrases: The number of key phrases to try to combine.
     
@@ -184,145 +334,153 @@ def generate_feedback_gist(text: str, max_length: int = 150, num_phrases: int = 
     if not text or not isinstance(text, str):
         return "No content"
     
-    # Clean the text
     text = text.strip()
     if not text:
         return "Empty feedback"
     
     try:
-        # Strategy 1: Extract title from structured content (if available)
-        title_match = re.search(r'^([^.\n!?]+)[.\n!?]', text)
-        if title_match:
-            potential_title = title_match.group(1).strip()
-            if len(potential_title) > 10 and len(potential_title) < max_length:
-                # Check if it looks like a meaningful title
-                if not potential_title.lower().startswith(('hey', 'hi', 'hello', 'i ', 'we ', 'the ', 'a ', 'an ')):
-                    return potential_title
+        # --- Preparation ---
+        cleaned = _clean_gist_text(text)
+        text_lower = cleaned.lower()
         
-        # Strategy 2: Domain-specific keyword extraction
-        fabric_keywords = {
-            'workloads': ['workload', 'workloads', 'marketplace', 'hub'],
-            'development': ['wdk', 'sdk', 'develop', 'developing', 'development', 'api', 'build'],
-            'data': ['pipeline', 'notebooks', 'lakehouse', 'warehouse', 'delta', 'spark'],
-            'integration': ['connector', 'integration', 'authenticate', 'oauth', 'token'],
-            'performance': ['slow', 'performance', 'speed', 'optimization', 'latency'],
-            'security': ['security', 'permission', 'access', 'authentication', 'authorization'],
-            'ui': ['interface', 'ui', 'ux', 'usability', 'design', 'navigation'],
-            'multi-tenant': ['tenant', 'tenancy', 'isv', 'multi-tenant', 'customer'],
-            'architecture': ['architecture', 'structure', 'pattern', 'design'],
-            'issues': ['error', 'bug', 'issue', 'problem', 'crash', 'fail', 'not working']
-        }
+        # Detect intent
+        intent = _detect_feedback_intent(text_lower)
+        intent_prefix = f"[{intent}] "
+        available_length = max_length - len(intent_prefix)
         
-        # Find relevant domain keywords
-        text_lower = text.lower()
-        found_categories = []
-        for category, keywords in fabric_keywords.items():
-            if any(keyword in text_lower for keyword in keywords):
-                found_categories.append(category)
+        # Split into title (first line) and body
+        parts = text.split('\n', 1)
+        raw_title = _clean_gist_text(parts[0].strip()) if parts[0].strip() else ''
+        body = _clean_gist_text(parts[1].strip()) if len(parts) > 1 and parts[1].strip() else ''
         
-        # Strategy 3: Enhanced extractive summarization
-        sentences = re.split(r'[.!?]+', text)
-        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
+        # --- Strategy 1: Smart title usage ---
+        # Use the title if it's substantive and self-explanatory
+        if raw_title and 15 < len(raw_title) <= available_length:
+            title_lower = raw_title.lower()
+            # Skip if title is just a greeting or too generic
+            is_greeting = re.match(r'^(?:hey|hi|hello|dear|good\s)', title_lower)
+            is_generic = re.match(r'^(?:feedback|comment|question|issue|problem|help|suggestion)$', title_lower)
+            
+            if not is_greeting and not is_generic:
+                # Title is good — but can we enrich it with intent info?
+                # Don't prefix if the title already contains the intent
+                title_has_intent = any(word in title_lower for word in [
+                    'bug', 'error', 'crash', 'feature request', 'question', 'how to',
+                    'suggestion', 'performance', 'slow', 'discussion'
+                ])
+                if title_has_intent:
+                    return _smart_truncate(raw_title, max_length)
+                
+                # If title is good but body adds important context about the actual ask,
+                # try to append a brief qualifier from the body
+                if body:
+                    core_ask = _extract_core_ask(body)
+                    if core_ask and len(core_ask) < 100:
+                        # Check if the core ask adds genuinely new info vs. the title
+                        title_words = set(raw_title.lower().split())
+                        ask_words = set(core_ask.lower().split())
+                        new_info_ratio = len(ask_words - title_words) / max(len(ask_words), 1)
+                        if new_info_ratio > 0.5:  # More than half the words are new
+                            combined = f"{raw_title}: {core_ask}"
+                            return intent_prefix + _smart_truncate(combined, available_length)
+                
+                return intent_prefix + _smart_truncate(raw_title, available_length)
         
-        if sentences:
-            # Find the most informative sentence (contains keywords, not too long, not a question)
-            best_sentence = None
-            best_score = 0
-            
-            for sentence in sentences[:3]:  # Only check first 3 sentences
-                if len(sentence) > max_length:
-                    continue
-                
-                score = 0
-                sentence_lower = sentence.lower()
-                
-                # Boost score for domain keywords
-                for category in found_categories:
-                    if category in fabric_keywords:
-                        for keyword in fabric_keywords[category]:
-                            if keyword in sentence_lower:
-                                score += 2
-                
-                # Boost score for technical terms
-                technical_terms = ['fabric', 'microsoft', 'azure', 'sql', 'database', 'workspace']
-                for term in technical_terms:
-                    if term in sentence_lower:
-                        score += 1
-                
-                # Penalize questions and conversational starts
-                if sentence.strip().endswith('?'):
-                    score -= 1
-                if sentence_lower.startswith(('hey', 'hi', 'hello', 'i am', 'we are')):
-                    score -= 2
-                
-                if score > best_score:
-                    best_score = score
-                    best_sentence = sentence
-            
-            if best_sentence and best_score > 0:
-                return best_sentence.strip()
+        # --- Strategy 2: Extract the core ask from the full text ---
+        core_ask = _extract_core_ask(cleaned)
+        if core_ask:
+            return intent_prefix + _smart_truncate(core_ask, available_length)
         
-        # Strategy 4: Generate descriptive title from categories and key terms
-        if found_categories:
-            # Extract key business terms
-            business_terms = []
-            patterns = [
-                r'\b(multi-tenant|isv|customer|workspace|pipeline|notebook|lakehouse|warehouse)\b',
-                r'\b(workload|development|integration|performance|security|authentication)\b',
-                r'\b(fabric|power bi|azure|sql|database|api|connector)\b'
-            ]
+        # --- Strategy 3: Build descriptive summary from key terms ---
+        # Extract the most important technical/domain terms from the text
+        term_patterns = [
+            # Product/platform terms
+            (r'\b(fabric|power\s*bi|azure|microsoft|sql|database)\b', 'product'),
+            # Component terms
+            (r'\b(workload|pipeline|notebook|lakehouse|warehouse|workspace|capacity|'
+             r'connector|api|sdk|wdk|copilot|agent|data\s+agent|mcp|gateway|'
+             r'semantic\s+model|dataset|dataflow|spark|delta)\b', 'component'),
+            # Action/topic terms
+            (r'\b(deploy(?:ment)?|install(?:ation)?|authenticat(?:e|ion)|integrat(?:e|ion)|'
+             r'monitor(?:ing)?|scaling|permission|security|compliance|'
+             r'publish(?:ing)?|ci/?cd|version\s+control|git)\b', 'action'),
+            # Architecture terms
+            (r'\b(multi-tenant|isv|saas|microservice|architecture|infrastructure|'
+             r'real-?time|streaming|batch|etl|elt|medallion)\b', 'architecture'),
+        ]
+        
+        found_terms = {}  # term -> category for dedup
+        for pattern, category in term_patterns:
+            for match in re.finditer(pattern, text_lower):
+                term = match.group(0).strip()
+                if term not in found_terms:
+                    found_terms[term] = category
+        
+        if found_terms:
+            # Group: pick the most descriptive terms (prefer component + action)
+            components = [t for t, c in found_terms.items() if c == 'component']
+            actions = [t for t, c in found_terms.items() if c == 'action']
+            products = [t for t, c in found_terms.items() if c == 'product']
+            arch_terms = [t for t, c in found_terms.items() if c == 'architecture']
             
-            for pattern in patterns:
-                matches = re.findall(pattern, text_lower)
-                business_terms.extend(matches)
+            summary_parts = []
+            # Lead with components (most specific)
+            if components:
+                summary_parts.extend([t.title() for t in components[:2]])
+            # Add action context
+            if actions:
+                summary_parts.extend([t.title() for t in actions[:2]])
+            # Add product context only if we don't have enough yet
+            if len(summary_parts) < 2 and products:
+                summary_parts.extend([t.title() for t in products[:1]])
+            # Add architecture terms
+            if arch_terms and len(summary_parts) < 3:
+                summary_parts.extend([t.title() for t in arch_terms[:1]])
             
-            # Remove duplicates while preserving order
-            unique_terms = []
-            for term in business_terms:
-                if term not in unique_terms:
-                    unique_terms.append(term)
-            
-            # Create descriptive title
-            if unique_terms:
-                if len(found_categories) == 1:
-                    category = found_categories[0].replace('-', ' ').title()
-                    key_terms = ' '.join(unique_terms[:3]).title()
-                    gist = f"{category} - {key_terms}"
-                else:
-                    key_terms = ' '.join(unique_terms[:4]).title()
-                    gist = f"{key_terms} - {' & '.join(found_categories[:2]).title()}"
-                
+            if summary_parts:
+                descriptive = ' - '.join(summary_parts[:3])
+                gist = intent_prefix + descriptive
                 if len(gist) <= max_length:
                     return gist
         
-        # Strategy 5: Improved fallback - use most meaningful words
-        words = text.split()
+        # --- Strategy 4: Meaningful first sentence ---
+        # Fall back to the best first sentence that isn't a greeting
+        sentences = re.split(r'(?<=[.!?])\s+|\n\n+|\n', cleaned)
+        for sentence in sentences[:5]:
+            sentence = sentence.strip()
+            if len(sentence) < 15:
+                continue
+            s_lower = sentence.lower()
+            if re.match(r'^(?:hey|hi|hello|thanks|thank|dear|good\s|edit:|update:)', s_lower):
+                continue
+            return intent_prefix + _smart_truncate(sentence, available_length)
         
-        # Filter out common stop words and conversational starts
-        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'between', 'among', 'within', 'without', 'against', 'hey', 'hi', 'hello', 'i', 'we', 'you', 'they', 'it', 'this', 'that', 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'cannot'}
+        # --- Strategy 5: Meaningful words fallback ---
+        stop_words = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for',
+            'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during',
+            'before', 'after', 'above', 'below', 'between', 'among', 'within',
+            'hey', 'hi', 'hello', 'i', 'we', 'you', 'they', 'it', 'this', 'that',
+            'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has',
+            'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may',
+            'might', 'must', 'can', 'cannot', 'so', 'just', 'also', 'very', 'really',
+            'not', 'all', 'any', 'some', 'my', 'our', 'your', 'its', 'his', 'her',
+        }
         
-        meaningful_words = []
-        for word in words:
-            clean_word = re.sub(r'[^\w]', '', word.lower())
-            if clean_word and clean_word not in stop_words and len(clean_word) > 2:
-                meaningful_words.append(word)
+        words = cleaned.split()
+        meaningful = [w for w in words if re.sub(r'[^\w]', '', w.lower()) not in stop_words and len(w) > 2]
         
-        if meaningful_words:
-            # Take first 8-12 meaningful words
-            selected_words = meaningful_words[:min(12, len(meaningful_words))]
-            gist = ' '.join(selected_words)
-            
-            if len(gist) > max_length:
-                gist = gist[:max_length-3] + "..."
-            
-            return gist
+        if meaningful:
+            selected = meaningful[:min(10, len(meaningful))]
+            gist = ' '.join(selected)
+            return intent_prefix + _smart_truncate(gist, available_length)
         
-        # Final fallback - simple truncation
-        return text[:max_length-3] + "..." if len(text) > max_length else text
+        # --- Final fallback ---
+        return intent_prefix + _smart_truncate(cleaned if cleaned else text, available_length)
         
     except Exception as e:
         logger.error(f"Error generating feedback gist: {e}. Using fallback truncation.")
-        return text[:max_length-3] + "..." if len(text) > max_length else text
+        return _smart_truncate(text, max_length)
 
 def categorize_feedback(text: str) -> str:
     """
@@ -342,78 +500,100 @@ def categorize_feedback(text: str) -> str:
 def detect_audience(text: str, source: str = "", scenario: str = "", organization: str = "") -> str:
     """
     Detect the audience for feedback based on text analysis and contextual clues.
-    
-    Args:
-        text: The feedback text to analyze
-        source: Source of the feedback (Reddit, GitHub, etc.)
-        scenario: Scenario field (Customer, Partner, Internal)
-        organization: Organization field
-    
-    Returns:
-        Detected audience: 'Developer', 'Customer', or 'ISV'
+    Uses project-specific audience labels when a project is active (e.g. Builder/User).
+    Falls back to Developer/Customer/ISV for legacy mode.
     """
+    import config as _cfg
+    
+    # Determine the default audience and available audience labels from current config
+    audience_labels = list(AUDIENCE_DETECTION_KEYWORDS.keys())
+    
+    # Get project-specific settings if available
+    _active_project = _cfg.get_active_project_id()
+    _audience_cfg = None
+    if _active_project:
+        try:
+            import project_manager as _pm
+            _project = _pm.load_project(_active_project)
+            _audience_cfg = _project.get('audience_config')
+        except Exception:
+            pass
+    
+    default_audience = 'Customer'
+    source_biases = {}
+    if _audience_cfg:
+        default_audience = _audience_cfg.get('default_audience', audience_labels[0] if audience_labels else 'Customer')
+        source_biases = _audience_cfg.get('source_biases', {})
+    
     if not text or not isinstance(text, str):
-        return 'Customer'  # Default to Customer instead of Unknown
+        return default_audience
     
     text_lower = text.lower()
-    audience_scores = {'Developer': 0, 'Customer': 0, 'ISV': 0}
+    audience_scores = {label: 0 for label in audience_labels}
     
-    # Score based on keywords - now including ISV as separate category
+    # Score based on keywords from current config (project-specific or global)
     for audience, keywords in AUDIENCE_DETECTION_KEYWORDS.items():
         for keyword in keywords:
             if keyword.lower() in text_lower:
                 audience_scores[audience] += 1
     
-    # DevGateway and related terms get very strong Developer scoring
-    devgateway_terms = ['devgateway', 'dev gateway', 'developer gateway', 'dev portal', 'developer portal']
-    if any(term in text_lower for term in devgateway_terms):
-        audience_scores['Developer'] += 5  # Very strong Developer indication
-    
-    # Strong contextual scoring based on source and scenario
-    # GitHub and ADO are primarily developer-oriented
-    if source.lower() in ['github', 'github discussions', 'azure devops', 'ado', 'azure devops child tasks']:
-        audience_scores['Developer'] += 3  # Strong bias for developer sources
-    elif source.lower() == 'reddit':
-        audience_scores['Customer'] += 1
-    elif source.lower() in ['fabric community', 'fabric community search']:
-        # Fabric community could be either, slight customer bias
-        audience_scores['Customer'] += 0.5
-    
-    # Scenario-based scoring
-    if scenario.lower() == 'partner':
-        # Partner could be ISV or Developer, check context
-        if any(isv_term in text_lower for isv_term in ['isv', 'independent software vendor', 'multi-tenant', 'tenant', 'saas']):
-            audience_scores['ISV'] += 3
-        else:
+    # Apply source biases (project-specific or legacy defaults)
+    if source_biases:
+        # Project-specific source biases from audience_config.json
+        for bias_source, bias_info in source_biases.items():
+            if source.lower() == bias_source.lower():
+                target_audience = bias_info.get('audience', '')
+                weight = bias_info.get('weight', 1)
+                if target_audience in audience_scores:
+                    audience_scores[target_audience] += weight
+                break
+    else:
+        # Legacy source biases (Developer/Customer/ISV mode)
+        if 'Developer' in audience_scores:
+            if source.lower() in ['github', 'github discussions', 'azure devops', 'ado', 'azure devops child tasks']:
+                audience_scores['Developer'] += 3
+            elif source.lower() == 'reddit':
+                audience_scores.setdefault('Customer', 0)
+                audience_scores['Customer'] += 1
+            elif source.lower() in ['fabric community', 'fabric community search']:
+                audience_scores.setdefault('Customer', 0)
+                audience_scores['Customer'] += 0.5
+        
+        # Legacy DevGateway boost
+        devgateway_terms = ['devgateway', 'dev gateway', 'developer gateway', 'dev portal', 'developer portal']
+        if any(term in text_lower for term in devgateway_terms):
+            audience_scores.get('Developer') is not None and audience_scores.__setitem__('Developer', audience_scores.get('Developer', 0) + 5)
+        
+        # Legacy scenario-based scoring
+        if scenario.lower() == 'partner':
+            if any(isv_term in text_lower for isv_term in ['isv', 'independent software vendor', 'multi-tenant', 'tenant', 'saas']):
+                if 'ISV' in audience_scores:
+                    audience_scores['ISV'] += 3
+            elif 'Developer' in audience_scores:
+                audience_scores['Developer'] += 2
+        elif scenario.lower() == 'customer' and 'Customer' in audience_scores:
+            audience_scores['Customer'] += 2
+        elif scenario.lower() == 'internal' and 'Developer' in audience_scores:
             audience_scores['Developer'] += 2
-    elif scenario.lower() == 'customer':
-        audience_scores['Customer'] += 2
-    elif scenario.lower() == 'internal':
-        audience_scores['Developer'] += 2
-    
-    # Organization-based scoring
-    if organization:
-        org_lower = organization.lower()
-        if 'isv' in org_lower or any(isv_term in org_lower for isv_term in ['vendor', 'partner', 'saas']):
-            audience_scores['ISV'] += 2
-        elif any(dev_org in org_lower for dev_org in ['github', 'ado', 'azure devops', 'devgateway']):
-            audience_scores['Developer'] += 2
-    
-    # Multi-tenant and SaaS patterns strongly indicate ISV
-    if any(term in text_lower for term in ['multi-tenant', 'saas', 'software as a service', 'independent software vendor']):
-        audience_scores['ISV'] += 3
+        
+        # Legacy multi-tenant/SaaS boost
+        if 'ISV' in audience_scores:
+            if any(term in text_lower for term in ['multi-tenant', 'saas', 'software as a service', 'independent software vendor']):
+                audience_scores['ISV'] += 3
     
     # Find the highest scoring audience
+    if not audience_scores:
+        return default_audience
+    
     max_score = max(audience_scores.values())
     if max_score == 0:
-        return 'Customer'  # Default to Customer
+        return default_audience
     
-    # Return the audience with the highest score
     for audience, score in audience_scores.items():
         if score == max_score:
             return audience
     
-    return 'Customer'  # Fallback
+    return default_audience
 
 def determine_impact_type(text: str) -> str:
     """
@@ -452,7 +632,7 @@ def determine_impact_type(text: str) -> str:
     
     return 'FEEDBACK'  # Fallback
 
-def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = "", organization: str = "") -> dict:
+def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = "", organization: str = "", source_hint: str = "") -> dict:
     """
     Enhanced categorization that provides hierarchical categorization with audience detection.
     
@@ -558,6 +738,12 @@ def enhanced_categorize_feedback(text: str, source: str = "", scenario: str = ""
     detected_domains = detect_domain(text)
     result['domains'] = detected_domains
     result['primary_domain'] = detected_domains[0]['domain'] if detected_domains else None
+    
+    # Detect workloads (which Fabric workload the feedback addresses)
+    # Pass source_hint (e.g. forum name) to boost the matching workload
+    detected_workloads = detect_workload(text, source_hint=source_hint)
+    result['workloads'] = detected_workloads
+    result['primary_workload'] = detected_workloads[0]['workload'] if detected_workloads else None
     
     return result
 
@@ -811,25 +997,73 @@ def analyze_sentiment(text: str) -> dict:
         }
 
 if __name__ == '__main__':
-    # Test cases
+    # Test cases 
     print(f"NLTK Resource Check Complete (see logs above).")
-    sample1 = "The user interface is very intuitive and the performance is excellent. I love the new dashboard feature!"
-    print(f"Text: {sample1}\nGist: {generate_feedback_gist(sample1)}")
+    print("=" * 80)
+    print("FEEDBACK GIST GENERATION TESTS")
+    print("=" * 80)
 
-    sample2 = "It crashes frequently on my Android device, especially when I try to upload a file."
-    print(f"Text: {sample2}\nGist: {generate_feedback_gist(sample2)}")
-
-    sample3 = "Good."
-    print(f"Text: {sample3}\nGist: {generate_feedback_gist(sample3)}")
+    test_cases = [
+        # (label, input_text)
+        ("UI praise", "The user interface is very intuitive and the performance is excellent. I love the new dashboard feature!"),
+        
+        ("Bug report", "It crashes frequently on my Android device, especially when I try to upload a file."),
+        
+        ("Minimal", "Good."),
+        
+        ("Long mixed", "This is a very long piece of feedback that talks about many different things including the speed, the reliability, the customer service which was not great, and also the pricing model which I think could be improved significantly for small businesses like mine."),
+        
+        ("Empty", ""),
+        
+        ("Short bug", "Login button not working."),
+        
+        ("Reddit-style title+body",
+         "Semantic model permissions - WHat am I missing?\n\n"
+         "So I have a process to gather information about the RLS on 40k reports and 5k semantic models which I store in a lakehouse. "
+         "The notebook summary I created works fine but I need a way to handle permission errors across models."),
+        
+        ("Feature request body",
+         "Data Agent improvements\n\n"
+         "I know Data Agent is still in preview mode and the Fabric team is actively working to improve it, "
+         "but would be great if it could support business terminology variations. "
+         "For example, when users ask about 'revenue', it should also search for 'sales amount'."),
+        
+        ("Blog/sharing post",
+         "{Blog} dbt with Fabric Spark in Production\n\n"
+         "Link: [dbt with Fabric Spark in Production](https://www.rakirahman.me/dbt-fabric-spark/)\n"
+         "Demo: [YouTube](https://www.youtube.com/watch?v=example)"),
+        
+        ("Greeting + bug",
+         "Hi everyone!\n\n"
+         "I am trying to create data agent under lakehouse but it throws error as power bi features disabled "
+         "but under tenant settings this option was enabled already. Is it because I have Power BI Pro license? "
+         "Is it mandatory to have premium?"),
+        
+        ("DevOps/CI question",
+         "Avoiding pip install in Azure DevOps yaml pipelines\n\n"
+         "Hi, I'm using Azure DevOps (ADO) to run a yaml script for automated deployment. "
+         "In the yaml I have a pip install fabric cicd, so it installs or upgrades every time. "
+         "Is there a way to cache or skip the install step?"),
+        
+        ("Multi-tenant architecture",
+         "Multi-tenant workload architecture\n\n"
+         "We are building a multi-tenant ISV solution on Fabric. We need a way to isolate tenant data "
+         "in workspaces while sharing the same Spark compute. Should we use separate lakehouses per tenant "
+         "or a shared lakehouse with row-level security?"),
+        
+        ("Performance complaint",
+         "Notebook execution is extremely slow\n\n"
+         "Our Spark notebooks are taking 15-20 minutes just to start the session. "
+         "The actual computation is only 2 minutes. This latency makes iterative development impossible."),
+    ]
     
-    sample4 = "This is a very long piece of feedback that talks about many different things including the speed, the reliability, the customer service which was not great, and also the pricing model which I think could be improved significantly for small businesses like mine."
-    print(f"Text: {sample4}\nGist: {generate_feedback_gist(sample4, num_phrases=3)}")
-
-    sample5 = ""
-    print(f"Text: '{sample5}'\nGist: {generate_feedback_gist(sample5)}")
-
-    sample6 = "Login button not working."
-    print(f"Text: '{sample6}'\nGist: {generate_feedback_gist(sample6)}")
+    for label, text in test_cases:
+        gist = generate_feedback_gist(text)
+        print(f"\n[{label}]")
+        print(f"  Input:  {text[:100]}{'...' if len(text) > 100 else ''}")
+        print(f"  Gist:   {gist}")
+    
+    print("\n" + "=" * 80)
 
 def call_mcp_tool(server_name: str, tool_name: str, arguments: dict):
     """
@@ -895,6 +1129,83 @@ def detect_domain(text: str) -> list:
     # Sort by confidence score descending
     detected_domains.sort(key=lambda x: x['confidence'], reverse=True)
     return detected_domains
+
+# Mapping from forum names (as configured in project.json) to workload names
+FORUM_TO_WORKLOAD = {
+    'Power BI': 'Power BI',
+    'Data Engineering': 'Data Engineering',
+    'Data Warehouse': 'Data Warehouse',
+    'Data Science': 'Data Science',
+    'Data Factory': 'Data Factory',
+    'IQ': 'IQ',
+    'Copilot & AI': 'Copilot & AI',
+    'Real-Time Intelligence': 'Real-Time Intelligence',
+    'Databases': 'Databases',
+    'Fabric Platform': 'Fabric Platform',
+}
+
+def detect_workload(text: str, source_hint: str = "") -> list:
+    """
+    Detect which Microsoft Fabric workload(s) the feedback addresses.
+    
+    When source_hint is provided (e.g. the forum name the feedback was scraped from),
+    the matching workload receives a significant score boost so it is more likely
+    to be selected as the primary workload.
+    
+    Args:
+        text: The feedback text to analyze
+        source_hint: Optional hint from the source (e.g. forum name) to boost
+                     the most likely workload
+    
+    Returns:
+        List of detected workloads with confidence scores, sorted by confidence descending
+    """
+    if not text or not isinstance(text, str):
+        return []
+    
+    text_lower = text.lower()
+    detected_workloads = []
+    
+    # Resolve the source hint to a workload name
+    hint_workload = FORUM_TO_WORKLOAD.get(source_hint, "") if source_hint else ""
+    
+    for workload_id, workload_info in WORKLOAD_CATEGORIES.items():
+        score = 0
+        matched_keywords = []
+        
+        for keyword in workload_info['keywords']:
+            if keyword.lower() in text_lower:
+                score += 1
+                matched_keywords.append(keyword)
+        
+        # Apply forum-based boost: if the feedback came from a forum that
+        # directly maps to this workload, add a flat confidence bonus.
+        # This ensures the forum workload wins when keyword evidence is 
+        # ambiguous or absent, but can be overridden when the text 
+        # strongly matches a different workload.
+        forum_boosted = False
+        if hint_workload and workload_info['name'] == hint_workload:
+            forum_boosted = True
+            if not matched_keywords:
+                matched_keywords.append(f'[forum:{source_hint}]')
+        
+        if score > 0 or forum_boosted:
+            confidence = min(score / len(workload_info['keywords']), 1.0) if workload_info['keywords'] else 0.0
+            if forum_boosted:
+                confidence = min(confidence + 0.15, 1.0)
+            detected_workloads.append({
+                'workload': workload_info['name'],
+                'workload_id': workload_id,
+                'confidence': round(confidence, 2),
+                'score': score,
+                'matched_keywords': matched_keywords,
+                'color': workload_info['color'],
+                'forum_boosted': forum_boosted
+            })
+    
+    # Sort by confidence score descending
+    detected_workloads.sort(key=lambda x: x['confidence'], reverse=True)
+    return detected_workloads
 
 def find_similar_feedback(feedback_text: str, all_feedback: list, similarity_threshold: float = 0.7, exclude_self: bool = True) -> list:
     """

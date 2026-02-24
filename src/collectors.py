@@ -8,7 +8,8 @@ from textblob import TextBlob
 import json
 import xml.etree.ElementTree as ET
 import re 
-import time 
+import time
+import concurrent.futures
 import config 
 from utils import generate_feedback_gist, categorize_feedback, enhanced_categorize_feedback, clean_feedback_text
 
@@ -36,6 +37,9 @@ def find_matched_keywords(text: str, keywords: List[str]) -> List[str]:
 class RedditCollector:
     def __init__(self):
         self.max_items = config.MAX_ITEMS_PER_RUN
+        self.subreddit_name = config.REDDIT_SUBREDDIT
+        self.sort = 'new'
+        self.time_filter = 'month'
         # Debug: Print what we're passing to praw
         print(f"🔍 RedditCollector init - REDDIT_CLIENT_ID type: {type(config.REDDIT_CLIENT_ID).__name__}, value exists: {config.REDDIT_CLIENT_ID is not None}")
         print(f"🔍 RedditCollector init - REDDIT_CLIENT_SECRET type: {type(config.REDDIT_CLIENT_SECRET).__name__}, value exists: {config.REDDIT_CLIENT_SECRET is not None}")
@@ -63,76 +67,119 @@ class RedditCollector:
     def configure(self, settings: Dict[str, Any]):
         """Configure collector with custom settings"""
         if 'max_items' in settings:
-            self.max_items = settings['max_items']
+            self.max_items = int(settings['max_items'])
             logger.info(f"RedditCollector configured with max_items={self.max_items}")
+        if 'subreddit' in settings:
+            self.subreddit_name = settings['subreddit']
+            logger.info(f"RedditCollector configured with subreddit={self.subreddit_name}")
+        if 'sort' in settings:
+            self.sort = settings['sort']
+        if 'time_filter' in settings:
+            self.time_filter = settings['time_filter']
         
     def collect(self) -> List[Dict[str, Any]]:
         feedback_items = []
         try:
-            logger.info(f"Collecting feedback from Reddit subreddit: {config.REDDIT_SUBREDDIT}")
+            logger.info(f"Collecting feedback from Reddit subreddit: {self.subreddit_name}")
             logger.info(f"Using keywords for search: {config.KEYWORDS}") 
-            subreddit = self.reddit.subreddit(config.REDDIT_SUBREDDIT)
+            subreddit = self.reddit.subreddit(self.subreddit_name)
             
-            search_query = " OR ".join([f'"{k}"' for k in config.KEYWORDS])
-            logger.info(f"Reddit search query: {search_query}")
-
-            submissions_generator = subreddit.search(search_query, sort="new", limit=self.max_items)
+            # Reddit search API has a ~512 char query limit. Batch keywords if needed.
+            all_keywords = list(config.KEYWORDS)
+            max_query_len = 450  # leave margin under Reddit's limit
+            seen_ids = set()
+            
+            keyword_batches = []
+            current_batch = []
+            current_len = 0
+            for kw in all_keywords:
+                token = f'"{kw}"'
+                addition = len(token) + (4 if current_batch else 0)  # " OR " = 4 chars
+                if current_len + addition > max_query_len and current_batch:
+                    keyword_batches.append(current_batch)
+                    current_batch = [kw]
+                    current_len = len(token)
+                else:
+                    current_batch.append(kw)
+                    current_len += addition
+            if current_batch:
+                keyword_batches.append(current_batch)
+            
+            logger.info(f"Split {len(all_keywords)} keywords into {len(keyword_batches)} search batches")
             
             count = 0
-            for submission in submissions_generator:
+            for batch_idx, batch in enumerate(keyword_batches):
                 if count >= self.max_items:
-                    logger.info(f"Reached max_items limit ({self.max_items}) for Reddit submissions.")
                     break
+                search_query = " OR ".join([f'"{k}"' for k in batch])
+                logger.info(f"Reddit search batch {batch_idx+1}/{len(keyword_batches)}: {search_query[:200]}...")
                 
-                logger.info(f"Processing submission via search: {submission.title}")
-                reddit_url = f"https://www.reddit.com{submission.permalink}"
-                full_feedback_text = f"{submission.title}\n\n{submission.selftext}"
+                batch_limit = max(10, self.max_items - count)
+                submissions_generator = subreddit.search(search_query, sort=self.sort, time_filter=self.time_filter, limit=batch_limit)
                 
-                # Find matched keywords - filter out posts without keyword matches
-                matched_keywords = find_matched_keywords(full_feedback_text, config.KEYWORDS)
+                for submission in submissions_generator:
+                    if count >= self.max_items:
+                        logger.info(f"Reached max_items limit ({self.max_items}) for Reddit submissions.")
+                        break
+                    
+                    # Deduplicate across batches
+                    if submission.id in seen_ids:
+                        continue
+                    seen_ids.add(submission.id)
+                    
+                    logger.info(f"Processing submission via search: {submission.title}")
+                    reddit_url = f"https://www.reddit.com{submission.permalink}"
+                    full_feedback_text = f"{submission.title}\n\n{submission.selftext}"
                 
-                if not matched_keywords:
-                    logger.info(f"Skipping submission (no keyword matches): {submission.title}")
-                    continue
-                
-                tag_value = self._extract_flair(submission)
+                    # Find matched keywords - filter out posts without keyword matches
+                    matched_keywords = find_matched_keywords(full_feedback_text, config.KEYWORDS)
+                    
+                    if not matched_keywords:
+                        logger.info(f"Skipping submission (no keyword matches): {submission.title}")
+                        continue
+                    
+                    tag_value = self._extract_flair(submission)
 
-                # Enhanced categorization
-                enhanced_cat = enhanced_categorize_feedback(
-                    full_feedback_text,
-                    source='Reddit',
-                    scenario='Customer',
-                    organization=f'Reddit/{config.REDDIT_SUBREDDIT}'
-                )
-                
-                feedback_items.append({
-                    'Feedback_Gist': generate_feedback_gist(full_feedback_text),
-                    'Feedback': full_feedback_text,
-                    'Matched_Keywords': matched_keywords,
-                    'Url': reddit_url,
-                    'Area': 'Workloads',
-                    'Sources': 'Reddit',
-                    'Impacttype': self._determine_impact_type_content(submission.title + " " + submission.selftext),
-                    'Scenario': 'Customer',
-                    'Customer': str(submission.author) if submission.author else "N/A",
-                    'Tag': tag_value,
-                    'Created': datetime.fromtimestamp(submission.created_utc).isoformat(),
-                    'Organization': f'Reddit/{config.REDDIT_SUBREDDIT}',
-                    'Status': config.DEFAULT_STATUS,
-                    'Created_by': config.SYSTEM_USER,
-                    'Rawfeedback': f"Source URL: {reddit_url}\nRaw Data: {str(vars(submission))}",
-                    'Sentiment': analyze_sentiment(full_feedback_text),
-                    'Category': enhanced_cat['legacy_category'],  # Backward compatibility
-                    'Enhanced_Category': enhanced_cat['primary_category'],
-                    'Subcategory': enhanced_cat['subcategory'],
-                    'Audience': enhanced_cat['audience'],
-                    'Priority': enhanced_cat['priority'],
-                    'Feature_Area': enhanced_cat['feature_area'],
-                    'Categorization_Confidence': enhanced_cat['confidence'],
-                    'Domains': enhanced_cat.get('domains', []),
-                    'Primary_Domain': enhanced_cat.get('primary_domain', None)
-                })
-                count += 1
+                    # Enhanced categorization
+                    enhanced_cat = enhanced_categorize_feedback(
+                        full_feedback_text,
+                        source='Reddit',
+                        scenario='Customer',
+                        organization=f'Reddit/{self.subreddit_name}'
+                    )
+                    
+                    feedback_items.append({
+                        'Feedback_ID': f'reddit-{submission.id}',
+                        'Title': submission.title,
+                        'Feedback_Gist': generate_feedback_gist(full_feedback_text),
+                        'Feedback': full_feedback_text,
+                        'Matched_Keywords': matched_keywords,
+                        'Url': reddit_url,
+                        'Area': f'Reddit - r/{self.subreddit_name}',
+                        'Sources': 'Reddit',
+                        'Impacttype': self._determine_impact_type_content(submission.title + " " + submission.selftext),
+                        'Scenario': 'Customer',
+                        'Customer': str(submission.author) if submission.author else "N/A",
+                        'Tag': tag_value,
+                        'Created': datetime.fromtimestamp(submission.created_utc).isoformat(),
+                        'Organization': f'Reddit/{self.subreddit_name}',
+                        'Status': config.DEFAULT_STATUS,
+                        'Created_by': config.SYSTEM_USER,
+                        'Rawfeedback': f"Source URL: {reddit_url}\nRaw Data: {str(vars(submission))}",
+                        'Sentiment': analyze_sentiment(full_feedback_text),
+                        'Category': enhanced_cat['legacy_category'],
+                        'Enhanced_Category': enhanced_cat['primary_category'],
+                        'Subcategory': enhanced_cat['subcategory'],
+                        'Audience': enhanced_cat['audience'],
+                        'Priority': enhanced_cat['priority'],
+                        'Feature_Area': enhanced_cat['feature_area'],
+                        'Categorization_Confidence': enhanced_cat['confidence'],
+                        'Domains': enhanced_cat.get('domains', []),
+                        'Primary_Domain': enhanced_cat.get('primary_domain', None),
+                        'Workloads': enhanced_cat.get('workloads', []),
+                        'Primary_Workload': enhanced_cat.get('primary_workload', None)
+                    })
+                    count += 1
             
             logger.info(f"Collected {len(feedback_items)} feedback items from Reddit")
             return feedback_items[:self.max_items] 
@@ -170,6 +217,7 @@ class FabricCommunityCollector:
         self.max_items_to_fetch = config.MAX_ITEMS_PER_RUN
         self.max_items = config.MAX_ITEMS_PER_RUN 
         self.search_page_size = 50 
+        self.forums = []  # List of forum configs: [{name, url, enabled}]
         self.session = requests.Session()
         self.session.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -178,171 +226,401 @@ class FabricCommunityCollector:
     def configure(self, settings: Dict[str, Any]):
         """Configure collector with custom settings"""
         if 'max_items' in settings:
-            self.max_items = settings['max_items']
-            self.max_items_to_fetch = settings['max_items']
+            self.max_items = int(settings['max_items'])
+            self.max_items_to_fetch = int(settings['max_items'])
             logger.info(f"FabricCommunityCollector configured with max_items={self.max_items}")
+        if 'forums' in settings:
+            self.forums = [f for f in settings['forums'] if f.get('enabled', True)]
+            logger.info(f"FabricCommunityCollector configured with {len(self.forums)} forums")
+    
+    def _extract_forum_location(self, forum_url: str) -> str:
+        """Extract the forum location ID from a community URL for search filtering.
         
+        Board pages (bd-p/) -> forum-board:<id>
+        Category pages (ct-p/) -> category:<id>
+        
+        e.g. .../t5/Copilot/bd-p/copilot -> forum-board:copilot
+        e.g. .../t5/Fabric-platform-forums/ct-p/AC-Community -> category:AC-Community
+        """
+        if not forum_url:
+            return 'forum-board:ac_generaldiscussion'
+        
+        import re as _re
+        
+        # Board pages: /bd-p/<board_id>
+        board_match = _re.search(r'/bd-p/([^/?#]+)', forum_url)
+        if board_match:
+            return f'forum-board:{board_match.group(1)}'
+        
+        # Category pages: /ct-p/<category_id>
+        cat_match = _re.search(r'/ct-p/([^/?#]+)', forum_url)
+        if cat_match:
+            return f'category:{cat_match.group(1)}'
+        
+        # Fallback to default
+        return 'forum-board:ac_generaldiscussion'
+        
+    @staticmethod
+    def _normalize_url(url: str) -> str:
+        """Strip search tracking params so the same thread always maps to one key."""
+        from urllib.parse import urlparse, urlencode, parse_qs, urlunparse
+        parsed = urlparse(url)
+        # Remove search-action-id and search-result-uid params
+        qs = {k: v for k, v in parse_qs(parsed.query).items()
+              if k not in ('search-action-id', 'search-result-uid')}
+        clean_query = urlencode(qs, doseq=True)
+        return urlunparse(parsed._replace(query=clean_query))
+
     def collect(self) -> List[Dict[str, Any]]: 
         feedback_items = []
+        seen_urls = set()  # Deduplicate across forums
         keywords_to_use = config.KEYWORDS 
         
         if not keywords_to_use:
             logger.warning(f"{self.source_name}: No keywords configured, skipping collection. This collector requires keywords for searching.")
             return []
 
-        query_string = " OR ".join([f'"{keyword}"' for keyword in keywords_to_use])
+        # Build keyword batches to avoid overly long query strings
+        # (Lithium/Khoros search may silently truncate or fail with very large queries)
+        all_keywords = list(keywords_to_use)
+        max_query_len = 800  # Keep individual query strings under URL-safe length
+        keyword_batches = []
+        current_batch = []
+        current_len = 0
+        for kw in all_keywords:
+            token = f'"{kw}"'
+            addition = len(token) + (4 if current_batch else 0)  # " OR " separator
+            if current_len + addition > max_query_len and current_batch:
+                keyword_batches.append(current_batch)
+                current_batch = [kw]
+                current_len = len(token)
+            else:
+                current_batch.append(kw)
+                current_len += addition
+        if current_batch:
+            keyword_batches.append(current_batch)
         
         logger.info(f"Starting {self.source_name} HTML search for keywords: {keywords_to_use}")
-        logger.info(f"Query string for search: {query_string}")
+        logger.info(f"Split {len(all_keywords)} keywords into {len(keyword_batches)} search batches")
 
-        num_pages_to_scrape = (self.max_items_to_fetch + self.search_page_size - 1) // self.search_page_size
-        num_pages_to_scrape = min(num_pages_to_scrape, 5) 
-        logger.info(f"Pages to scrape (max 5): {num_pages_to_scrape}")
+        # Build list of forum locations to search
+        forum_locations = []
+        if self.forums:
+            for forum in self.forums:
+                loc = self._extract_forum_location(forum.get('url', ''))
+                forum_name = forum.get('name', loc)
+                forum_locations.append({'location': loc, 'name': forum_name})
+            logger.info(f"Searching across {len(forum_locations)} forums: {[f['name'] for f in forum_locations]}")
+        else:
+            # Fallback to default forum
+            forum_locations = [{'location': 'forum-board:ac_generaldiscussion', 'name': 'General Discussion'}]
+            logger.info("No forums configured, using default: General Discussion")
 
-        for page_num in range(1, num_pages_to_scrape + 1):
+        for forum_idx, forum_info in enumerate(forum_locations):
             if len(feedback_items) >= self.max_items_to_fetch:
                 logger.info(f"Reached MAX_ITEMS_PER_RUN ({self.max_items_to_fetch}). Stopping collection.")
                 break
-            
-            params = {
-                'filter': 'location', 'q': query_string, 'noSynonym': 'false', 'advanced': 'true',
-                'location': 'forum-board:ac_generaldiscussion', 'collapse_discussion': 'true',
-                'search_type': 'thread', 'search_page_size': str(self.search_page_size), 'page': str(page_num) 
-            }
-            current_url = f"{self.search_base_url}?{requests.compat.urlencode(params)}"
-            logger.info(f"Scraping search results page {page_num}: {current_url}")
 
-            try:
-                response = self.session.get(self.search_base_url, params=params, timeout=30)
-                response.raise_for_status()
-                soup = BeautifulSoup(response.content, 'html.parser')
-                
-                search_results_items = soup.select('div.lia-message-view-message-search-item') 
+            # Add delay between forums to avoid rate-limiting (skip first)
+            if forum_idx > 0:
+                time.sleep(2)
 
-                if not search_results_items:
-                    logger.info(f"No search result items found on page {page_num} using selector 'div.lia-message-view-message-search-item'.")
-                    break 
+            # Dynamic per-forum budget: forums that yield few results free up budget for others
+            remaining_budget = self.max_items_to_fetch - len(feedback_items)
+            remaining_forums = len(forum_locations) - forum_idx
+            items_per_forum = max(20, remaining_budget // max(1, remaining_forums))
 
-                logger.info(f"Found {len(search_results_items)} potential search result items on page {page_num}.")
+            forum_location = forum_info['location']
+            forum_name = forum_info['name']
+            forum_items_count = 0
+            logger.info(f"--- Searching forum: {forum_name} ({forum_location}) --- Budget: {items_per_forum} items ---")
 
-                for item_element in search_results_items:
-                    if len(feedback_items) >= self.max_items_to_fetch: break
+            for batch_idx, keyword_batch in enumerate(keyword_batches):
+                if len(feedback_items) >= self.max_items_to_fetch or forum_items_count >= items_per_forum:
+                    break
 
-                    title_tag = item_element.select_one('h2.message-subject a.page-link.lia-link-navigation')
-                    author_tag = item_element.select_one('span.lia-message-byline a.lia-user-name-link')
+                query_string = " OR ".join([f'"{kw}"' for kw in keyword_batch])
+                if len(keyword_batches) > 1:
+                    logger.info(f"Search batch {batch_idx+1}/{len(keyword_batches)} for {forum_name}: {query_string[:120]}...")
+
+                remaining_for_forum = items_per_forum - forum_items_count
+                num_pages_to_scrape = min(3, max(1, (remaining_for_forum + self.search_page_size - 1) // self.search_page_size))
+
+                for page_num in range(1, num_pages_to_scrape + 1):
+                    if len(feedback_items) >= self.max_items_to_fetch or forum_items_count >= items_per_forum:
+                        break
+
+                    params = {
+                        'filter': 'location', 'q': query_string, 'noSynonym': 'false', 'advanced': 'true',
+                        'location': forum_location, 'collapse_discussion': 'true',
+                        'search_type': 'thread', 'search_page_size': str(self.search_page_size), 'page': str(page_num) 
+                    }
+                    current_url = f"{self.search_base_url}?{requests.compat.urlencode(params)}"
+                    logger.info(f"Scraping {forum_name} search results page {page_num}: {current_url}")
+
+                    try:
+                        response = self.session.get(self.search_base_url, params=params, timeout=30)
+                        response.raise_for_status()
+                        soup = BeautifulSoup(response.content, 'html.parser')
                     
-                    date_span = item_element.select_one('div.lia-message-post-date span.local-date')
-                    time_span = item_element.select_one('div.lia-message-post-date span.local-time')
-                    
-                    body_container_tag = item_element.select_one('div.lia-truncated-body-container') # New selector for body
-                    
-                    date_str_combined = None
-                    if date_span and time_span:
-                        raw_date_text = date_span.get_text(strip=True) if date_span else ""
-                        raw_time_text = time_span.get_text(strip=True) if time_span else ""
+                        search_results_items = soup.select('div.lia-message-view-message-search-item') 
+
+                        if not search_results_items:
+                            logger.info(f"No search result items found on page {page_num} in {forum_name}.")
+                            break 
+
+                        logger.info(f"Found {len(search_results_items)} potential search result items on page {page_num} in {forum_name}.")
+
+                        for item_element in search_results_items:
+                            if len(feedback_items) >= self.max_items_to_fetch or forum_items_count >= items_per_forum:
+                                break
+
+                            title_tag = item_element.select_one('h2.message-subject a.page-link.lia-link-navigation')
+                            author_tag = item_element.select_one('span.lia-message-byline a.lia-user-name-link')
                         
-                        # Aggressively clean date and time parts individually using regex
-                        date_match = re.search(r'([\d\-]+)', raw_date_text)
-                        time_match = re.search(r'([\d\s:/APMampm]+)', raw_time_text) # Allow space in time
+                            date_span = item_element.select_one('div.lia-message-post-date span.local-date')
+                            time_span = item_element.select_one('div.lia-message-post-date span.local-time')
                         
-                        date_text_cleaned = date_match.group(1).strip() if date_match else ""
-                        time_text_cleaned = time_match.group(1).strip() if time_match else ""
+                            body_container_tag = item_element.select_one('div.lia-truncated-body-container')
                         
-                        if date_text_cleaned and time_text_cleaned:
-                            date_str_combined = f"{date_text_cleaned} {time_text_cleaned}"
-                            logger.debug(f"Cleaned combined date/time: '{date_str_combined}' from raw '{raw_date_text} {raw_time_text}'")
-                        elif date_text_cleaned: # Case where only date_span might exist
-                             date_str_combined = date_text_cleaned
-                             logger.debug(f"Cleaned date only: '{date_str_combined}' from raw '{raw_date_text}'")
-                        else:
-                            date_str_combined = None # Will trigger fallback in _parse_community_date
-                            logger.warning(f"Could not reliably extract date/time from raw: '{raw_date_text} {raw_time_text}'")
+                            date_str_combined = None
+                            if date_span and time_span:
+                                raw_date_text = date_span.get_text(strip=True) if date_span else ""
+                                raw_time_text = time_span.get_text(strip=True) if time_span else ""
                             
-                    elif date_span: # This case might be redundant now but kept for safety if only date_span exists without time_span initially
-                        raw_date_text_only = date_span.get_text(strip=True)
-                        date_match_only = re.search(r'([\d\-]+)', raw_date_text_only)
-                        date_str_combined = date_match_only.group(1).strip() if date_match_only else None
-                        logger.debug(f"Cleaned date only (elif branch): '{date_str_combined}' from raw '{raw_date_text_only}'")
+                                date_match = re.search(r'([\d\-]+)', raw_date_text)
+                                time_match = re.search(r'([\d\s:/APMampm]+)', raw_time_text)
+                            
+                                date_text_cleaned = date_match.group(1).strip() if date_match else ""
+                                time_text_cleaned = time_match.group(1).strip() if time_match else ""
+                            
+                                if date_text_cleaned and time_text_cleaned:
+                                    date_str_combined = f"{date_text_cleaned} {time_text_cleaned}"
+                                    logger.debug(f"Cleaned combined date/time: '{date_str_combined}' from raw '{raw_date_text} {raw_time_text}'")
+                                elif date_text_cleaned:
+                                     date_str_combined = date_text_cleaned
+                                     logger.debug(f"Cleaned date only: '{date_str_combined}' from raw '{raw_date_text}'")
+                                else:
+                                    date_str_combined = None
+                                    logger.warning(f"Could not reliably extract date/time from raw: '{raw_date_text} {raw_time_text}'")
+                                
+                            elif date_span:
+                                raw_date_text_only = date_span.get_text(strip=True)
+                                date_match_only = re.search(r'([\d\-]+)', raw_date_text_only)
+                                date_str_combined = date_match_only.group(1).strip() if date_match_only else None
+                                logger.debug(f"Cleaned date only (elif branch): '{date_str_combined}' from raw '{raw_date_text_only}'")
 
 
-                    labels_list_container = item_element.select_one('div.LabelsList')
-                    tag_texts = []
-                    if labels_list_container:
-                        label_links = labels_list_container.select('li.label a.label-link')
-                        for link in label_links:
-                            tag_texts.append(link.get_text(strip=True).replace('', '')) 
-                    tag_value = ", ".join(tag_texts)
+                            labels_list_container = item_element.select_one('div.LabelsList')
+                            tag_texts = []
+                            if labels_list_container:
+                                label_links = labels_list_container.select('li.label a.label-link')
+                                for link in label_links:
+                                    tag_texts.append(link.get_text(strip=True).replace('', '')) 
+                            tag_value = ", ".join(tag_texts)
 
-                    if title_tag and title_tag.has_attr('href'):
-                        title = title_tag.get_text(strip=True)
-                        thread_url_path = title_tag['href']
-                        base_community_url = "https://community.fabric.microsoft.com" 
-                        thread_url = requests.compat.urljoin(base_community_url, thread_url_path)
-                        author_name = author_tag.get_text(strip=True) if author_tag else "Unknown Author"
-                        created_utc = self._parse_community_date(date_str_combined) 
-                        
-                        feedback_text = title # Default feedback text
-                        if body_container_tag:
-                            # Use get_text with separator to preserve spaces between elements
-                            extracted_body_text = body_container_tag.get_text(separator=' ', strip=True)
-                            # Clean up multiple spaces and normalize whitespace
-                            extracted_body_text = re.sub(r'\s+', ' ', extracted_body_text).strip()
-                            if extracted_body_text: # Use body if found and not empty
-                                feedback_text = extracted_body_text
-                        
-                        gist = generate_feedback_gist(feedback_text) # Generate gist from new feedback_text
-                        
-                        raw_feedback_data = {
-                            "title": title, "author": author_name, "parsed_date_str": date_str_combined,
-                            "search_page_num_scraped": page_num, "url_path": thread_url_path, "extracted_tags": tag_texts,
-                            "body_preview_used": bool(body_container_tag and body_container_tag.get_text(strip=True))
-                        }
-                        
-                        # Enhanced categorization
-                        enhanced_cat = enhanced_categorize_feedback(
-                            feedback_text,
-                            source='Fabric Community',
-                            scenario='Customer',
-                            organization='Microsoft Fabric Community'
-                        )
-                        
-                        # Find matched keywords
-                        matched_keywords = find_matched_keywords(feedback_text, keywords_to_use)
-                        
-                        feedback_items.append({
-                            'Feedback_Gist': gist, 'Feedback': feedback_text, 'Url': thread_url,
-                            'Matched_Keywords': matched_keywords,
-                            'Area': 'Fabric Platform Search', 'Sources': self.source_name,
-                            'Impacttype': self._determine_impact_type_content(title + " " + feedback_text), # Use title + feedback for impact
-                            'Scenario': 'Customer', 'Customer': author_name,
-                            'Tag': tag_value,
-                            'Created': created_utc.isoformat(),
-                            'Organization': 'Microsoft Fabric Community', 'Status': config.DEFAULT_STATUS,
-                            'Created_by': config.SYSTEM_USER, 'Rawfeedback': json.dumps(raw_feedback_data),
-                            'Sentiment': analyze_sentiment(feedback_text), # Analyze new feedback_text
-                            'Category': enhanced_cat['legacy_category'],  # Backward compatibility
-                            'Enhanced_Category': enhanced_cat['primary_category'],
-                            'Subcategory': enhanced_cat['subcategory'],
-                            'Audience': enhanced_cat['audience'],
-                            'Priority': enhanced_cat['priority'],
-                            'Feature_Area': enhanced_cat['feature_area'],
-                            'Categorization_Confidence': enhanced_cat['confidence'],
-                            'Domains': enhanced_cat.get('domains', []),
-                            'Primary_Domain': enhanced_cat.get('primary_domain', None)
-                        })
-                        if len(feedback_items) % 10 == 0 and len(feedback_items) > 0:
-                            logger.info(f"Collected {len(feedback_items)} relevant items from {self.source_name} search...")
-                    else:
-                        logger.warning(f"Skipping search result item: missing title/href. Title: {title_tag}, Author: {author_tag}, Date: {date_str_combined}")
-                time.sleep(1.5) 
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Error scraping {self.source_name} search page {current_url}: {e}", exc_info=True)
-                break 
-            except Exception as e:
-                logger.error(f"An unexpected error occurred processing {self.source_name} page {page_num}: {e}", exc_info=True)
-                break
-        logger.info(f"Finished {self.source_name} search. Total items: {len(feedback_items)}")
-        return feedback_items[:self.max_items_to_fetch]
+                            if title_tag and title_tag.has_attr('href'):
+                                thread_url_path = title_tag['href']
+
+                                # --- Robust title extraction ---
+                                # 1. Try the 'title' attribute (sometimes full)
+                                title = (title_tag.get('title') or '').strip()
+                                # 2. Fallback: link text (no separator to avoid word-breaking at highlight spans)
+                                if not title:
+                                    title = re.sub(r'\s+', ' ', title_tag.get_text()).strip()
+                                # 3. Strip leading/trailing ellipsis artefacts
+                                title = re.sub(r'^[.\u2026]+\s*', '', title).strip()
+                                title = re.sub(r'\s*[.\u2026]{3,}$', '', title).strip()
+
+                                # 4. If title still looks truncated (starts lowercase / orphan punctuation)
+                                #    recover the clean title from the URL slug
+                                #    URL pattern: .../Title-Slug/m-p/12345
+                                if not title or (title and (title[0].islower() or title[0] in ')]}>,;:')):
+                                    slug_match = re.search(r'/([^/]+)/m-p/\d+', thread_url_path)
+                                    if slug_match:
+                                        slug = slug_match.group(1)
+                                        title = slug.replace('-', ' ').strip()
+                                        # Capitalize first letter of each word (title-case the slug)
+                                        title = title.title()
+                                # 5. Even if not obviously truncated, if the extracted title ends with '...'
+                                #    prefer the slug-derived title (it's complete)
+                                elif title.endswith('...') or title.endswith('\u2026'):
+                                    slug_match = re.search(r'/([^/]+)/m-p/\d+', thread_url_path)
+                                    if slug_match:
+                                        slug = slug_match.group(1)
+                                        slug_title = slug.replace('-', ' ').strip()
+                                        # Use the slug if it's longer (more complete)
+                                        if len(slug_title) > len(title):
+                                            title = slug_title[0].upper() + slug_title[1:]
+
+                                base_community_url = "https://community.fabric.microsoft.com" 
+                                thread_url = requests.compat.urljoin(base_community_url, thread_url_path)
+                                author_name = author_tag.get_text(strip=True) if author_tag else "Unknown Author"
+                                created_utc = self._parse_community_date(date_str_combined) 
+                            
+                                feedback_text = title
+                                if body_container_tag:
+                                    # Use get_text() without separator to avoid inserting spaces
+                                    # inside words split by search highlight <span> tags
+                                    extracted_body_text = re.sub(r'\s+', ' ', body_container_tag.get_text()).strip()
+                                    if extracted_body_text:
+                                        feedback_text = extracted_body_text
+                            
+                                # Normalize URL (strip search tracking params) for dedup & storage
+                                thread_url = self._normalize_url(thread_url)
+                                if thread_url in seen_urls:
+                                    logger.debug(f"Skipping duplicate thread: {title} ({thread_url})")
+                                    continue
+                                seen_urls.add(thread_url)
+                            
+                                gist = generate_feedback_gist(feedback_text)
+                            
+                                raw_feedback_data = {
+                                    "title": title, "author": author_name, "parsed_date_str": date_str_combined,
+                                    "search_page_num_scraped": page_num, "url_path": thread_url_path, "extracted_tags": tag_texts,
+                                    "body_preview_used": bool(body_container_tag and body_container_tag.get_text(strip=True)),
+                                    "forum": forum_name
+                                }
+                            
+                                # Enhanced categorization
+                                enhanced_cat = enhanced_categorize_feedback(
+                                    feedback_text,
+                                    source='Fabric Community',
+                                    scenario='Customer',
+                                    organization='Microsoft Fabric Community',
+                                    source_hint=forum_name
+                                )
+                            
+                                matched_keywords = find_matched_keywords(feedback_text, keywords_to_use)
+                            
+                                # Extract the message ID from the URL (e.g., /m-p/4896487)
+                                community_msg_id = ''
+                                msg_id_match = re.search(r'/m-p/(\d+)', thread_url)
+                                if msg_id_match:
+                                    community_msg_id = msg_id_match.group(1)
+
+                                feedback_items.append({
+                                    'Feedback_ID': f'community-{community_msg_id}' if community_msg_id else None,
+                                    'Title': title,
+                                    'Feedback_Gist': gist, 'Feedback': feedback_text, 'Url': thread_url,
+                                    'Matched_Keywords': matched_keywords,
+                                    'Area': f'Fabric Community - {forum_name}', 'Sources': self.source_name,
+                                    'Impacttype': self._determine_impact_type_content(title + " " + feedback_text),
+                                    'Scenario': 'Customer', 'Customer': author_name,
+                                    'Tag': tag_value,
+                                    'Created': created_utc.isoformat(),
+                                    'Organization': 'Microsoft Fabric Community', 'Status': config.DEFAULT_STATUS,
+                                    'Created_by': config.SYSTEM_USER, 'Rawfeedback': json.dumps(raw_feedback_data),
+                                    'Sentiment': analyze_sentiment(feedback_text),
+                                    'Category': enhanced_cat['legacy_category'],
+                                    'Enhanced_Category': enhanced_cat['primary_category'],
+                                    'Subcategory': enhanced_cat['subcategory'],
+                                    'Audience': enhanced_cat['audience'],
+                                    'Priority': enhanced_cat['priority'],
+                                    'Feature_Area': enhanced_cat['feature_area'],
+                                    'Categorization_Confidence': enhanced_cat['confidence'],
+                                    'Domains': enhanced_cat.get('domains', []),
+                                    'Primary_Domain': enhanced_cat.get('primary_domain', None),
+                                    'Workloads': enhanced_cat.get('workloads', []),
+                                    'Primary_Workload': enhanced_cat.get('primary_workload', None)
+                                })
+                                forum_items_count += 1
+                                if len(feedback_items) % 10 == 0 and len(feedback_items) > 0:
+                                    logger.info(f"Collected {len(feedback_items)} relevant items from {self.source_name} ({forum_name})...")
+                            else:
+                                logger.warning(f"Skipping search result item: missing title/href. Title: {title_tag}, Author: {author_tag}, Date: {date_str_combined}")
+                        time.sleep(0.5) 
+                    except requests.exceptions.RequestException as e:
+                        logger.error(f"Error scraping {self.source_name} forum {forum_name} page {current_url}: {e}", exc_info=True)
+                        break 
+                    except Exception as e:
+                        logger.error(f"An unexpected error occurred processing {self.source_name} forum {forum_name} page {page_num}: {e}", exc_info=True)
+                        break
+
+                # Small delay between batches within the same forum
+                if batch_idx < len(keyword_batches) - 1:
+                    time.sleep(1)
+
+            logger.info(f"Finished forum {forum_name}: collected {forum_items_count} items")
+
+        logger.info(f"Finished {self.source_name} search across {len(forum_locations)} forums. Total items: {len(feedback_items)}")
+
+        # --- Phase 2: Fetch full post bodies from thread pages (concurrent) ---
+        # The search results only contain a truncated body preview.
+        # Follow each thread URL to retrieve the complete original post.
+        # Uses a thread pool (10 workers) for ~5-8x speed improvement.
+        items_to_enrich = feedback_items[:self.max_items_to_fetch]
+        total = len(items_to_enrich)
+        logger.info(f"Starting full-body enrichment for {total} items (concurrent, 10 workers)")
+
+        # Step 1: Fetch all thread bodies concurrently
+        body_results = [None] * total  # index-aligned with items_to_enrich
+
+        def _fetch_one(idx_url):
+            idx, url = idx_url
+            return idx, self._fetch_thread_body(url)
+
+        fetch_tasks = [
+            (i, item.get('Url', ''))
+            for i, item in enumerate(items_to_enrich)
+            if item.get('Url')
+        ]
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            # Stagger submissions slightly (0.15s apart) to soften burst
+            futures = {}
+            for task in fetch_tasks:
+                futures[executor.submit(_fetch_one, task)] = task[0]
+                time.sleep(0.15)
+
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    idx, body = future.result()
+                    body_results[idx] = body
+                except Exception as e:
+                    logger.warning(f"Thread fetch failed for item {futures[future]}: {e}")
+
+            done_count = sum(1 for b in body_results if b is not None)
+            logger.info(f"Fetched {done_count}/{total} thread bodies")
+
+        # Step 2: Enrich items with the fetched bodies (single-threaded, CPU-only)
+        enriched_count = 0
+        for idx, item in enumerate(items_to_enrich):
+            full_body = body_results[idx]
+            if full_body and len(full_body) > len(item.get('Feedback', '')):
+                old_len = len(item.get('Feedback', ''))
+                item['Feedback'] = full_body
+                item['Feedback_Gist'] = generate_feedback_gist(full_body)
+                item['Sentiment'] = analyze_sentiment(full_body)
+                enhanced_cat = enhanced_categorize_feedback(
+                    full_body,
+                    source='Fabric Community',
+                    scenario=item.get('Scenario', 'Customer'),
+                    organization=item.get('Organization', 'Microsoft Fabric Community'),
+                    source_hint=item.get('Area', '').replace('Fabric Community - ', '')
+                )
+                item['Category'] = enhanced_cat['legacy_category']
+                item['Enhanced_Category'] = enhanced_cat['primary_category']
+                item['Subcategory'] = enhanced_cat['subcategory']
+                item['Audience'] = enhanced_cat['audience']
+                item['Priority'] = enhanced_cat['priority']
+                item['Feature_Area'] = enhanced_cat['feature_area']
+                item['Categorization_Confidence'] = enhanced_cat['confidence']
+                item['Domains'] = enhanced_cat.get('domains', [])
+                item['Primary_Domain'] = enhanced_cat.get('primary_domain', None)
+                item['Workloads'] = enhanced_cat.get('workloads', [])
+                item['Primary_Workload'] = enhanced_cat.get('primary_workload', None)
+                item['Impacttype'] = self._determine_impact_type_content(
+                    item.get('Title', '') + " " + full_body
+                )
+                item['Matched_Keywords'] = find_matched_keywords(full_body, keywords_to_use)
+                enriched_count += 1
+                logger.debug(f"Enriched item {idx+1}/{total}: {old_len} -> {len(full_body)} chars")
+            if (idx + 1) % 50 == 0:
+                logger.info(f"Enrichment progress: {idx+1}/{total} ({enriched_count} enriched)")
+
+        logger.info(f"Full-body enrichment complete: {enriched_count}/{total} items enriched")
+        return items_to_enrich
 
     def _parse_community_date(self, date_str: str) -> datetime: 
         # The date_str should be pre-cleaned by the caller now
@@ -388,6 +666,47 @@ class FabricCommunityCollector:
         if any(word in content_lower for word in ['suggest', 'feature', 'improve']): return 'Feature Request'
         if any(word in content_lower for word in ['help', 'how to', 'question']): return 'Question'
         return 'Feedback'
+
+    def _fetch_thread_body(self, thread_url: str) -> str | None:
+        """Fetch the full original-post body from a Fabric Community thread page.
+        
+        Returns the cleaned text of the first message, or None on failure.
+        The search results page only shows a truncated body preview; this method
+        follows the thread URL to retrieve the complete post content.
+        
+        Note: Uses requests.get() instead of self.session.get() to support
+        concurrent calls from ThreadPoolExecutor (requests.Session is not thread-safe).
+        """
+        try:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            resp = requests.get(thread_url, headers=headers, timeout=30)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.content, 'html.parser')
+            body_div = soup.select_one('div.lia-message-body-content')
+            if not body_div:
+                logger.debug(f"No lia-message-body-content found on {thread_url}")
+                return None
+            # Extract text, collapsing whitespace
+            raw_text = re.sub(r'\s+', ' ', body_div.get_text(separator=' ', strip=True)).strip()
+            if not raw_text:
+                return None
+            # Strip trailing Khoros boilerplate ("Solved! Go to Solution.", signature lines)
+            raw_text = re.sub(r'\s*Solved!\s*Go to Solution\.?\s*$', '', raw_text).strip()
+            # Remove "CC: @user..." and everything following it (sign-off often trails CC)
+            raw_text = re.sub(r'\s*CC:\s*@.+$', '', raw_text, flags=re.IGNORECASE).strip()
+            # Remove trailing sign-offs like "Thanks, Firstname Lastname"
+            raw_text = re.sub(r'\s+(?:Thanks|Thank you|Regards|Best),?\s+\S+(?:\s+\S+)?\s*$', '', raw_text, flags=re.IGNORECASE).strip()
+            # Remove bare trailing "Thank you" / "Thanks" (no name following)
+            raw_text = re.sub(r'\s+(?:Thanks|Thank you|Regards|Best)[.!]?\s*$', '', raw_text, flags=re.IGNORECASE).strip()
+            return raw_text if len(raw_text) > 20 else None
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Failed to fetch thread body from {thread_url}: {e}")
+            return None
+        except Exception as e:
+            logger.warning(f"Error parsing thread body from {thread_url}: {e}")
+            return None
 
 class GitHubDiscussionsCollector:
     def __init__(self):
@@ -463,7 +782,10 @@ class GitHubDiscussionsCollector:
                 # Find matched keywords
                 matched_keywords = find_matched_keywords(full_feedback_text_github, config.KEYWORDS)
                 
+                disc_number = discussion.get('number', '')
                 feedback_items.append({
+                    'Feedback_ID': f'ghdisc-{self.owner}-{self.repo}-{disc_number}' if disc_number else None,
+                    'Title': title,
                     'Feedback_Gist': generate_feedback_gist(full_feedback_text_github),
                     'Feedback': full_feedback_text_github, 'Url': url,
                     'Matched_Keywords': matched_keywords,
@@ -485,7 +807,9 @@ class GitHubDiscussionsCollector:
                     'Feature_Area': enhanced_cat['feature_area'],
                     'Categorization_Confidence': enhanced_cat['confidence'],
                     'Domains': enhanced_cat.get('domains', []),
-                    'Primary_Domain': enhanced_cat.get('primary_domain', None)
+                    'Primary_Domain': enhanced_cat.get('primary_domain', None),
+                    'Workloads': enhanced_cat.get('workloads', []),
+                    'Primary_Workload': enhanced_cat.get('primary_workload', None)
                 })
                 count +=1
             logger.info(f"Collected {len(feedback_items)} relevant feedback items from GitHub Discussions")
@@ -603,14 +927,11 @@ class GitHubIssuesCollector:
                 matched_keywords = find_matched_keywords(full_feedback_text_github, config.KEYWORDS)
                 
                 feedback_items.append({
+                    'Feedback_ID': f'ghissue-{self.owner}-{self.repo}-{issue_number}' if issue_number else None,
+                    'Title': title,
                     'Feedback_Gist': generate_feedback_gist(full_feedback_text_github),
                     'Feedback': full_feedback_text_github,
-                    'Matched_Keywords': matched_keywords, 
-                    'Title': title,  # Add explicit Title field for ID generation
-                    'Content': full_feedback_text_github,  # Add explicit Content field for ID generation
-                    'Source': 'GitHub Issues',  # Add explicit Source field for ID generation
-                    'Author': author,  # Add explicit Author field for ID generation
-                    'Created_Date': created_at_str,  # Add explicit Created_Date field for ID generation
+                    'Matched_Keywords': matched_keywords,
                     'Url': url,
                     'Area': 'Issues',
                     'Sources': 'GitHub Issues',
@@ -632,7 +953,9 @@ class GitHubIssuesCollector:
                     'Feature_Area': enhanced_cat['feature_area'],
                     'Categorization_Confidence': enhanced_cat['confidence'],
                     'Domains': enhanced_cat.get('domains', []),
-                    'Primary_Domain': enhanced_cat.get('primary_domain', None)
+                    'Primary_Domain': enhanced_cat.get('primary_domain', None),
+                    'Workloads': enhanced_cat.get('workloads', []),
+                    'Primary_Workload': enhanced_cat.get('primary_workload', None)
                 })
                 count += 1
                 
@@ -759,6 +1082,8 @@ class ADOChildTasksCollector:
                     logger.info(f"ADO Categorization Debug - Audience: {enhanced_cat.get('audience', 'MISSING')}, Category: {enhanced_cat.get('primary_category', 'MISSING')}")
                     
                     feedback_items.append({
+                        'Feedback_ID': f"ado-{task_data['work_item_id']}" if task_data.get('work_item_id') else None,
+                        'Title': cleaned_title,
                         'Feedback_Gist': generate_feedback_gist(full_feedback_text),
                         'Feedback': full_feedback_text,
                         'Url': work_item_url,
@@ -782,7 +1107,9 @@ class ADOChildTasksCollector:
                         'Feature_Area': enhanced_cat['feature_area'],
                         'Categorization_Confidence': enhanced_cat['confidence'],
                         'Domains': enhanced_cat.get('domains', []),
-                        'Primary_Domain': enhanced_cat.get('primary_domain', None)
+                        'Primary_Domain': enhanced_cat.get('primary_domain', None),
+                        'Workloads': enhanced_cat.get('workloads', []),
+                        'Primary_Workload': enhanced_cat.get('primary_workload', None)
                     })
                 except Exception as e:
                     logger.error(f"Error creating feedback item for task {task_data.get('work_item_id', 'unknown')}: {e}")

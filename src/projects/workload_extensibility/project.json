@@ -1,0 +1,107 @@
+{
+  "id": "workload_extensibility",
+  "name": "Workload Extensibility",
+  "description": "Feedback collection for Fabric Workload Development Kit, SDK, Marketplace, and ISV experiences",
+  "icon": "bi-puzzle",
+  "color": "#0078d4",
+  
+  "database": {
+    "connection_string_env": "FABRIC_SQL_CONNECTION_STRING_WE",
+    "server_env": "FABRIC_SQL_SERVER",
+    "database_env": "FABRIC_SQL_DATABASE",
+    "authentication": "ActiveDirectoryInteractive"
+  },
+
+  "sources": {
+    "reddit": {
+      "enabled": true,
+      "subreddit": "MicrosoftFabric",
+      "sort": "new",
+      "timeFilter": "month",
+      "maxItems": 5
+    },
+    "github": {
+      "enabled": true,
+      "repositories": [
+        {"owner": "microsoft", "repo": "Microsoft-Fabric-workload-development-sample", "enabled": true},
+        {"owner": "microsoft", "repo": "fabric-extensibility-toolkit", "enabled": true},
+        {"owner": "microsoft", "repo": "Microsoft-fabric-tools-workload", "enabled": true}
+      ],
+      "state": "all",
+      "maxItems": 5
+    },
+    "githubIssues": {
+      "enabled": true,
+      "repositories": [
+        {"owner": "microsoft", "repo": "Microsoft-Fabric-workload-development-sample", "enabled": true},
+        {"owner": "microsoft", "repo": "fabric-extensibility-toolkit", "enabled": true},
+        {"owner": "microsoft", "repo": "Microsoft-fabric-tools-workload", "enabled": true}
+      ],
+      "state": "all",
+      "maxItems": 5
+    },
+    "fabricCommunity": {
+      "enabled": true,
+      "forums": [
+        {
+          "enabled": true,
+          "name": "Power BI",
+          "url": "https://community.fabric.microsoft.com/t5/Power-BI-forums/ct-p/powerbi"
+        },
+        {
+          "enabled": true,
+          "name": "Data Engineering",
+          "url": "https://community.fabric.microsoft.com/t5/Data-Engineering-forums/ct-p/dataengineering"
+        },
+        {
+          "enabled": true,
+          "name": "Data Warehouse",
+          "url": "https://community.fabric.microsoft.com/t5/Data-Warehouse-forums/ct-p/datawarehouse"
+        },
+        {
+          "enabled": true,
+          "name": "Data Science",
+          "url": "https://community.fabric.microsoft.com/t5/Data-Science-forums/ct-p/datascience"
+        },
+        {
+          "enabled": true,
+          "name": "Data Factory",
+          "url": "https://community.fabric.microsoft.com/t5/Data-Factory-forums/ct-p/datafactory"
+        },
+        {
+          "enabled": true,
+          "name": "IQ",
+          "url": "https://community.fabric.microsoft.com/t5/IQ-forums-Private/ct-p/fabriciq"
+        },
+        {
+          "enabled": true,
+          "name": "Real-Time Intelligence",
+          "url": "https://community.fabric.microsoft.com/t5/Data-Activator-private-preview/ct-p/dataactivator"
+        },
+        {
+          "enabled": true,
+          "name": "Databases",
+          "url": "https://community.fabric.microsoft.com/t5/Databases-preview-Community/ct-p/databases"
+        },
+        {
+          "enabled": true,
+          "name": "Fabric Platform",
+          "url": "https://community.fabric.microsoft.com/t5/Fabric-platform/ct-p/AC-Community"
+        }
+      ],
+      "maxItems": 5
+    },
+    "ado": {
+      "enabled": true,
+      "parentWorkItem": "1319103",
+      "maxItems": 5
+    }
+  },
+
+  "settings": {
+    "timeRangeMonths": 6,
+    "maxItemsPerSource": 5,
+    "respectRateLimits": true,
+    "duplicateDetection": true
+  }
+}

@@ -33,6 +33,9 @@ venv/
 env/
 ENV/
 
+# Project definitions (exclude specific projects)
+src/projects/copilot_ai_experiences/
+
 # Build output
 dist/
 build/

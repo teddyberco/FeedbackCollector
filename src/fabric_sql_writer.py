@@ -14,21 +14,49 @@ from config import FABRIC_SQL_SERVER, FABRIC_SQL_DATABASE, FABRIC_SQL_AUTHENTICA
 logger = logging.getLogger(__name__)
 
 class FabricSQLWriter:
-    """Handles writing feedback state changes to Fabric SQL Database"""
+    """Handles writing feedback state changes to Fabric SQL Database.
     
-    def __init__(self, bearer_token: str = None):
+    Supports dynamic database targeting via project configuration.
+    If db_config is provided, it overrides the global env vars.
+    """
+    
+    def __init__(self, bearer_token: str = None, db_config: Dict[str, str] = None):
         self.bearer_token = bearer_token
-        self.server = FABRIC_SQL_SERVER
-        self.database = FABRIC_SQL_DATABASE
-        self.auth_method = FABRIC_SQL_AUTHENTICATION
         self.current_user = None  # Will be set after connection
         
+        if db_config:
+            # Use project-specific database configuration
+            self.server = db_config.get('server', '')
+            self.database = db_config.get('database_name', '')
+            self.auth_method = db_config.get('authentication', 'ActiveDirectoryInteractive')
+            self.connection_string = db_config.get('connection_string', '')
+        else:
+            # Fallback to global env vars
+            self.server = FABRIC_SQL_SERVER
+            self.database = FABRIC_SQL_DATABASE
+            self.auth_method = FABRIC_SQL_AUTHENTICATION
+            self.connection_string = ''
+        
         # Validate that required configuration is present
-        if not self.server or not self.database:
-            raise ValueError("FABRIC_SQL_SERVER and FABRIC_SQL_DATABASE must be configured in .env file")
+        if not self.connection_string and (not self.server or not self.database):
+            raise ValueError(
+                "Database connection not configured. Either provide a connection_string "
+                "or set FABRIC_SQL_SERVER and FABRIC_SQL_DATABASE in .env / project config."
+            )
+
     
     def connect_interactive(self):
         """Connect using interactive Azure AD authentication (for development)"""
+        
+        # If a full connection string is provided (e.g. from project config), use it directly
+        if self.connection_string:
+            try:
+                logger.info(f"Connecting with project connection string to {self.database}")
+                conn = pyodbc.connect(self.connection_string)
+                logger.info(f"Successfully connected using project connection string")
+                return conn
+            except Exception as e:
+                logger.warning(f"Direct connection string failed: {e}, falling back to driver iteration")
         
         # Try multiple driver names in order of preference
         drivers_to_try = [
@@ -130,7 +158,7 @@ class FabricSQLWriter:
             
             create_table_sql = """
             CREATE TABLE FeedbackState (
-                Feedback_ID NVARCHAR(50) PRIMARY KEY,
+                Feedback_ID NVARCHAR(100) PRIMARY KEY,
                 State NVARCHAR(20),
                 Feedback_Notes NTEXT,
                 Primary_Domain NVARCHAR(100),
@@ -215,43 +243,35 @@ class FabricSQLWriter:
         table_exists = cursor.fetchone()[0] > 0
         
         if not table_exists:
-            logger.info("Creating new Feedback table with all columns...")
+            logger.info("Creating new Feedback table with simplified schema (v2)...")
             
             create_table_sql = """
             CREATE TABLE Feedback (
-                Feedback_ID NVARCHAR(50) PRIMARY KEY,
+                Feedback_ID NVARCHAR(100) PRIMARY KEY,
                 Title NVARCHAR(500),
-                Content NTEXT,
+                Feedback_Gist NVARCHAR(1000),
+                Feedback NTEXT,
                 Source NVARCHAR(50),
-                Source_URL NVARCHAR(1000),
+                Url NVARCHAR(1000),
                 Author NVARCHAR(100),
                 Created_Date DATETIME2,
                 Sentiment NVARCHAR(20),
-                Primary_Category NVARCHAR(100),
-                Enhanced_Category NVARCHAR(200),
-                Audience NVARCHAR(50),
-                Priority NVARCHAR(20),
-                -- Additional fields from collectors
-                Feedback_Gist NVARCHAR(1000),
-                Area NVARCHAR(100),
                 Impacttype NVARCHAR(100),
                 Scenario NVARCHAR(50),
-                Tag NVARCHAR(200),
+                Area NVARCHAR(100),
+                Tag NVARCHAR(1000),
                 Organization NVARCHAR(200),
-                Status NVARCHAR(50),
-                Created_by NVARCHAR(100),
-                Rawfeedback NTEXT,
-                Category NVARCHAR(100),
+                Category NVARCHAR(200),
                 Subcategory NVARCHAR(200),
                 Feature_Area NVARCHAR(200),
                 Categorization_Confidence FLOAT,
+                Audience NVARCHAR(50),
+                Priority NVARCHAR(20),
                 Primary_Domain NVARCHAR(100),
-                Domains NTEXT, -- Store as JSON string
-                Matched_Keywords NTEXT, -- Store matched keywords as JSON array
-                User_Modified_Categorization BIT DEFAULT 0, -- Flag to protect user changes from auto-recategorization
-                Auto_Recategorized_Date DATETIME2, -- Timestamp of last automatic recategorization
-                Collected_Date DATETIME2 DEFAULT GETDATE(),
-                CONSTRAINT UK_Feedback_ID UNIQUE (Feedback_ID)
+                Primary_Workload NVARCHAR(100),
+                Matched_Keywords NTEXT,
+                Rawfeedback NTEXT,
+                Collected_Date DATETIME2 DEFAULT GETDATE()
             );
             """
             
@@ -263,35 +283,35 @@ class FabricSQLWriter:
             self.migrate_feedback_table(conn)
     
     def migrate_feedback_table(self, conn):
-        """Add missing columns to existing Feedback table"""
+        """Add missing columns to existing Feedback table (v2 schema)"""
         cursor = conn.cursor()
         
-        # List of new columns to add
-        new_columns = [
+        # v2 schema columns - ensure these exist
+        v2_columns = [
             "Feedback_Gist NVARCHAR(1000)",
+            "Feedback NTEXT",
+            "Url NVARCHAR(1000)",
+            "Author NVARCHAR(100)",
             "Area NVARCHAR(100)",
             "Impacttype NVARCHAR(100)",
             "Scenario NVARCHAR(50)",
-            "Tag NVARCHAR(200)",
+            "Tag NVARCHAR(1000)",
             "Organization NVARCHAR(200)",
-            "Status NVARCHAR(50)",
-            "Created_by NVARCHAR(100)",
-            "Rawfeedback NTEXT",
-            "Category NVARCHAR(100)",
+            "Category NVARCHAR(200)",
             "Subcategory NVARCHAR(200)",
             "Feature_Area NVARCHAR(200)",
             "Categorization_Confidence FLOAT",
+            "Audience NVARCHAR(50)",
+            "Priority NVARCHAR(20)",
             "Primary_Domain NVARCHAR(100)",
-            "Domains NTEXT",
+            "Primary_Workload NVARCHAR(100)",
             "Matched_Keywords NTEXT",
-            "User_Modified_Categorization BIT DEFAULT 0",
-            "Auto_Recategorized_Date DATETIME2"
+            "Rawfeedback NTEXT",
         ]
         
-        for column_def in new_columns:
+        for column_def in v2_columns:
             column_name = column_def.split()[0]
             try:
-                # Check if column exists
                 cursor.execute("""
                     SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
                     WHERE TABLE_NAME = 'Feedback' AND COLUMN_NAME = ?
@@ -300,7 +320,6 @@ class FabricSQLWriter:
                 column_exists = cursor.fetchone()[0] > 0
                 
                 if not column_exists:
-                    # Add the missing column
                     alter_sql = f"ALTER TABLE Feedback ADD {column_def}"
                     cursor.execute(alter_sql)
                     conn.commit()
@@ -311,17 +330,54 @@ class FabricSQLWriter:
             except Exception as e:
                 logger.error(f"❌ Error adding column {column_name}: {e}")
         
-        # Update ISV/Platform to Developer in existing data
-        try:
-            cursor.execute("UPDATE Feedback SET Audience = 'Developer' WHERE Audience IN ('ISV', 'Platform')")
-            updated_rows = cursor.rowcount
-            if updated_rows > 0:
-                conn.commit()
-                logger.info(f"✅ Updated {updated_rows} rows: ISV/Platform → Developer")
-        except Exception as e:
-            logger.error(f"❌ Error updating audience values: {e}")
+        # Migrate data from old column names to new names if old columns exist
+        rename_map = [
+            ('Content', 'Feedback'),
+            ('Source_URL', 'Url'),
+            ('Enhanced_Category', 'Category'),
+        ]
+        for old_col, new_col in rename_map:
+            try:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_NAME = 'Feedback' AND COLUMN_NAME = ?
+                """, [old_col])
+                old_exists = cursor.fetchone()[0] > 0
+                if old_exists:
+                    cursor.execute(f"""
+                        UPDATE Feedback SET [{new_col}] = [{old_col}]
+                        WHERE [{new_col}] IS NULL AND [{old_col}] IS NOT NULL
+                    """)
+                    if cursor.rowcount > 0:
+                        conn.commit()
+                        logger.info(f"✅ Migrated data: {old_col} → {new_col} ({cursor.rowcount} rows)")
+            except Exception as e:
+                logger.debug(f"Migration {old_col}→{new_col}: {e}")
         
-        logger.info("🔄 Feedback table migration completed")
+        # Standardize audience values (legacy mode only — skip if project has custom audiences)
+        import config as _cfg
+        _active_proj = _cfg.get_active_project_id()
+        _has_custom_audiences = False
+        if _active_proj:
+            try:
+                import project_manager as _pm
+                _proj = _pm.load_project(_active_proj)
+                if _proj.get('audience_config', {}).get('audiences'):
+                    _has_custom_audiences = True
+            except Exception:
+                pass
+        
+        if not _has_custom_audiences:
+            try:
+                cursor.execute("UPDATE Feedback SET Audience = 'Developer' WHERE Audience IN ('ISV', 'Platform')")
+                updated_rows = cursor.rowcount
+                if updated_rows > 0:
+                    conn.commit()
+                    logger.info(f"✅ Updated {updated_rows} rows: ISV/Platform → Developer")
+            except Exception as e:
+                logger.error(f"❌ Error updating audience values: {e}")
+        
+        logger.info("🔄 Feedback table migration completed (v2)")
     
     def load_feedback_states(self):
         """Load state data from FeedbackState table for server-side filtering"""
@@ -425,12 +481,18 @@ class FabricSQLWriter:
             
             cursor = conn.cursor()
             
-            # Get ALL existing feedback (ID, Title, Content hash) for comprehensive duplicate checking
-            # Optimize fetch: Only get what's needed for the hash (first 200 chars of content)
-            cursor.execute("""
-                SELECT Feedback_ID, Title, CAST(LEFT(CAST(Content AS NVARCHAR(MAX)), 200) AS NVARCHAR(200))
-                FROM Feedback
-            """)
+            # Get ALL existing feedback (ID, Title, Feedback hash) for comprehensive duplicate checking
+            # Try new schema column name first, fall back to old 'Content' column
+            try:
+                cursor.execute("""
+                    SELECT Feedback_ID, Title, CAST(LEFT(CAST(Feedback AS NVARCHAR(MAX)), 200) AS NVARCHAR(200))
+                    FROM Feedback
+                """)
+            except Exception:
+                cursor.execute("""
+                    SELECT Feedback_ID, Title, CAST(LEFT(CAST(Content AS NVARCHAR(MAX)), 200) AS NVARCHAR(200))
+                    FROM Feedback
+                """)
             
             existing_items_db = {}
             existing_content_hashes = set()
@@ -453,17 +515,25 @@ class FabricSQLWriter:
             # Collect new items for bulk insert
             new_items_params = []
             
+            # Source-based ID prefixes that indicate a stable source ID
+            SOURCE_ID_PREFIXES = ('reddit-', 'community-', 'ghissue-', 'ghdisc-', 'ado-')
+            
             for feedback in feedback_data:
                 try:
-                    # Generate deterministic ID based on content
-                    deterministic_id = FeedbackIDGenerator.generate_id_from_feedback_dict(feedback)
+                    # Use source-based ID if present, otherwise generate content-hash fallback
                     original_id = feedback.get('Feedback_ID') or feedback.get('id', '')
                     
-                    if deterministic_id != original_id:
-                        id_regenerated += 1
-                        logger.info(f"🔄 ID regenerated: {original_id} → {deterministic_id}")
+                    if original_id and original_id.startswith(SOURCE_ID_PREFIXES):
+                        # Source-based ID is stable - use it directly
+                        deterministic_id = original_id
+                    else:
+                        # No source ID — generate deterministic content-hash ID
+                        deterministic_id = FeedbackIDGenerator.generate_id_from_feedback_dict(feedback)
+                        if deterministic_id != original_id:
+                            id_regenerated += 1
+                            logger.info(f"🔄 ID regenerated: {original_id} → {deterministic_id}")
                     
-                    # Update feedback with deterministic ID
+                    # Update feedback with the resolved ID
                     feedback['Feedback_ID'] = deterministic_id
                     
                     # Check for duplicates by ID - UPDATE if exists to add keywords
@@ -512,33 +582,30 @@ class FabricSQLWriter:
                         logger.debug(f"✅ Item already exists by content: {title[:50]}...")
                         continue
                     
-                    # Extract all fields for new item with proper field mapping
+                    # Extract all fields for new item — v2 simplified schema
+                    # Unified field mapping: accept both old CSV names and new SQL names
+                    feedback_text = feedback.get('Feedback') or feedback.get('Content') or ''
                     source = feedback.get('Source') or feedback.get('Sources', '')
-                    source_url = feedback.get('Source_URL') or feedback.get('Url', '')
+                    source_url = feedback.get('Url') or feedback.get('Source_URL', '')
                     author = feedback.get('Author') or feedback.get('Customer', '')
                     created_date = feedback.get('Created_Date') or feedback.get('Created')
                     sentiment = feedback.get('Sentiment', '')
-                    primary_category = feedback.get('Primary_Category') or feedback.get('Category', '')
-                    enhanced_category = feedback.get('Enhanced_Category', '')
-                    audience = feedback.get('Audience', '')
-                    priority = feedback.get('Priority', '')
-                    
-                    # New fields from collectors
-                    feedback_gist = feedback.get('Feedback_Gist', '')
-                    area = feedback.get('Area', '')
                     impacttype = feedback.get('Impacttype', '')
                     scenario = feedback.get('Scenario', '')
+                    area = feedback.get('Area', '')
                     tag = feedback.get('Tag', '')
                     organization = feedback.get('Organization', '')
-                    status = feedback.get('Status', '')
-                    created_by = feedback.get('Created_by', '')
-                    rawfeedback = feedback.get('Rawfeedback', '')
-                    category = feedback.get('Category', '')
+                    # Category: prefer Enhanced_Category (more specific), fall back to Category
+                    category = feedback.get('Enhanced_Category') or feedback.get('Category', '')
                     subcategory = feedback.get('Subcategory', '')
                     feature_area = feedback.get('Feature_Area', '')
                     categorization_confidence = feedback.get('Categorization_Confidence', 0.0)
+                    audience = feedback.get('Audience', '')
+                    priority = feedback.get('Priority', '')
+                    feedback_gist = feedback.get('Feedback_Gist', '')
                     primary_domain = feedback.get('Primary_Domain', '')
-                    domains = str(feedback.get('Domains', [])) if feedback.get('Domains') else ''
+                    primary_workload = feedback.get('Primary_Workload', '')
+                    rawfeedback = feedback.get('Rawfeedback', '')
                     
                     # Serialize Matched_Keywords as JSON string
                     import json
@@ -546,15 +613,34 @@ class FabricSQLWriter:
                     if isinstance(matched_keywords_raw, list):
                         matched_keywords = json.dumps(matched_keywords_raw)
                     elif isinstance(matched_keywords_raw, str):
-                        matched_keywords = matched_keywords_raw  # Already JSON string
+                        matched_keywords = matched_keywords_raw
                     else:
                         matched_keywords = '[]'
                     
-                    # Map ISV/Platform to Developer for audience standardization
-                    if audience in ['ISV', 'Platform']:
-                        audience = 'Developer'
-                    elif audience not in ['Developer', 'Customer']:
-                        audience = 'Customer'  # Default fallback
+                    # Standardize audience values based on project config
+                    import config as _cfg
+                    _audience_cfg = None
+                    _active_proj = _cfg.get_active_project_id()
+                    if _active_proj:
+                        try:
+                            import project_manager as _pm
+                            _proj = _pm.load_project(_active_proj)
+                            _audience_cfg = _proj.get('audience_config')
+                        except Exception:
+                            pass
+                    
+                    if _audience_cfg and 'audiences' in _audience_cfg:
+                        # Project mode: allow project-defined audience labels
+                        valid_audiences = list(_audience_cfg['audiences'].keys())
+                        default_aud = _audience_cfg.get('default_audience', valid_audiences[0] if valid_audiences else 'User')
+                        if audience not in valid_audiences:
+                            audience = default_aud
+                    else:
+                        # Legacy mode: Developer/Customer/ISV
+                        if audience in ['ISV', 'Platform']:
+                            audience = 'Developer'
+                        elif audience not in ['Developer', 'Customer']:
+                            audience = 'Customer'
                     
                     # Convert date if needed
                     if isinstance(created_date, str):
@@ -564,13 +650,15 @@ class FabricSQLWriter:
                         except:
                             created_date = None
                     
-                    # Add to batch params
+                    # Add to batch params — 24 columns (v2 schema)
                     new_items_params.append([
-                        deterministic_id, title, content, source, source_url, author,
-                        created_date, sentiment, primary_category, enhanced_category,
-                        audience, priority, feedback_gist, area, impacttype, scenario,
-                        tag, organization, status, created_by, rawfeedback, category,
-                        subcategory, feature_area, categorization_confidence, primary_domain, domains, matched_keywords
+                        deterministic_id, title, feedback_gist, feedback_text,
+                        source, source_url, author, created_date,
+                        sentiment, impacttype, scenario, area, tag, organization,
+                        category, subcategory, feature_area, categorization_confidence,
+                        audience, priority,
+                        primary_domain, primary_workload,
+                        matched_keywords, rawfeedback
                     ])
                     
                     # Add to existing sets to prevent duplicates within this batch
@@ -589,12 +677,14 @@ class FabricSQLWriter:
                 logger.info(f"🚀 Executing bulk insert for {len(new_items_params)} items...")
                 cursor.executemany("""
                     INSERT INTO Feedback (
-                        Feedback_ID, Title, Content, Source, Source_URL, Author,
-                        Created_Date, Sentiment, Primary_Category, Enhanced_Category,
-                        Audience, Priority, Feedback_Gist, Area, Impacttype, Scenario,
-                        Tag, Organization, Status, Created_by, Rawfeedback, Category,
-                        Subcategory, Feature_Area, Categorization_Confidence, Primary_Domain, Domains, Matched_Keywords
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        Feedback_ID, Title, Feedback_Gist, Feedback,
+                        Source, Url, Author, Created_Date,
+                        Sentiment, Impacttype, Scenario, Area, Tag, Organization,
+                        Category, Subcategory, Feature_Area, Categorization_Confidence,
+                        Audience, Priority,
+                        Primary_Domain, Primary_Workload,
+                        Matched_Keywords, Rawfeedback
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, new_items_params)
                 logger.info("✅ Bulk insert completed")
             
@@ -624,6 +714,9 @@ class FabricSQLWriter:
         except Exception as e:
             logger.error(f"❌ Error in bulletproof sync: {e}")
             return {'new_items': 0, 'existing_items': 0, 'total_items': len(feedback_data), 'id_regenerated': 0}
+    
+    # Alias for backward compatibility
+    bulletproof_sync_with_deduplication = write_feedback_bulk
     
     def sync_domains_from_state_to_feedback(self, conn):
         """
@@ -885,11 +978,12 @@ class FabricSQLWriter:
             
             cursor = conn.cursor()
             
-            # Get all feedback that hasn't been manually modified
+            # Get all feedback for recategorization
             cursor.execute("""
-                SELECT Feedback_ID, Content, Source, Scenario, Organization, 
-                       User_Modified_Categorization
-                FROM Feedback
+                SELECT f.Feedback_ID, CAST(f.Feedback AS NVARCHAR(MAX)), f.Source, f.Scenario, f.Organization
+                FROM Feedback f
+                LEFT JOIN FeedbackState fs ON f.Feedback_ID = fs.Feedback_ID
+                WHERE fs.Category IS NULL
             """)
             
             feedback_items = cursor.fetchall()
@@ -897,7 +991,7 @@ class FabricSQLWriter:
             recategorized_count = 0
             skipped_count = 0
             
-            logger.info(f"📊 Found {total_items} feedback items to process")
+            logger.info(f"📊 Found {total_items} feedback items to recategorize (skipping items with user-set categories in FeedbackState)")
             
             for row in feedback_items:
                 try:
@@ -906,13 +1000,6 @@ class FabricSQLWriter:
                     source = row[2] or ""
                     scenario = row[3] or ""
                     organization = row[4] or ""
-                    user_modified = row[5] if len(row) > 5 else False
-                    
-                    # Skip if user has manually modified categorization
-                    if user_modified:
-                        skipped_count += 1
-                        logger.debug(f"⏭️  Skipped user-modified item: {feedback_id}")
-                        continue
                     
                     # Recategorize
                     result = enhanced_categorize_feedback(content, source, scenario, organization)
@@ -920,14 +1007,13 @@ class FabricSQLWriter:
                     # Update the feedback with new categorization
                     cursor.execute("""
                         UPDATE Feedback
-                        SET Enhanced_Category = ?,
+                        SET Category = ?,
                             Subcategory = ?,
                             Feature_Area = ?,
                             Audience = ?,
                             Priority = ?,
                             Impacttype = ?,
-                            Categorization_Confidence = ?,
-                            Auto_Recategorized_Date = ?
+                            Categorization_Confidence = ?
                         WHERE Feedback_ID = ?
                     """, [
                         result.get('primary_category', 'Other'),
@@ -937,7 +1023,6 @@ class FabricSQLWriter:
                         result.get('priority', 'medium'),
                         result.get('impact_type', 'FEEDBACK'),
                         result.get('confidence', 0.0),
-                        datetime.now(),
                         feedback_id
                     ])
                     

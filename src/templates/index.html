@@ -31,6 +31,15 @@
                     Feedback Collector
                 </a>
             </div>
+
+            <!-- Project Switcher -->
+            <div class="project-switcher" id="projectSwitcher" style="padding: 8px 16px; border-bottom: 1px solid var(--border-color);">
+                <label class="fluent-label" style="font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 4px;">Active Project</label>
+                <select class="fluent-select" id="projectSelect" onchange="switchProject(this.value)" style="font-size: 0.85em; padding: 6px 8px;">
+                    <option value="">Legacy Mode</option>
+                </select>
+                <div id="projectInfo" style="margin-top: 4px; font-size: 0.75em; color: var(--text-secondary);"></div>
+            </div>
             
             <nav class="sidebar-nav">
                 <div class="nav-section-label">Overview</div>
@@ -520,6 +529,112 @@
                 navItem.classList.add('active');
             }
         }
+
+        // ═══════════════════════════════════════════════════════════
+        // Project Management
+        // ═══════════════════════════════════════════════════════════
+        
+        async function loadProjects() {
+            try {
+                const response = await fetch('/api/projects');
+                const data = await response.json();
+                if (data.status === 'success') {
+                    const select = document.getElementById('projectSelect');
+                    select.innerHTML = '<option value="">Legacy Mode (Global Config)</option>';
+                    
+                    data.projects.forEach(project => {
+                        const option = document.createElement('option');
+                        option.value = project.id;
+                        option.textContent = project.name;
+                        option.style.color = project.color || '#0078d4';
+                        if (project.id === data.active_project_id) {
+                            option.selected = true;
+                        }
+                        select.appendChild(option);
+                    });
+                    
+                    // Update project info
+                    updateProjectInfo(data.active_project_id);
+                }
+            } catch (e) {
+                console.error('Error loading projects:', e);
+            }
+        }
+        
+        async function switchProject(projectId) {
+            try {
+                const response = await fetch('/api/projects/activate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ project_id: projectId || null })
+                });
+                
+                const data = await response.json();
+                if (data.status === 'success') {
+                    // Update project info display
+                    updateProjectInfo(projectId);
+                    
+                    // Reload keywords, categories, impact types for the new project
+                    fetch('/api/keywords').then(r => r.json()).then(kw => renderKeywordList(kw));
+                    loadCategories();
+                    loadImpactTypes();
+                    
+                    // Update source configuration
+                    if (window.sourceConfigManager) {
+                        window.sourceConfigManager.applyProjectConfig(projectId || null);
+                    }
+                    
+                    // Show success notification
+                    showProjectNotification(`Switched to: ${data.active_project_name}`, data.active_project_id);
+                    
+                    // Reset Fabric connection status since DB target changed
+                    const fabricBadge = document.getElementById('fabricAuthBadge');
+                    if (fabricBadge) {
+                        fabricBadge.textContent = 'Not Connected';
+                        fabricBadge.className = 'fluent-badge fluent-badge-secondary';
+                    }
+                } else {
+                    alert('Error switching project: ' + data.message);
+                }
+            } catch (e) {
+                console.error('Error switching project:', e);
+                alert('Error switching project');
+            }
+        }
+        
+        async function updateProjectInfo(projectId) {
+            const infoDiv = document.getElementById('projectInfo');
+            if (!projectId) {
+                infoDiv.innerHTML = '<i class="bi bi-gear"></i> Using global .env config';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/projects/${projectId}/db-config`);
+                const data = await response.json();
+                if (data.status === 'success') {
+                    const dbName = data.db_config.database_name || 'Not configured';
+                    const shortDb = dbName.length > 30 ? dbName.substring(0, 30) + '...' : dbName;
+                    infoDiv.innerHTML = `<i class="bi bi-database"></i> ${shortDb}`;
+                    infoDiv.title = dbName;
+                }
+            } catch (e) {
+                infoDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error loading config';
+            }
+        }
+        
+        function showProjectNotification(message, projectId) {
+            // Create a brief notification toast
+            const toast = document.createElement('div');
+            toast.className = 'fluent-alert fluent-alert-success';
+            toast.style.cssText = 'position: fixed; top: 16px; right: 16px; z-index: 9999; padding: 12px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: fadeIn 0.3s ease;';
+            toast.innerHTML = `<i class="bi bi-check-circle"></i> ${message}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+        
+        // Load projects on page load
+        document.addEventListener('DOMContentLoaded', loadProjects);
 
         // ...existing code...
         let lastCollectionHadData = false; // Flag to track if collection yielded data

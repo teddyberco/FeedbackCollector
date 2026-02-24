@@ -43,66 +43,83 @@
         
         /* Card specific styles */
         .card {
-            border: 1px solid #e1dfdd; /* fabric-gray-40 */
-            border-radius: 8px; /* border-radius-lg */
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            transition: all 0.2s ease;
+            border: 1px solid #edebe9;
+            border-radius: 12px;
+            box-shadow: 0 1.6px 3.6px rgba(0,0,0,0.06), 0 0.3px 0.9px rgba(0,0,0,0.04);
+            transition: box-shadow 0.2s ease, transform 0.15s ease;
             height: 100%;
             background-color: #ffffff;
         }
         .card:hover {
-            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            box-shadow: 0 6.4px 14.4px rgba(0,0,0,0.1), 0 1.2px 3.6px rgba(0,0,0,0.06);
             transform: translateY(-2px);
-            border-color: #c8c6c4; /* fabric-gray-60 */
+            border-color: #d2d0ce;
         }
         
         .category-chip, .subcategory-chip, .domain-badge {
             display: inline-block;
-            padding: 4px 10px;
-            border-radius: 16px;
-            font-size: 0.75rem;
+            padding: 3px 10px;
+            border-radius: 14px;
+            font-size: 0.72rem;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.1s ease;
+            transition: all 0.15s ease;
             margin-right: 4px;
             margin-bottom: 4px;
             vertical-align: middle;
         }
         
         .category-chip {
-            background-color: #e6f2fb; /* Light blue */
-            color: #0078d4; /* fabric-primary */
+            background-color: #deecf9;
+            color: #0078d4;
             border: 1px solid transparent;
         }
         .category-chip:hover {
-            background-color: #cce4f7;
+            background-color: #c7e0f4;
             border-color: #0078d4;
         }
         
         .subcategory-chip {
-            background-color: #f3f2f1; /* fabric-neutral-lighter */
-            color: #323130; /* fabric-neutral-dark */
-            border: 1px solid #e1dfdd;
+            background-color: #f3f2f1;
+            color: #323130;
+            border: 1px solid #edebe9;
         }
         .subcategory-chip:hover {
             background-color: #edebe9;
-            border-color: #8a8886;
+            border-color: #a19f9d;
         }
         .subcategory-empty {
             border-style: dashed;
-            color: #605e5c;
+            color: #a19f9d;
         }
         
         .domain-badge {
-            /* Background color is set inline */
             border: 1px solid transparent;
             color: white !important;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+            font-weight: 600;
+            letter-spacing: 0.01em;
         }
         .domain-badge:hover {
-            opacity: 0.9;
-            transform: scale(1.02);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+            opacity: 0.92;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.12);
+        }
+
+        .workload-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            color: white;
+            border: 1px solid transparent;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+            white-space: nowrap;
+        }
+        .workload-badge:hover {
+            opacity: 0.92;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.12);
         }
 
         .card.dropdown-open {
@@ -110,23 +127,27 @@
             transform: none !important;
         }
         .card-title {
-            font-size: 1.1rem;
-            font-weight: 500;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #201f1e;
+            letter-spacing: -0.01em;
         }
         .card-subtitle {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
+            color: #605e5c;
         }
         .feedback-content {
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             line-height: 1.5;
             display: -webkit-box;
-            -webkit-line-clamp: 5;
+            -webkit-line-clamp: 4;
             -webkit-box-orient: vertical;
             overflow: hidden;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
             cursor: pointer;
             transition: color 0.2s ease;
-            height: 7.5em; /* Force fixed height for 5 lines alignment */
+            min-height: 3em;
+            max-height: 6em;
         }
         .feedback-content:hover {
             color: #0078d4 !important;
@@ -161,17 +182,16 @@
             100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
         }
         
-        /* Keyword badge styles */
         .keyword-tags {
             display: inline-flex;
             align-items: center;
+            flex-wrap: wrap;
             gap: 4px;
-            margin-left: 8px;
         }
         .keyword-label {
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: 500;
-            color: #495057;
+            color: #605e5c;
             margin-right: 2px;
         }
         .keyword-badge {
@@ -201,33 +221,37 @@
         
         /* Enhanced categorization styles */
         .audience-badge {
-            font-size: 0.7rem;
+            font-size: 0.68rem;
             font-weight: 600;
-            border-radius: 12px;
-            padding: 4px 8px;
+            border-radius: 14px;
+            padding: 3px 10px;
             margin-right: 4px;
+            letter-spacing: 0.02em;
         }
-        .audience-developer { background-color: #007bff; color: white; }
-        .audience-customer { background-color: #28a745; color: white; }
-        .audience-isv { background-color: #6f42c1; color: white; }
-        .audience-platform { background-color: #fd7e14; color: white; }
-        .audience-unknown { background-color: #6c757d; color: white; }
+        .audience-developer { background-color: #0078d4; color: white; }
+        .audience-customer { background-color: #107c10; color: white; }
+        .audience-isv { background-color: #5c2d91; color: white; }
+        .audience-platform { background-color: #d83b01; color: white; }
+        .audience-unknown { background-color: #8a8886; color: white; }
+        .audience-builder { background-color: #0078d4; color: white; }
+        .audience-user { background-color: #107c10; color: white; }
         
         .priority-badge {
-            font-size: 0.7rem;
+            font-size: 0.68rem;
             font-weight: 600;
-            border-radius: 8px;
-            padding: 3px 6px;
+            border-radius: 14px;
+            padding: 3px 10px;
             margin-left: 4px;
+            letter-spacing: 0.02em;
         }
         .priority-critical {
-            background-color: #dc3545;
+            background-color: #d13438;
             color: white;
             animation: pulse-red 2s infinite;
         }
-        .priority-high { background-color: #fd7e14; color: white; }
-        .priority-medium { background-color: #ffc107; color: #212529; }
-        .priority-low { background-color: #6c757d; color: white; }
+        .priority-high { background-color: #ca5010; color: white; }
+        .priority-medium { background-color: #ffb900; color: #323130; }
+        .priority-low { background-color: #a19f9d; color: white; }
         
         .category-info {
             font-size: 0.75rem;
@@ -248,7 +272,7 @@
         /* Modern Card Layout */
         .filters-container {
             display: grid;
-            grid-template-columns: 1fr 1fr 2fr;
+            grid-template-columns: 1fr 1fr 2fr 1fr;
             gap: 16px;
             margin-top: 24px;
         }
@@ -267,6 +291,12 @@
         
         .filter-card.content-card .filter-groups-grid .filter-group {
             margin-bottom: 0 !important;
+        }
+        
+        @media (max-width: 1400px) {
+            .filters-container {
+                grid-template-columns: 1fr 1fr 2fr;
+            }
         }
         
         @media (max-width: 1200px) {
@@ -477,6 +507,14 @@
             color: white;
         }
 
+        .workload-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 3px 6px;
+            margin-right: 4px;
+        }
+
         .category-chip,
         .subcategory-chip {
             display: inline-flex;
@@ -555,22 +593,23 @@
         
         /* State Management Styles */
         .state-badge {
-            font-size: 0.75rem;
+            font-size: 0.68rem;
             font-weight: 600;
-            border-radius: 12px;
-            padding: 4px 10px;
+            border-radius: 14px;
+            padding: 3px 10px;
             margin-right: 6px;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.15s ease;
+            letter-spacing: 0.02em;
         }
         .state-badge:hover {
-            transform: scale(1.05);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transform: scale(1.04);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         }
-        .state-new { background-color: #6c757d; color: white; }
-        .state-triaged { background-color: #007bff; color: white; }
-        .state-closed { background-color: #28a745; color: white; }
-        .state-irrelevant { background-color: #dc3545; color: white; }
+        .state-new { background-color: #8a8886; color: white; }
+        .state-triaged { background-color: #0078d4; color: white; }
+        .state-closed { background-color: #107c10; color: white; }
+        .state-irrelevant { background-color: #d13438; color: white; }
         
         .card-actions {
             position: relative;
@@ -1124,10 +1163,21 @@
                             </div>
                         </div>
                         {% endif %}
+                        </div>
+                </div>
+
+                <!-- Data Sources Card -->
+                <div class="fluent-card p-3">
+                        <div class="fluent-card-header p-0 border-0 mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="filter-card-icon" style="width: 32px; height: 32px; font-size: 1.2rem;">📡</span>
+                                <h6 class="fluent-section-title mb-0" style="font-size: 1rem;">Data Sources</h6>
+                            </div>
+                        </div>
 
                         <!-- Source Filter -->
                         {% if all_sources %}
-                        <div class="filter-group">
+                        <div class="filter-group mb-3">
                             <label class="fluent-label" for="sourceFilter">📡 Source</label>
                             <div class="dropdown">
                                 <button class="fluent-select d-flex justify-content-between align-items-center" type="button" id="sourceFilter" data-bs-toggle="dropdown" aria-expanded="false">
@@ -1158,7 +1208,49 @@
                             </div>
                         </div>
                         {% endif %}
+
+                        <!-- Workload Filter -->
+                        {% if all_workloads %}
+                        <div class="filter-group mb-3">
+                            <label class="fluent-label" for="workloadFilter">⚙️ Workload</label>
+                            <div class="dropdown">
+                                <button class="fluent-select d-flex justify-content-between align-items-center" type="button" id="workloadFilter" data-bs-toggle="dropdown" aria-expanded="false">
+                                    {% if selected_workloads %}
+                                        {{ selected_workloads|length }} selected
+                                    {% else %}
+                                        Select workloads
+                                    {% endif %}
+                                    <i class="bi bi-chevron-down"></i>
+                                </button>
+                                <div class="dropdown-menu p-3 shadow-sm border-0" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
+                                    {% set workload_icons = {
+                                        'Power BI': '📊',
+                                        'Data Engineering': '🔧',
+                                        'Data Factory': '🏭',
+                                        'Data Science': '🔬',
+                                        'Data Warehouse': '🏢',
+                                        'Databases': '🗄️',
+                                        'Graph': '🕸️',
+                                        'Industry Solutions': '🏗️',
+                                        'IQ': '🧠',
+                                        'Real-Time Intelligence': '⚡'
+                                    } %}
+                                    {% for workload in all_workloads %}
+                                    <div class="form-check">
+                                        <input class="form-check-input filter-checkbox" type="checkbox" data-filter="workload"
+                                               value="{{ workload }}" id="workload_{{ workload|lower|replace(' ', '_')|replace('-', '') }}"
+                                               {% if workload in selected_workloads %}checked{% endif %}>
+                                        <label class="form-check-label" for="workload_{{ workload|lower|replace(' ', '_')|replace('-', '') }}">
+                                            {{ workload_icons.get(workload, '⚙️') }} {{ workload }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                    <hr class="dropdown-divider">
+                                    <button class="fluent-button fluent-button-primary w-100" onclick="applyMultiSelectFilters()">Apply</button>
+                                </div>
+                            </div>
                         </div>
+                        {% endif %}
                 </div>
             </div>
         </div>
@@ -1250,27 +1342,21 @@
                 <div class="col">
                     <div class="fluent-card h-100 d-flex flex-column">
                         <div class="fluent-card-header border-bottom-0 pb-0 pt-3 px-3">
-                            <h5 class="fluent-section-title mb-1 fluent-card-title-truncate" style="font-size: 1.1rem; line-height: 1.4;" title="{{ item['Feedback_Gist'] or item.Title or ('Feedback from ' + (item.Sources or 'N/A')) }}">
-                                {% if item['Feedback_Gist'] and item['Feedback_Gist']|trim != '' and item['Feedback_Gist']|lower != 'no content' and item['Feedback_Gist']|lower != 'summary unavailable' %}
-                                    {{ item['Feedback_Gist'] }}
-                                {% elif item.Title and item.Title|trim != '' %}
-                                    {{ item.Title }} {# Fallback to original Title if Gist is not useful #}
-                                {% else %}
-                                    Feedback from {{ item.Sources or 'N/A' }} {# Generic fallback #}
-                                {% endif %}
+                            <h5 class="fluent-section-title mb-1 fluent-card-title-truncate" style="font-size: 1.1rem; line-height: 1.4;" title="{{ item|display_title }}">
+                                {{ item|display_title }}
                             </h5>
-                            <h6 class="text-muted small mb-2">
+                            <h6 class="text-muted mb-2" style="font-size: 0.78rem;">
                                 {{ item.Sources or 'Unknown Source' }}
                                 {% if item.Created and item.Created|trim != '' %}
-                                    - {{ item.Created.split('T')[0] }} {# Show Date part only #}
+                                    · {{ item.Created.split('T')[0] }}
                                 {% endif %}
                             </h6>
                         </div>
                         
                         <div class="fluent-card-body pt-2 flex-grow-1">
                             <!-- Metadata Section: Audience, Priority, State -->
-                            <div class="category-info mb-3">
-                                <div class="d-flex flex-wrap align-items-center gap-2">
+                            <div class="category-info mb-2">
+                                <div class="d-flex flex-wrap align-items-center gap-1" style="row-gap: 4px !important;">
                                     {% if item.Audience and item.Audience|trim != '' %}
                                         <span class="audience-badge audience-{{ item.Audience|lower }}"
                                               onclick="updateAudience('{{ item.Feedback_ID or '' }}', '{{ item.Audience }}')"
@@ -1279,6 +1365,8 @@
                                             {% if item.Audience == 'Developer' %}🛠️ Developer
                                             {% elif item.Audience == 'Customer' %}👤 Customer
                                             {% elif item.Audience == 'ISV' %}🏢 ISV
+                                            {% elif item.Audience == 'Builder' %}🔧 Builder
+                                            {% elif item.Audience == 'User' %}👤 User
                                             {% else %}{{ item.Audience }}{% endif %}
                                         </span>
                                     {% endif %}
@@ -1312,14 +1400,12 @@
                                            <div class="state-option" data-state="IRRELEVANT">❌ Irrelevant</div>
                                        </div>
                                    </span>
-                                   
-                                   {% if item.Last_Updated and item.Last_Updated|trim != '' %}
-                                   <small class="text-muted">
-                                       Updated: {{ item.Last_Updated.split('T')[0] }}
-                                       {% if item.Updated_By and item.Updated_By|trim != '' %} by {{ item.Updated_By }}{% endif %}
-                                   </small>
-                                   {% endif %}
                                </div>
+                               {% if item.Last_Updated and item.Last_Updated|trim != '' %}
+                               <div class="mt-1" style="font-size: 0.65rem; color: #a19f9d;">
+                                   Updated {{ item.Last_Updated.split('T')[0] }}{% if item.Updated_By and item.Updated_By|trim != '' %} · {{ item.Updated_By }}{% endif %}
+                               </div>
+                               {% endif %}
                            </div>
                            
                            <!-- State Notes Display -->
@@ -1329,8 +1415,8 @@
                            </div>
                            {% endif %}
                            
-                           <div class="category-info mb-3 small text-muted interactive-categories">
-                               <span class="text-uppercase fw-bold text-muted me-2" style="font-size: 0.65rem; letter-spacing: 1px;">Category</span>
+                           <div class="category-info mb-2 small text-muted interactive-categories">
+                               <span class="text-uppercase fw-bold me-1" style="font-size: 0.6rem; letter-spacing: 0.8px; color: #a19f9d;">Category</span>
                                {% if item.Categorization_Confidence %}
                                    <i class="bi bi-info-circle me-2 text-muted" style="font-size: 0.75rem; cursor: help;" title="Confidence: {{ (item.Categorization_Confidence * 100)|round|int }}%"></i>
                                {% endif %}
@@ -1376,39 +1462,62 @@
                                      onclick="showCategoryPickerFromElement(this)">
                                    {{ domain_display }}
                                </span>
+                               {% if item.Primary_Workload %}
+                               {% set workload_colors = {
+                                   'Power BI': '#F2C811',
+                                   'Data Engineering': '#0078D4',
+                                   'Data Factory': '#4CA6A8',
+                                   'Data Science': '#E8488B',
+                                   'Data Warehouse': '#5B5FC7',
+                                   'Databases': '#2E86AB',
+                                   'Graph': '#2D9B83',
+                                   'Industry Solutions': '#4B8BBE',
+                                   'IQ': '#7B68EE',
+                                   'Real-Time Intelligence': '#FF6F61'
+                               } %}
+                               {% set wl_color = workload_colors.get(item.Primary_Workload, '#6c757d') %}
+                               <span class="workload-badge"
+                                     style="background-color: {{ wl_color }};{% if wl_color == '#F2C811' %} color: #333;{% endif %}"
+                                     title="Workload: {{ item.Primary_Workload }}">
+                                   {{ item.Primary_Workload }}
+                               </span>
+                               {% endif %}
                            </div>
                            
                            <!-- Domain Information removed: domain badge now inline with category -->
                            
-                            <p class="card-text feedback-content mb-auto text-secondary" onclick="showFeedbackDetail(this)" title="Click to read full feedback">
-                                {{ item.Feedback }}
+                            <p class="card-text feedback-content text-secondary" data-feedback-id="{{ item.Feedback_ID }}" onclick="showFeedbackDetail(this)" title="Click to read full feedback">
+                                {{ item.Feedback|clean_title }}
                             </p>
-                            <div class="mt-auto pt-3 d-flex align-items-center flex-wrap gap-2"> {# Push button to bottom #}
-                                {% if item.Url and item.Url|trim != '' %}
-                                    <a href="{{ item.Url }}" class="fluent-button fluent-button-secondary" target="_blank" rel="noopener noreferrer" style="min-height: 32px; padding: 4px 12px;">View Source</a>
-                                {% endif %}
-                                {% if item.Tag and item.Tag|trim != '' %}
-                                    <span class="fluent-badge fluent-badge-secondary" title="Source Tag: {{ item.Tag }}"><i class="bi bi-tag-fill me-1"></i>{{ item.Tag }}</span>
-                                {% endif %}
-                                {% if item.Sentiment and item.Sentiment|trim != '' %}
-                                    {% if item.Sentiment == 'Positive' %}
-                                        <span class="fluent-badge fluent-badge-success" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😊 {{ item.Sentiment }}</span>
-                                    {% elif item.Sentiment == 'Negative' %}
-                                        <span class="fluent-badge fluent-badge-error" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😞 {{ item.Sentiment }}</span>
-                                    {% else %}
-                                        <span class="fluent-badge fluent-badge-secondary" title="Sentiment: {{ item.Sentiment }}{% if item.Sentiment_Score %} (Score: {{ item.Sentiment_Score }}){% endif %}{% if item.Sentiment_Confidence %} - Confidence: {{ item.Sentiment_Confidence }}{% endif %}">😐 {{ item.Sentiment }}</span>
+                            
+                            <div class="mt-auto pt-2 border-top" style="border-color: #f3f2f1 !important;">
+                                <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                                    {% if item.Url and item.Url|trim != '' %}
+                                        <a href="{{ item.Url }}" class="fluent-button fluent-button-secondary" target="_blank" rel="noopener noreferrer" style="min-height: 28px; padding: 2px 12px; font-size: 0.78rem;">View Source</a>
                                     {% endif %}
-                                {% endif %}
+                                    {% if item.Tag and item.Tag|trim != '' %}
+                                        <span class="fluent-badge fluent-badge-secondary" style="font-size: 0.7rem;" title="Source Tag: {{ item.Tag }}">🏷️ {{ item.Tag }}</span>
+                                    {% endif %}
+                                    {% if item.Sentiment and item.Sentiment|trim != '' %}
+                                        {% if item.Sentiment == 'Positive' %}
+                                            <span class="fluent-badge" style="background: #dff6dd; color: #107c10; font-size: 0.7rem;" title="Sentiment: {{ item.Sentiment }}">😊 {{ item.Sentiment }}</span>
+                                        {% elif item.Sentiment == 'Negative' %}
+                                            <span class="fluent-badge" style="background: #fde7e9; color: #d13438; font-size: 0.7rem;" title="Sentiment: {{ item.Sentiment }}">😞 {{ item.Sentiment }}</span>
+                                        {% else %}
+                                            <span class="fluent-badge" style="background: #f3f2f1; color: #605e5c; font-size: 0.7rem;" title="Sentiment: {{ item.Sentiment }}">😐 {{ item.Sentiment }}</span>
+                                        {% endif %}
+                                    {% endif %}
+                                </div>
                                 {% if item.Matched_Keywords and item.Matched_Keywords|length > 0 %}
-                                    <span class="keyword-tags d-inline-flex align-items-center gap-1">
-                                        <span class="keyword-label small text-muted fw-bold">🔑 Keywords:</span>
+                                    <div class="keyword-tags">
+                                        <span class="keyword-label">🔑 Keywords:</span>
                                         {% for keyword in item.Matched_Keywords[:3] %}
-                                            <span class="fluent-badge fluent-badge-secondary" style="background: #e1dfdd; color: #323130;">{{ keyword }}</span>
+                                            <span class="fluent-badge" style="background: #f3f2f1; color: #323130; font-size: 0.68rem; padding: 2px 8px; border-radius: 10px;">{{ keyword }}</span>
                                         {% endfor %}
                                         {% if item.Matched_Keywords|length > 3 %}
-                                            <span class="fluent-badge fluent-badge-primary" title="{{ item.Matched_Keywords[3:]|join(', ') }}">+{{ item.Matched_Keywords|length - 3 }} more</span>
+                                            <span class="fluent-badge fluent-badge-primary" style="font-size: 0.68rem; padding: 2px 8px; border-radius: 10px;" title="{{ item.Matched_Keywords[3:]|join(', ') }}">+{{ item.Matched_Keywords|length - 3 }}</span>
                                         {% endif %}
-                                    </span>
+                                    </div>
                                 {% endif %}
                             </div>
                         </div>
@@ -5313,9 +5422,193 @@
         `;
         document.head.appendChild(spinStyle);
 
-        // Feedback Detail Modal
+        // Feedback Detail Modal - Rich view with all fields
         function showFeedbackDetail(element) {
-            const fullText = element.textContent.trim();
+            const feedbackId = element.getAttribute('data-feedback-id');
+            
+            // Look up the full item from the filter system's data
+            let item = null;
+            if (window.modernFilterSystem && window.modernFilterSystem.filteredData) {
+                item = window.modernFilterSystem.filteredData.find(d => (d.Feedback_ID || '') === feedbackId);
+            }
+            // Fallback: search allFeedbackData if available
+            if (!item && window.allFeedbackData) {
+                item = window.allFeedbackData.find(d => (d.Feedback_ID || '') === feedbackId);
+            }
+            
+            // Build modal content
+            let bodyHtml = '';
+            if (item) {
+                const esc = (t) => {
+                    if (!t) return '';
+                    const map = {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'};
+                    return String(t).replace(/[&<>"']/g, m => map[m]);
+                };
+                const val = (v) => v && String(v).trim() ? esc(v) : '<span class="text-muted fst-italic">—</span>';
+                
+                // Sentiment styling
+                const sentimentLower = (item.Sentiment || '').toLowerCase();
+                const sentimentEmoji = sentimentLower === 'positive' ? '😊' : sentimentLower === 'negative' ? '😞' : '😐';
+                const sentimentColor = sentimentLower === 'positive' ? '#28a745' : sentimentLower === 'negative' ? '#dc3545' : '#6c757d';
+                
+                // Priority styling
+                const prioLower = (item.Priority || '').toLowerCase();
+                const prioEmoji = prioLower === 'critical' ? '🔴' : prioLower === 'high' ? '🟠' : prioLower === 'medium' ? '🟡' : '⚪';
+                
+                // Keywords as badges
+                let keywordBadges = '<span class="text-muted fst-italic">—</span>';
+                const kw = item.Matched_Keywords;
+                if (kw && ((Array.isArray(kw) && kw.length > 0) || (typeof kw === 'string' && kw.trim()))) {
+                    const kwArr = Array.isArray(kw) ? kw : kw.split(',').map(s => s.trim()).filter(Boolean);
+                    keywordBadges = kwArr.map(k => `<span class="badge bg-secondary me-1 mb-1">${esc(k)}</span>`).join('');
+                }
+                
+                // State from Fabric if available
+                const fabricState = (window.fabricStateData && window.fabricStateData[feedbackId]) || {};
+                const currentState = fabricState.state || item.State || 'NEW';
+                const stateEmoji = {'NEW':'🆕','TRIAGED':'🔍','CLOSED':'✅','IRRELEVANT':'❌'}[currentState] || '🆕';
+                const notes = fabricState.notes || item.Feedback_Notes || '';
+                const lastUpdated = fabricState.last_updated || item.Last_Updated || '';
+                const updatedBy = fabricState.updated_by || item.Updated_By || '';
+                
+                bodyHtml = `
+                    <div class="mb-4">
+                        <h5 class="fw-bold mb-1">${val(item.Title)}</h5>
+                        <small class="text-muted">${val(item.Sources)} &middot; ${item.Created ? item.Created.split('T')[0] : '—'}</small>
+                    </div>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6 col-md-3">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Audience</small>
+                                <span>${val(item.Audience)}</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Priority</small>
+                                <span>${prioEmoji} ${val(item.Priority)}</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">State</small>
+                                <span>${stateEmoji} ${esc(currentState)}</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Sentiment</small>
+                                <span style="color:${sentimentColor}">${sentimentEmoji} ${val(item.Sentiment)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6 col-md-3">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Impact Type</small>
+                                <span>${val(item.Impacttype)}</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Scenario</small>
+                                <span>${val(item.Scenario)}</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Customer</small>
+                                <span>${val(item.Customer)}</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6 col-md-3">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Organization</small>
+                                <span>${val(item.Organization)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Category</small>
+                                <span>${val(item.Enhanced_Category)}</span>
+                                ${item.Subcategory && item.Subcategory.trim() ? `<span class="text-muted"> &rsaquo; ${esc(item.Subcategory)}</span>` : ''}
+                                ${item.Categorization_Confidence ? `<small class="text-muted ms-2">(${Math.round(item.Categorization_Confidence * 100)}% confidence)</small>` : ''}
+                            </div>
+                        </div>
+                        <div class="col-sm-3">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Domain</small>
+                                <span>${val(item.Primary_Domain)}</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-3">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Feature Area</small>
+                                <span>${val(item.Feature_Area)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-6">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Workload</small>
+                                <span>${val(item.Primary_Workload)}</span>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="border rounded p-2 h-100">
+                                <small class="text-uppercase fw-bold text-muted d-block" style="font-size:0.65rem;letter-spacing:1px">Tag</small>
+                                <span>${val(item.Tag)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <small class="text-uppercase fw-bold text-muted d-block mb-2" style="font-size:0.65rem;letter-spacing:1px">Matched Keywords</small>
+                        <div>${keywordBadges}</div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <small class="text-uppercase fw-bold text-muted d-block mb-2" style="font-size:0.65rem;letter-spacing:1px">Feedback Gist</small>
+                        <div class="bg-light border-start border-3 border-primary p-3 rounded">
+                            ${val(item.Feedback_Gist)}
+                        </div>
+                    </div>
+                    
+                    ${notes ? `
+                    <div class="mb-4">
+                        <small class="text-uppercase fw-bold text-muted d-block mb-2" style="font-size:0.65rem;letter-spacing:1px">Notes</small>
+                        <div class="bg-light border-start border-3 border-warning p-3 rounded">
+                            📝 ${esc(notes)}
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="mb-4">
+                        <small class="text-uppercase fw-bold text-muted d-block mb-2" style="font-size:0.65rem;letter-spacing:1px">Full Feedback</small>
+                        <div class="border rounded p-3" style="white-space:pre-wrap;font-size:0.95rem;line-height:1.7;max-height:400px;overflow-y:auto;background:#fafafa">
+                            ${esc(item.Feedback || 'No feedback content')}
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex flex-wrap gap-3 text-muted small">
+                        <span><strong>ID:</strong> ${esc(feedbackId)}</span>
+                        <span><strong>Source:</strong> ${val(item.Sources)}</span>
+                        <span><strong>Area:</strong> ${val(item.Area)}</span>
+                        <span><strong>Created:</strong> ${val(item.Created)}</span>
+                        ${lastUpdated ? `<span><strong>Updated:</strong> ${esc(lastUpdated)}${updatedBy ? ` by ${esc(updatedBy)}` : ''}</span>` : ''}
+                    </div>
+                `;
+            } else {
+                // Fallback: just show the text from the element
+                bodyHtml = `<p style="white-space:pre-wrap;font-size:1rem;line-height:1.6">${element.textContent.trim().replace(/&/g,'&amp;').replace(/</g,'&lt;')}</p>`;
+            }
             
             // Create modal if it doesn't exist
             let modal = document.getElementById('feedbackDetailModal');
@@ -5326,16 +5619,15 @@
                 modal.setAttribute('tabindex', '-1');
                 modal.setAttribute('aria-hidden', 'true');
                 modal.innerHTML = `
-                    <div class="modal-dialog modal-dialog-centered modal-lg">
-                        <div class="modal-content" style="height: 70vh;">
+                    <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+                        <div class="modal-content" style="max-height: 90vh;">
                             <div class="modal-header">
                                 <h5 class="modal-title">Feedback Details</h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
-                            <div class="modal-body" style="overflow-y: auto;">
-                                <p id="feedbackDetailText" style="white-space: pre-wrap; font-size: 1rem; line-height: 1.6;"></p>
-                            </div>
-                            <div class="modal-footer">
+                            <div class="modal-body" id="feedbackDetailBody" style="overflow-y: auto;"></div>
+                            <div class="modal-footer justify-content-between">
+                                <div id="feedbackDetailSourceLink"></div>
                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                             </div>
                         </div>
@@ -5345,7 +5637,15 @@
             }
             
             // Set content
-            document.getElementById('feedbackDetailText').textContent = fullText;
+            document.getElementById('feedbackDetailBody').innerHTML = bodyHtml;
+            
+            // Set source link in footer
+            const sourceLink = document.getElementById('feedbackDetailSourceLink');
+            if (item && item.Url && item.Url.trim()) {
+                sourceLink.innerHTML = `<a href="${item.Url}" class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right me-1"></i>View Source</a>`;
+            } else {
+                sourceLink.innerHTML = '';
+            }
             
             // Show modal
             const bsModal = new bootstrap.Modal(modal);
